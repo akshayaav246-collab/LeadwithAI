@@ -18,7 +18,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Artifacts
 
-- `lead-with-ai` — Marketing website for the "Lead with AI" 2-day professional AI program by Global Knowledge Technologies. Frontend-only React + Vite app with wouter routing, plain CSS design system (beige/espresso palette, Playfair Display + EB Garamond), 4 pages: Home, Program, Speakers, Register. Built per a fully prescriptive PRD in `attached_assets/`.
+- `lead-with-ai` — Marketing website for the "Lead with AI" 2-day professional AI program by Global Knowledge Technologies. Frontend-only React + Vite app with wouter routing, plain CSS design system (beige/espresso palette, Playfair Display + EB Garamond + DM Sans), 4 pages: Home, Program, Speakers, Register. Home page features a luxury-editorial "Six Things" interactive grid (`SixThings.tsx`) with staggered scroll-reveal, click-to-flip dark state, hover lift, ghost numerals, navigation dots, and an exploration progress tracker. Schedule is a full-width 4-column borderless layout (Day 1 S1/S2, Day 2 S1/S2). Built per a fully prescriptive PRD in `attached_assets/`.
 
 ## Key Commands
 

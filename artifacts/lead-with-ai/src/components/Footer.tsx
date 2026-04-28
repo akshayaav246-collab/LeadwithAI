@@ -40,9 +40,9 @@ export function Footer() {
             <p style={{ marginBottom: '1rem' }}>
               For institutional registrations or group bookings, reach out to the GKT team directly.
             </p>
-            <div style={{ color: 'var(--color-sienna)' }}>
+            <a href="mailto:info@gkt.edu.in" className="footer-email">
               info@gkt.edu.in
-            </div>
+            </a>
           </div>
         </div>
         
