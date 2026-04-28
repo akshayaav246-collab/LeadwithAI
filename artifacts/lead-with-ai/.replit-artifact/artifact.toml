@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Lead with AI"
+version = "1.0.0"
+id = "artifacts/lead-with-ai"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21307
+
+[services.development]
+run = "pnpm --filter @workspace/lead-with-ai run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lead-with-ai", "run", "build" ]
+publicDir = "artifacts/lead-with-ai/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21307"
+BASE_PATH = "/"

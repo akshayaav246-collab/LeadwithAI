@@ -16,6 +16,10 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
+## Artifacts
+
+- `lead-with-ai` — Marketing website for the "Lead with AI" 2-day professional AI program by Global Knowledge Technologies. Frontend-only React + Vite app with wouter routing, plain CSS design system (beige/espresso palette, Playfair Display + EB Garamond), 4 pages: Home, Program, Speakers, Register. Built per a fully prescriptive PRD in `attached_assets/`.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
