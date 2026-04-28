@@ -1,0 +1,692 @@
+Here is a comprehensive Replit prompt / PRD for the Lead with AI website:
+
+---
+
+# Lead with AI — Full Website PRD for Replit
+
+## Project Overview
+
+Build a 3-page marketing website for **Lead with AI**, a 2-day professional AI program by **Global Knowledge Technologies (GKT)**. The site must be production-quality, visually refined, and fully navigable with smooth transitions.
+
+---
+
+## Tech Stack
+
+- **Framework**: React (Vite)
+- **Routing**: React Router v6
+- **Styling**: Plain CSS (no Tailwind, no CSS modules — one global `styles.css`)
+- **Fonts**: Import from Google Fonts — `Playfair Display` (serif, for headings) and `EB Garamond` (serif, for body text). Load both via `<link>` in `index.html`.
+- **Animations**: CSS transitions and keyframes only. No animation libraries.
+- **Icons**: Inline SVG only. No icon libraries.
+- **No external UI component libraries.**
+
+---
+
+## Design System
+
+### Color Palette (Beige Theme)
+```
+--color-cream:       #FAF7F2     /* page background */
+--color-parchment:   #F0EBE1     /* section alternates, card backgrounds */
+--color-sand:        #E2D9CC     /* borders, dividers */
+--color-sienna:      #C4956A     /* primary accent, CTA buttons, highlights */
+--color-sienna-dark: #A67A52     /* button hover */
+--color-espresso:    #3B2F2F     /* primary headings, footer background */
+--color-umber:       #6B4F3A     /* secondary text, subheadings */
+--color-stone:       #8C7B6B     /* muted text, captions */
+--color-white:       #FFFFFF     /* card surfaces, nav background */
+--color-ink:         #2A1F1F     /* body text */
+```
+
+### Typography
+```css
+--font-heading: 'Playfair Display', serif;
+--font-body:    'EB Garamond', serif;
+
+h1 { font-family: var(--font-heading); font-size: clamp(2.4rem, 5vw, 4rem); font-weight: 700; color: var(--color-espresso); line-height: 1.15; }
+h2 { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.8rem); font-weight: 600; color: var(--color-espresso); line-height: 1.2; }
+h3 { font-family: var(--font-heading); font-size: 1.4rem; font-weight: 600; color: var(--color-espresso); }
+h4 { font-family: var(--font-heading); font-size: 1.15rem; font-weight: 600; color: var(--color-umber); }
+p  { font-family: var(--font-body); font-size: 1.15rem; color: var(--color-ink); line-height: 1.8; }
+```
+
+### Spacing
+Use an 8px base grid. Section vertical padding: `5rem 0`. Inner container max-width: `1100px`, horizontally centered, `padding: 0 2rem`.
+
+### Button Styles
+```css
+.btn-primary {
+  background: var(--color-sienna);
+  color: var(--color-white);
+  padding: 0.85rem 2rem;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: background 0.25s ease, transform 0.15s ease;
+}
+.btn-primary:hover { background: var(--color-sienna-dark); transform: translateY(-1px); }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--color-sienna);
+  padding: 0.85rem 2rem;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 600;
+  border: 2px solid var(--color-sienna);
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+.btn-secondary:hover { background: var(--color-sienna); color: var(--color-white); }
+```
+
+### Cards
+```css
+.card {
+  background: var(--color-white);
+  border: 1px solid var(--color-sand);
+  border-radius: 4px;
+  padding: 2rem;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.card:hover { box-shadow: 0 8px 32px rgba(59,47,47,0.1); transform: translateY(-3px); }
+```
+
+---
+
+## Navigation (Persistent across all pages)
+
+The `<nav>` component is sticky (top: 0, z-index: 1000). It has a white background with a 1px bottom border in `--color-sand`. On scroll past 60px, add class `nav-scrolled` which adds a subtle box-shadow (`0 2px 16px rgba(59,47,47,0.08)`).
+
+**Left side**: Logo text — "Lead with AI" in Playfair Display, 1.2rem, bold, `--color-espresso`. Beneath it in smaller text: "by Global Knowledge Technologies" in `--color-stone`, 0.7rem.
+
+**Right side nav links**: `Home`, `Program`, `Speakers`, `Register Now` — the last one styled as a small `btn-primary` pill.
+
+**Mobile**: Hamburger menu below 768px. Clicking hamburger opens a full-width dropdown panel that slides down with a CSS max-height transition (0 → auto via max-height: 400px, transition 0.35s ease). Menu links stack vertically with 1.5rem padding each.
+
+**Active link**: Underlined with a 2px `--color-sienna` line using `border-bottom`.
+
+**Page transitions**: Wrap all `<Routes>` in a container with class `page`. On route change, apply `fade-in` keyframe:
+```css
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page { animation: fade-in 0.4s ease forwards; }
+```
+
+---
+
+## Page 1: Home (`/`)
+
+### Section 1 — Hero
+
+Full-viewport-height section (`min-height: 100vh`). Background: a warm dark overlay (`rgba(43,28,28,0.72)`) over a high-quality abstract background using CSS — create a layered background with `--color-espresso` as the base, and a diagonal repeating linear gradient in sienna tones at 5% opacity to simulate texture. White text throughout.
+
+**Pre-headline tag** (small uppercase label with `--color-sienna` background, white text, 0.75rem, letter-spacing 0.12em, border-radius 2px, padding 0.3rem 0.8rem):
+> GLOBAL KNOWLEDGE TECHNOLOGIES · 2-DAY PROFESSIONAL AI PROGRAM
+
+**Main headline** (h1, white, centered):
+> Lead with AI: Adopt, Implement and Transform
+
+**Sub-headline** (p, `rgba(255,255,255,0.82)`, max-width 640px, centered, 1.2rem):
+> Stop experimenting with AI — start executing with it. In two intensive days, you'll move from passive curiosity to building real workflows, products, and creative assets that you can immediately put to use in your career, projects, or organisation.
+
+**CTA Buttons** (side by side, centered, 1rem gap):
+- Primary: `Register Now →` — links to `/register`
+- Secondary: `Download the Brochure ↓` — styled with white border, white text (modified `.btn-secondary` for dark hero context)
+
+**Trust bar** (below CTAs, 2.5rem margin-top): Three items inline separated by vertical dividers (`|`). Each item has a sienna checkmark SVG icon followed by text:
+- `Certificate on completion`
+- `4 hands-on modules`
+- `Industry practitioners as mentors`
+
+Text in `rgba(255,255,255,0.7)`, 0.95rem.
+
+---
+
+### Section 2 — Why Attend
+
+Background: `--color-cream`. Centered section.
+
+**Section label** (small caps, sienna, 0.8rem, letter-spacing 0.1em): THE CASE FOR THE PROGRAM
+
+**Section headline** (h2, centered, max-width 700px):
+> AI fluency is the new professional baseline. Here's why this program moves the needle.
+
+**3-column card grid** (gap 1.5rem, responsive — 1 column on mobile, 3 on desktop):
+
+Each card has:
+- A decorative inline SVG icon at the top (40×40, `--color-sienna` stroke, 1.5px)
+- h4 heading
+- p body text
+
+**Card 1 — Build real confidence, not just awareness**
+Icon: A shield with a checkmark inside.
+Text: Most AI training stops at tool demos. This program is different. Every concept you learn is immediately applied to a live exercise, so you leave with skills you have actually tested — not just slides you have heard about. Confidence here means knowing what to do when the tool gives you something wrong.
+
+**Card 2 — Walk away with a portfolio, not just a certificate**
+Icon: A folder with a star badge overlaid.
+Text: By the end of day two, you will have created a writing bot, a product prototype, and visual storytelling assets — tangible work you can show on your LinkedIn profile or in your next interview. The certificate reflects demonstrated output, not attendance alone.
+
+**Card 3 — Learn from people who do this, not just teach it**
+Icon: Two overlapping speech bubbles.
+Text: Your mentors are working AI practitioners, technology leaders, and entrepreneurs — not consultants reading from slides. Expect direct insight from people who are building with AI every day, across machine learning, product development, content, and enterprise strategy.
+
+**Stat strip** (below cards, background `--color-parchment`, padding 2rem, border-radius 4px, 3-column flex):
+Each stat is a short bold headline (Playfair Display, 1.1rem, sienna) followed by a one-line descriptor in umber.
+
+- **"AI skills are growing fastest"** — Among the most in-demand competencies in global workplaces today
+- **"Teams are rebuilding around AI"** — Human-AI collaboration is reshaping how work gets organised and executed
+- **"Responsible use is a differentiator"** — Verifiable, ethical AI output is what separates leaders from followers
+
+---
+
+### Section 3 — What You Will Gain
+
+Background: `--color-parchment`. 
+
+**Section label**: SIX THINGS YOU LEAVE WITH
+
+**Section headline** (h2, centered):
+> Six things you will leave with that you did not have when you arrived
+
+**6-card grid** (2 columns desktop, 1 mobile, gap 1.25rem). Each card: white background, left `4px solid --color-sienna` border accent, icon + bold title + one-line description.
+
+**Card 1 — Career-ready AI confidence**
+Icon: graduation cap SVG
+Text: Use AI to learn faster, communicate more clearly, and solve real problems — in college, at work, or as an entrepreneur.
+
+**Card 2 — A portfolio you can show**
+Icon: briefcase SVG
+Text: A writing bot, an AI workflow, a vibe-coded product prototype, and visual storytelling assets — all yours to keep and demonstrate.
+
+**Card 3 — Faster learning habits**
+Icon: lightning bolt SVG
+Text: Use AI as a study partner — summarising, questioning, comparing, and revising at a pace that suits you, not a syllabus.
+
+**Card 4 — Tool-independent thinking**
+Icon: layered squares SVG
+Text: Work confidently across ChatGPT, Gemini, Claude, Copilot, and Perplexity — and whatever comes next — without needing to start over each time.
+
+**Card 5 — Responsible AI habits**
+Icon: scales SVG
+Text: Know when to trust AI output, when to push back, and when to keep the final decision firmly in your own hands.
+
+**Card 6 — Resume and LinkedIn value**
+Icon: badge/ribbon SVG
+Text: Graduate with a certificate and the language to articulate your AI skills clearly to employers, clients, and collaborators.
+
+---
+
+### Section 4 — Day-by-Day Overview
+
+Background: `--color-espresso` (dark section). All text white.
+
+**Section label** (sienna): THE SCHEDULE
+
+**Section headline** (h2, white, centered):
+> Two days. Four modules. One cohort that learns by doing.
+
+**Two cards side by side** (gap 2rem, each card background `rgba(255,255,255,0.07)`, border `1px solid rgba(255,255,255,0.12)`, border-radius 6px, padding 2rem):
+
+**Day 1 Card**
+- Day label: `DAY ONE` in sienna small caps, 0.8rem
+- Date/time: `Saturday · 10 AM – 5 PM IST` in stone, 0.95rem
+- Horizontal divider (1px, rgba white 0.15)
+- **Morning session block**:
+  - Time tag: `10:30 AM – 1:00 PM` in sienna, 0.85rem
+  - Module badge: `MODULE 1 · BEGINNER` (teal-toned background: `rgba(92,186,158,0.15)`, teal text)
+  - h4 in white: Getting Started with Generative AI
+  - p in stone: Understand how large language models actually work, explore the major tools, and build your personal AI adoption mindset. Led by **Sendhil Kumar S**, Founder & Chairman.
+- **Afternoon session block**:
+  - Time tag: `2:00 PM – 5:00 PM`
+  - Module badge: `MODULE 2 · INTERMEDIATE` (amber background `rgba(239,159,39,0.15)`, amber text)
+  - h4 in white: Building Personalised AI Agents
+  - p in stone: Create a writing bot that sounds like you, map your first agentic workflow, and learn how to delegate repeatable tasks to AI. Led by **Peter Darius**, AI Technology Leader.
+
+**Day 2 Card**
+- Day label: `DAY TWO` in sienna
+- Date/time: `Sunday · 10 AM – 6 PM IST`
+- **Morning session block**:
+  - Time: `10:00 AM – 1:00 PM`
+  - Badge: `MODULE 3 · INTERMEDIATE`
+  - h4 in white: Building Products Using AI
+  - p in stone: Go from idea to functional prototype using vibe coding and no-code AI platforms — no software engineering background required. Led by **Dr. Radhika S**, VP Technical.
+- **Afternoon session block**:
+  - Time: `2:00 PM – 5:00 PM`
+  - Badge: `MODULE 4 · ADVANCED` (navy/deep blue background `rgba(56,100,180,0.2)`, blue text)
+  - h4 in white: Visual Storytelling and Content Creation
+  - p in stone: Generate images, create video-ready scenes, and build creative assets for marketing, education, or personal branding. Led by **Dinesh T**, Chief Technology Officer.
+- **Graduation block** (with sienna left border):
+  - Time: `5:00 PM – 6:00 PM`
+  - h4 in white: Graduation Ceremony
+  - p in stone: Showcase your work, receive your certificate, and walk away with a LinkedIn-ready portfolio.
+
+**CTA below cards** (centered, sienna text link with arrow): `See the full program breakdown →` — links to `/program`
+
+---
+
+### Section 5 — Who Is This For
+
+Background: `--color-cream`.
+
+**Section label**: WHO SHOULD ATTEND
+
+**Section headline** (h2, centered, max-width 600px):
+> Designed for people who are done waiting for AI to "figure itself out"
+
+**Audience tag chips** (horizontal flex-wrap, centered, gap 0.75rem). Each chip: `--color-parchment` background, `--color-sand` border, `--color-umber` text, padding `0.5rem 1.25rem`, border-radius 100px, font-family heading, 0.9rem. Tags:
+
+Students & Recent Graduates · Early-Career Professionals · Educators & Trainers · Team Leads & Managers · Entrepreneurs & Founders · Career Switchers into AI-Adjacent Roles
+
+**Body copy** (centered, max-width 560px, 1.1rem, umber):
+No prior coding knowledge or AI experience is required. If you can use a browser, you can build in this program. We focus on practical confidence — not theory overload.
+
+**CTA block** (centered, 2rem margin-top):
+- Primary button: `Register Now →`
+- Small text below button in stone: "Upcoming cohort · 2 days · Certificate on completion"
+
+---
+
+## Page 2: Program (`/program`)
+
+### Page Header
+
+Background: `--color-espresso`. Padding: `6rem 0 4rem`.
+
+**Breadcrumb** (0.85rem, stone): `Home / Program`
+
+**Page headline** (h1, white):
+> The Full Program — What Happens, When, and Why
+
+**Intro paragraph** (p, `rgba(255,255,255,0.75)`, max-width 680px):
+Every session in this program is built around a single principle: if you cannot do it by the end of the day, you have not really learned it. Across two days and four modules, you move through a deliberate progression — from understanding AI clearly, to building with it, to producing outputs that reflect your own thinking, creativity, and goals.
+
+---
+
+### Schedule Overview — Visual Timeline
+
+Background: `--color-cream`. Full-width section.
+
+**Section label**: FULL SCHEDULE
+
+**Section headline**: Two days. Four modules.
+
+Display as a **2-column responsive table** (Day 1 left, Day 2 right). On mobile, stack vertically.
+
+Each column has a header row: `DAY ONE — SATURDAY` / `DAY TWO — SUNDAY` in Playfair, bold, 1rem.
+
+**Color-coded session rows** (each row has a left-side time column and a right-side session description):
+
+Day 1:
+- `10:00 AM` — Onboarding & Orientation — Welcome, goals, and how the program works (gray / neutral background `--color-parchment`)
+- `10:30 AM – 1:00 PM` — Module 1: Getting Started with Generative AI — badge `BEGINNER` in teal (`#2D9E75` text on `rgba(45,158,117,0.12)` background)
+- `1:00 – 2:00 PM` — Lunch Break (italic, stone text, `--color-cream` background)
+- `2:00 – 5:00 PM` — Module 2: Building Personalised AI Agents — badge `INTERMEDIATE` in amber
+
+Day 2:
+- `10:00 AM – 1:00 PM` — Module 3: Building Products Using AI — badge `INTERMEDIATE` in amber
+- `1:00 – 2:00 PM` — Lunch Break
+- `2:00 – 5:00 PM` — Module 4: Visual Storytelling & Content Creation — badge `ADVANCED` in deep blue (`#1A5FA8`)
+- `5:00 – 6:00 PM` — Graduation Ceremony — sienna background, white text
+
+---
+
+### Module 1 — Getting Started with Generative AI
+
+Background: `--color-white`. Padding: `4rem 0`.
+
+**Module label** (sienna small caps): MODULE 1 · SATURDAY MORNING · BEGINNER
+
+**Module headline** (h2):
+> Getting Started with Generative AI
+
+**Module summary** (intro p, max-width 700px, umber):
+Before you can use AI well, you need a clear mental model of what it actually is — and is not. This session cuts through the noise. You will understand how large language models generate text, where they are genuinely useful, where they fail, and how to build the right habits from day one.
+
+**Two-column layout** below (60/40 split):
+
+Left — **What you'll learn** (h4 + unordered list, styled with sienna bullet points):
+- How to explain AI, generative models, and large language models in plain language to any audience
+- How to evaluate which AI tool is right for which task — and why prompt quality matters more than tool choice
+- How to identify the right opportunities for AI in your day-to-day study or work, without over-relying on it
+- How to build a personal AI adoption mindset grounded in safety, clarity, and practical use
+
+Right — **What you'll do** (h4 + unordered list):
+- AI fluency self-assessment — find out where you actually stand before the day begins
+- Hands-on exploration of text, image, research, and productivity tools side by side, in real time
+- Live prompting practice: ask, refine, verify, and iterate until the output is genuinely useful
+- Future-of-AI discussion: what is on the horizon and how to stay ready without chasing every trend
+
+**Resources strip** (below two-column section, `--color-parchment` background, flex row of resource pills):
+Each pill: `--color-sand` border, sienna text, `0.4rem 1rem` padding, 100px border-radius, 0.85rem font. Pills: AI Tools Checklist · Prompt Starter Kit · Self-Assessment Worksheet · Concept Quiz · Personal AI Learning Plan
+
+**Speaker callout** (bottom of module card, border-top `--color-sand`, padding-top 1.5rem, flex row):
+Small avatar placeholder circle (40px, `--color-parchment` background, sienna border) + text: "Led by **Sendhil Kumar S** — Founder & Chairman, Global Knowledge Technologies"
+
+---
+
+### Module 2 — Building Personalised AI Agents
+
+Background: `--color-parchment`.
+
+**Module label**: MODULE 2 · SATURDAY AFTERNOON · INTERMEDIATE
+
+**Module headline**:
+> Building Personalised AI Agents
+
+**Summary** (max-width 700px, umber):
+Generic AI outputs are useful for everyone — and therefore not particularly useful for you. This session teaches you to build something personal: an AI agent that reflects your voice, understands your goals, and can handle the repetitive parts of your work so you can focus on what requires human judgment.
+
+**Two-column What you'll learn / What you'll do**:
+
+Learn:
+- How to create a writing bot that matches your tone, structure, and intended audience
+- The anatomy of an effective AI agent: goal, role, context, memory, and evaluation criteria
+- How to design workflows where AI handles drafting and reviewing while you handle final decisions
+- How to test and improve agent outputs so they stay accurate and consistent over time
+
+Do:
+- Build your own writing bot, personalised to your style and communication goals
+- Create a reusable prompt library for studying, working, and communicating across contexts
+- Map a real workflow from your own life and decide which steps benefit from AI and which must stay human-led
+- Run iteration cycles to debug and refine your agent until it produces consistent, useful outputs
+
+**Resources**: Agent Design Canvas · Writing-Style Capture Worksheet · Workflow Mapping Template · Prompt Library · Output Evaluation Checklist
+
+**Speaker**: Peter Darius — AI Technology Leader
+
+---
+
+### Module 3 — Building Products Using AI
+
+Background: `--color-white`.
+
+**Module label**: MODULE 3 · SUNDAY MORNING · INTERMEDIATE
+
+**Module headline**:
+> Building Products Using AI
+
+**Summary**:
+You do not need to know how to code to build something real. This session introduces vibe coding — using AI to translate ideas into functional product experiences — and walks you through the full process of going from a problem worth solving to a working prototype you can demo by lunchtime.
+
+**Learn**:
+- How to define a clear product problem, a user persona, and the minimum set of features that make the idea worth building
+- How to use AI to generate product requirements, user flows, and screen logic — without writing a single line of code
+- How to navigate no-code and AI-assisted platforms for rapid prototyping and iteration
+- How to test a prototype with real feedback and iterate based on what you learn from the room
+
+**Do**:
+- Turn a problem statement into a product concept with AI assistance in under an hour
+- Build a user journey and feature backlog, then prioritise it for a one-day build
+- Prototype a simple product flow using vibe coding platforms — functional and demonstrable
+- Run a live mini-demo and collect structured improvement feedback from the group
+
+**Resources**: Product Idea Canvas · User Persona Worksheet · AI Coding Prompt Pack · Prototype Checklist · Testing Rubric
+
+**Speaker**: Dr. Radhika S — VP Technical
+
+---
+
+### Module 4 — Visual Storytelling & Content Creation
+
+Background: `--color-parchment`.
+
+**Module label**: MODULE 4 · SUNDAY AFTERNOON · ADVANCED
+
+**Module headline**:
+> Visual Storytelling & Content Creation Using AI
+
+**Summary**:
+Ideas do not travel on text alone. This session teaches you to create compelling visual content using AI — from brand-aligned images to video-ready scenes — and to apply the editorial and ethical judgment that separates credible content from content that merely looks generated.
+
+**Learn**:
+- How to write image prompts that produce realistic, brand-consistent visuals on the first attempt
+- How to convert static images into short-form and long-form video concepts using AI workflows
+- How to plan content strategies for marketing, education, and portfolio storytelling
+- How to apply brand-safety and ethical checks before publishing anything AI-generated
+
+**Do**:
+- Design a campaign concept from scratch and build a visual storyboard around it
+- Generate multiple image prompt variations and choose the strongest creative direction
+- Convert static visuals into video scenes, complete with script, voice, and pacing notes
+- Present a mini creative asset with clear positioning rationale and intended audience
+
+**Resources**: Image Prompt Templates · Storyboard Worksheet · Video Scene Planner · Creative Brief Format · Brand-Safety Checklist · Content Review Rubric
+
+**Speaker**: Dinesh T — Chief Technology Officer
+
+---
+
+### Skills Grid Section
+
+Background: `--color-espresso` (dark). White text.
+
+**Section label** (sienna): SKILLS COVERED
+
+**Section headline** (h2, white):
+> Ten skills. Two days. All connected to a real output you produce.
+
+**10-skill grid** (2 columns desktop, 1 mobile, gap 1.25rem). Each skill card has `rgba(255,255,255,0.06)` background, `1px solid rgba(255,255,255,0.1)` border, padding 1.5rem:
+
+A small numbered label in sienna (01–10), then h4 in white (the skill name), then p in stone (one-liner).
+
+1. **Power Prompting** — Ask precise questions, set constraints, and iterate until the output is exactly right
+2. **AI-First Mindset** — Identify where AI genuinely adds value across learning, productivity, and creative work
+3. **Custom Writing Bot** — Build a personalised assistant that reflects your voice and communication goals
+4. **Agent Workflows** — Map tasks, connect tools, and design automations you will actually use in real work
+5. **Vibe Coding** — Prototype functional products without needing traditional software engineering skills
+6. **Verification Techniques** — Check facts, quality, safety, and hallucinations before acting on AI output
+7. **Visual Storytelling** — Create realistic images and convert them into short or long-form video concepts
+8. **Responsible Use** — Know when AI should lead, when you should review, and when to keep the human in charge
+9. **Workflow Orchestration** — Connect AI outputs across research, writing, product, and creative pipelines
+10. **AI Leadership Translation** — Communicate AI opportunities clearly to peers, teams, and decision-makers
+
+---
+
+### Certificate Section
+
+Background: `--color-cream`.
+
+**Section label**: CERTIFICATION
+
+**Section headline** (h2):
+> Graduate with proof — not just knowledge
+
+**Content** (centered two-column with a decorative certificate illustration on the right):
+
+Left column (body copy):
+Participants who complete both days of the program receive the **Lead with AI Certificate**, issued by Global Knowledge Technologies. The certificate is designed to be added directly to your LinkedIn profile, included in your resume, and referenced in job applications or client conversations.
+
+The certificate reflects not just your attendance, but demonstrated output — you will have the portfolio work to support every claim you make. A writing bot. A product prototype. A visual storytelling asset. A prompt library. These are the proof behind the credential.
+
+Right column: A decorative certificate mockup — use a `--color-parchment` background div with `border: 2px solid --color-sand`, a double inner border using box-shadow (`inset 0 0 0 8px --color-cream, inset 0 0 0 10px --color-sand`), and centered text: "Lead with AI Certificate" in Playfair Display italic, sienna, 1.5rem. Below it: "Global Knowledge Technologies" in stone, 0.85rem. A decorative sienna horizontal rule. "Issued upon completion of both program days." in stone italic.
+
+---
+
+## Page 3: Speakers (`/speakers`)
+
+### Page Header
+
+Background: `--color-espresso`. Same style as Program page header.
+
+**Headline** (h1, white):
+> Meet the People Who Will Change How You Think About AI
+
+**Intro paragraph** (stone, max-width 680px):
+Every mentor in this program is an active practitioner — someone who uses AI not to talk about transformation, but to cause it. They bring decades of combined experience across enterprise technology, machine learning, computer science research, and creative leadership. What they share comes directly from what they are building, researching, and deploying right now.
+
+---
+
+### Speaker 1 — Sendhil Kumar S
+
+Background: `--color-cream`. Padding `4rem 0`.
+
+**Layout**: Full-width card, two-column (photo left, bio right, 40/60 split). On mobile, stacked.
+
+**Left column**: A large portrait placeholder — `--color-parchment` background, `--color-sand` border, 320×380px, border-radius 4px. Centered inside: the person's initials "SK" in Playfair Display, 3rem, sienna. Below the placeholder (outside): a module tag chip — `MODULE 1 · GETTING STARTED WITH GENERATIVE AI` in sienna small caps, `--color-parchment` background, border `--color-sand`, padding `0.4rem 1rem`, border-radius 2px.
+
+**Right column**:
+- `FOUNDER & CHAIRMAN` in sienna small caps, 0.8rem, letter-spacing 0.12em
+- h2: Sendhil Kumar S
+- h4 in umber: Module 1 — Getting Started with Generative AI
+
+**Bio paragraph** (umber body text, 1.1rem):
+Sendhil has spent his career at the intersection of technology, learning, and entrepreneurship. As Founder and Chairman of Global Knowledge Technologies, he leads initiatives that help individuals and organisations move from passive AI awareness to active, responsible adoption. His work focuses on closing the gap between what AI can do and what most people actually know how to do with it — making lifelong learning practical in an era where the rules keep changing.
+
+**"What he brings to this session"** (h4 in espresso + p in ink):
+Sendhil opens the program with a session built to give participants a clear, honest mental model of generative AI — what it is, where it is heading, and how to engage with it without being overwhelmed. Expect a fast-moving, myth-busting conversation grounded in real-world examples, not vendor talking points.
+
+**Expertise tags** (flex-wrap row of chips, `--color-parchment` background):
+AI Adoption Strategy · Learning Design · Business Transformation · Entrepreneurship
+
+---
+
+### Speaker 2 — Peter Darius
+
+Background: `--color-parchment`. **Layout reversed** (bio left, photo right).
+
+- Role: `AI TECHNOLOGY LEADER`
+- Module: Module 2 — Building Personalised AI Agents
+
+**Bio**:
+Peter brings over two decades of technology training and hands-on AI leadership to the program. He has guided learners across Java, C++, blockchain, MuleSoft, and a wide range of modern AI disciplines — including machine learning, deep learning, neural networks, natural language processing, computer vision, and large language models. His sessions are known for being rigorous and practical in equal measure: participants leave understanding not just what tools do, but how to make them work reliably in real contexts.
+
+**What he brings**:
+Peter leads the module on building personalised AI agents — guiding participants through creating writing bots, designing agentic workflows, and understanding what separates a useful AI agent from one that sounds good but fails in practice. His background in deep learning and natural language processing gives this session a technical depth that is rare in workshop settings aimed at non-engineers.
+
+**Expertise**: Machine Learning · Deep Learning · NLP & LLMs · AI Agent Design · Computer Vision
+
+---
+
+### Speaker 3 — Dr. Radhika S
+
+Background: `--color-white`. Layout: photo left, bio right.
+
+- Role: `VP TECHNICAL`
+- Module: Module 3 — Building Products Using AI
+
+**Bio**:
+Dr. Radhika is a distinguished computer science academic and research leader with qualifications spanning MCA, ME, M.Phil., and a Ph.D. Her research interests include neural networks, image processing, data analysis, and machine learning — areas where she has guided numerous student projects and earned multiple academic recognitions. As VP Technical at GKT, she bridges research-grade thinking with practical product education, helping participants understand how AI-assisted tools actually behave under the hood.
+
+**What she brings**:
+Dr. Radhika leads the vibe coding and product prototyping module — translating complex technical concepts into approachable, actionable steps that participants with no engineering background can follow and apply immediately. Her teaching style is precise, patient, and deeply structured, making the most technically demanding content genuinely accessible.
+
+**Expertise**: Neural Networks · Image Processing · Data Analysis · AI-Assisted Product Development
+
+---
+
+### Speaker 4 — Dinesh T
+
+Background: `--color-parchment`. Layout reversed.
+
+- Role: `CHIEF TECHNOLOGY OFFICER`
+- Module: Module 4 — Visual Storytelling & Content Creation
+
+**Bio**:
+Dinesh operates at an unusual intersection: AI, storytelling, learning design, and strategic communication. As Chief Technology Officer at GKT, he leads the organisation's digital programs and AI-led content initiatives. His particular strength is translation — taking complex technological ideas and making them land with force in campaigns, learning materials, and public narratives. He has built teams that work across technology, creativity, and execution simultaneously.
+
+**What he brings**:
+Dinesh closes the program with the visual storytelling module — showing participants how to use AI not just to generate content, but to communicate ideas that actually stick. He brings an editorial eye and a technologist's precision to image prompting, video scripting, and creative asset development, with a strong emphasis on brand integrity and responsible publishing practices.
+
+**Expertise**: AI Content Creation · Visual Storytelling · Strategic Communication · Digital Learning Design
+
+---
+
+### Closing CTA Section
+
+Background: `--color-espresso`. Centered. Padding: `5rem 0`.
+
+**Headline** (h2, white):
+> Four days in the room with this team is a head start most people do not get.
+
+**Sub-text** (p, stone, max-width 520px, centered):
+Do not attend to observe. Attend to build — and leave with the confidence to keep going.
+
+**Button** (centered, large `btn-primary`): `Register for the Program →` — links to `/register`
+
+---
+
+## Footer (All pages)
+
+Background: `--color-espresso`. Color: stone/white. Padding: `3.5rem 0 2rem`.
+
+**4-column layout** (stacks to 2 on tablet, 1 on mobile):
+
+**Column 1 — Brand**:
+- Logo text: "Lead with AI" — Playfair Display, 1.3rem, white
+- Below: "by Global Knowledge Technologies" — stone, 0.8rem
+- Short description (p, stone, 0.95rem, margin-top 0.75rem): A Global Knowledge Technologies initiative bringing practical AI education to students, professionals, and organisations ready to lead the next chapter of work.
+
+**Column 2 — Program**:
+- h4 in sienna small caps: PROGRAM
+- Links (li, no bullets, stone, 0.95rem, each with hover → sienna transition): Getting Started with Generative AI · Building AI Agents · Building Products with AI · Visual Storytelling & AI · Certificate Information
+
+**Column 3 — Quick Links**:
+- h4 in sienna small caps: NAVIGATE
+- Links: Home · Program · Speakers · Register · Download Brochure
+
+**Column 4 — Contact**:
+- h4 in sienna small caps: CONTACT
+- p in stone: For institutional registrations or group bookings, reach out to the GKT team directly.
+- A sienna-colored email placeholder: `info@gkt.edu.in`
+
+**Footer bottom bar** (border-top `rgba(255,255,255,0.1)`, margin-top 2.5rem, padding-top 1.25rem, flex space-between):
+- Left: `© 2025 Global Knowledge Technologies. All rights reserved.`
+- Right: `Lead with AI Program`
+
+Both in stone, 0.8rem.
+
+---
+
+## Register Page (`/register`)
+
+A simple centered page — no full form needed. Background `--color-cream`.
+
+**Heading** (h2, centered): Ready to Join the Next Cohort?
+
+**Subtext**: Registration details and cohort dates will be published here. In the meantime, reach out directly to secure your spot.
+
+**Contact card** (centered, white card, max-width 480px): Email address placeholder + a `btn-primary` "Get in Touch" button.
+
+---
+
+## Routing & Scroll Behavior
+
+- Use `React Router v6` with `<BrowserRouter>`.
+- On every route change, scroll to top (`window.scrollTo(0,0)` in a `useEffect` on location change).
+- Apply the `fade-in` animation to the route container on every page change.
+
+---
+
+## Responsive Breakpoints
+
+```css
+/* Mobile first */
+/* Tablet */
+@media (min-width: 640px) { ... }
+/* Desktop */
+@media (min-width: 1024px) { ... }
+```
+
+All grids default to 1 column, expand to 2 or 3 at desktop. Nav collapses at 768px. Hero text scales with `clamp()`.
+
+---
+
+## Accessibility
+
+- All interactive elements have `:focus-visible` outlines in sienna.
+- Images have alt text. Placeholder divs have `aria-label`.
+- Nav has `aria-label="Main navigation"`. Mobile menu button has `aria-expanded` toggled.
+- Color contrast between body text (`--color-ink` on `--color-cream`) must pass WCAG AA.
+
+---
+
+Build this as a complete, fully working React + Vite app. Every section above must be implemented in full — no placeholder text saying "content goes here". All navigation links must work. The site must be visually polished, typographically elegant, and feel like a premium professional program website.
