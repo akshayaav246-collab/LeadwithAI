@@ -75,7 +75,6 @@ const ITEMS: Item[] = [
 
 export function SixThings() {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [explored, setExplored] = useState<Set<number>>(new Set());
   const [visible, setVisible] = useState(false);
   const sectionRef = useRef<HTMLElement | null>(null);
   const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -96,22 +95,12 @@ export function SixThings() {
     return () => observer.disconnect();
   }, []);
 
-  const markExplored = (index: number) => {
-    setExplored((prev) => {
-      if (prev.has(index)) return prev;
-      const next = new Set(prev);
-      next.add(index);
-      return next;
-    });
-  };
-
   const handleCardClick = (index: number) => {
-    markExplored(index);
     setActiveIndex((prev) => (prev === index ? null : index));
   };
 
   const handleDotClick = (index: number) => {
-    markExplored(index);
+    setActiveIndex(index);
     cardRefs.current[index]?.scrollIntoView({
       behavior: "smooth",
       block: "center",
@@ -119,7 +108,7 @@ export function SixThings() {
     });
   };
 
-  const progress = (explored.size / ITEMS.length) * 100;
+  const filledThrough = activeIndex !== null ? activeIndex : -1;
 
   return (
     <section
@@ -136,7 +125,7 @@ export function SixThings() {
             {ITEMS.map((_, i) => (
               <button
                 key={i}
-                className={`six-dot ${explored.has(i) ? "is-explored" : ""} ${activeIndex === i ? "is-active" : ""}`}
+                className={`six-dot ${i <= filledThrough ? "is-filled" : ""} ${activeIndex === i ? "is-active" : ""}`}
                 onClick={() => handleDotClick(i)}
                 aria-label={`Go to feature ${i + 1}`}
                 type="button"
@@ -150,9 +139,8 @@ export function SixThings() {
             <div
               key={i}
               ref={(el) => { cardRefs.current[i] = el; }}
-              className={`six-card ${activeIndex === i ? "is-active" : ""} ${explored.has(i) ? "is-explored" : ""}`}
+              className={`six-card ${activeIndex === i ? "is-active" : ""}`}
               style={{ animationDelay: `${i * 90}ms` }}
-              onMouseEnter={() => markExplored(i)}
               onClick={() => handleCardClick(i)}
               role="button"
               tabIndex={0}
@@ -167,30 +155,12 @@ export function SixThings() {
                 {String(i + 1).padStart(2, "0")}
               </span>
               <div className="six-card-icon">{item.icon}</div>
-              <div className="six-card-meta">
-                <span className="six-card-step">0{i + 1} / 06</span>
-              </div>
               <h3 className="six-card-title">{item.title}</h3>
               <p className="six-card-body">{item.body}</p>
               <span className="six-card-underline" aria-hidden="true" />
               <span className="six-card-pulse" aria-hidden="true" />
             </div>
           ))}
-        </div>
-
-        <div className="six-progress">
-          <div className="six-progress-meta">
-            <span className="six-progress-label">Your exploration</span>
-            <span className="six-progress-count">
-              {explored.size} <span className="six-progress-of">of {ITEMS.length}</span>
-            </span>
-          </div>
-          <div className="six-progress-track" aria-hidden="true">
-            <div
-              className="six-progress-fill"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
         </div>
       </div>
     </section>
