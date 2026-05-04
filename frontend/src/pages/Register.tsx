@@ -1,144 +1,731 @@
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent, type ChangeEvent } from 'react';
+import { useLocation } from 'wouter';
+import { useAuth } from '@/context/AuthContext';
+import * as api from '@/lib/api';
+import { Autocomplete } from '@/components/Autocomplete';
+
+const COURSE_OPTIONS = [
+  "B.E. Computer Science and Engineering",
+  "B.E. Electronics and Communication Engineering",
+  "B.E. Mechanical Engineering",
+  "B.E. Civil Engineering",
+  "B.E. Electrical and Electronics Engineering",
+  "B.E. Information Science and Engineering",
+  "B.E. Artificial Intelligence and Data Science",
+  "B.E. Cyber Security",
+  "B.E. Mechatronics",
+  "B.E. Aeronautical Engineering",
+  "B.E. Automobile Engineering",
+  "B.E. Biomedical Engineering",
+  "B.E. Biotechnology",
+  "B.Tech Information Technology",
+  "B.Tech Artificial Intelligence and Machine Learning",
+  "B.Tech Data Science",
+  "B.Tech Computer Science and Business Systems",
+  "B.Sc Computer Science",
+  "B.Sc Information Technology",
+  "BCA",
+  "MCA",
+  "MBA",
+  "B.Com",
+];
+
+const DOMAIN_OPTIONS = [
+  "Software Engineering",
+  "Data Science & Analytics",
+  "Artificial Intelligence / Machine Learning",
+  "Product Management",
+  "Marketing & Sales",
+  "Finance & Accounting",
+  "Human Resources",
+  "Operations & Supply Chain",
+  "Design (UI/UX, Graphic)",
+  "Consulting",
+  "Research & Development",
+  "Other"
+];
+
+// ── Razorpay types ──────────────────────────────────────────────
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
+type Tab = 'register' | 'login';
+type UserType = 'student' | 'working';
+type OtpStep = 'email' | 'otp';
 
 export function Register() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState("");
-  const [showModal, setShowModal] = useState(false);
+  const { login } = useAuth();
+  const [, navigate] = useLocation();
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!name.trim() || !email.trim() || !phone.trim()) {
-      setError("Please fill in all details.");
-      return;
+  // ── Tab state ────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<Tab>('register');
+
+  // ── Register form state ──────────────────────────────────────
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [userType, setUserType] = useState<UserType>('student');
+  // Student fields
+  const [collegeName, setCollegeName] = useState('');
+  const [course, setCourse] = useState('');
+  const [year, setYear] = useState('');
+  const [idFile, setIdFile] = useState<File | null>(null);
+  const [isScanningId, setIsScanningId] = useState(false);
+  // Working field
+  const [domain, setDomain] = useState('');
+
+  const [regError, setRegError] = useState('');
+  const [regLoading, setRegLoading] = useState(false);
+  const [regSuccess, setRegSuccess] = useState(false);
+  const [paymentDone, setPaymentDone] = useState(false);
+  const [regToken, setRegToken] = useState('');
+
+  const [regOtpSent, setRegOtpSent] = useState(false);
+  const [regOtp, setRegOtp] = useState('');
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Login form state ─────────────────────────────────────────
+  const [loginEmail, setLoginEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpStep, setOtpStep] = useState<OtpStep>('email');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+
+  // ─────────────────────────────────────────────────────────────
+  // RAZORPAY CHECKOUT
+  // ─────────────────────────────────────────────────────────────
+  async function launchRazorpay(token: string, user: any) {
+    try {
+      const order = await api.createOrder(token);
+
+      // Load Razorpay script dynamically
+      await new Promise<void>((resolve, reject) => {
+        if (window.Razorpay) { resolve(); return; }
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Razorpay'));
+        document.body.appendChild(script);
+      });
+
+      const options = {
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'Global Knowledge Technologies',
+        description: 'Lead with AI — Workshop Registration',
+        order_id: order.orderId,
+        prefill: {
+          name: order.userName,
+          email: order.userEmail,
+          contact: order.userPhone,
+        },
+        theme: { color: '#C4956A' },
+        handler: async (response: any) => {
+          try {
+            await api.verifyPayment(token, {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            setPaymentDone(true);
+          } catch (err: any) {
+            setRegError(err.message || 'Payment verification failed.');
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setRegError('Payment was cancelled. You can try again from your profile.');
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (err: any) {
+      setRegError(err.message || 'Failed to initiate payment.');
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // REGISTER OTP
+  // ─────────────────────────────────────────────────────────────
+  const handleSendRegOtp = async () => {
+    setRegError('');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Please enter a valid email address.");
-      return;
+      return setRegError('Please enter a valid email before sending OTP.');
     }
+    setVerifyLoading(true);
+    try {
+      await api.sendRegisterOtp(email);
+      setRegOtpSent(true);
+      setRegError('OTP sent to your email.');
+    } catch (err: any) {
+      setRegError(err.message || 'Failed to send OTP.');
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
+
+  const handleVerifyRegOtp = async () => {
+    setRegError('');
+    if (!regOtp || regOtp.length !== 6) {
+      return setRegError('Please enter the 6-digit OTP.');
+    }
+    setVerifyLoading(true);
+    try {
+      await api.verifyRegisterOtp(email, regOtp);
+      setIsEmailVerified(true);
+      setRegError('');
+    } catch (err: any) {
+      setRegError(err.message || 'Invalid OTP.');
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // REGISTER SUBMIT
+  // ─────────────────────────────────────────────────────────────
+  const handleRegisterSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setRegError('');
+
+    if (!isEmailVerified) return setRegError('Please verify your email address before registering.');
+
+    // Validation
+    if (!fullName.trim()) return setRegError('Please enter your full name.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setRegError('Please enter a valid email.');
     const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
-    if (!phoneRegex.test(phone.trim())) {
-      setError("Please enter a valid 10-digit mobile number.");
-      return;
+    if (!phoneRegex.test(phone.trim())) return setRegError('Please enter a valid 10-digit mobile number.');
+    if (userType === 'student') {
+      if (!collegeName.trim()) return setRegError('Please enter your college name.');
+      if (!course.trim()) return setRegError('Please enter your course.');
+      if (!year) return setRegError('Please select your year.');
+    } else {
+      if (!domain.trim()) return setRegError('Please enter your domain/field.');
     }
-    setError("");
-    setShowModal(true);
+
+    setRegLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('fullName', fullName.trim());
+      formData.append('email', email.trim().toLowerCase());
+      formData.append('phone', phone.trim());
+      formData.append('userType', userType);
+      if (userType === 'student') {
+        formData.append('collegeName', collegeName.trim());
+        formData.append('course', course.trim());
+        formData.append('year', year);
+        if (idFile) formData.append('idCard', idFile);
+      } else {
+        formData.append('domain', domain.trim());
+      }
+
+      const { token, user } = await api.registerUser(formData);
+      
+      // Auto-add new college to dropdown list in background
+      if (userType === 'student' && collegeName) {
+        api.addCollege(collegeName).catch(() => {});
+      }
+
+      login(token, user);
+      setRegToken(token);
+      setRegSuccess(true);
+    } catch (err: any) {
+      setRegError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setRegLoading(false);
+    }
   };
 
-  const handleConfirmPayment = () => {
-    setShowModal(false);
-    setSubmitted(true);
+  // ─────────────────────────────────────────────────────────────
+  // SEND OTP
+  // ─────────────────────────────────────────────────────────────
+  const handleSendOtp = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoginError('');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)) {
+      return setLoginError('Please enter a valid email address.');
+    }
+    setLoginLoading(true);
+    try {
+      await api.sendOtp(loginEmail.trim().toLowerCase());
+      setOtpSent(true);
+      setOtpStep('otp');
+    } catch (err: any) {
+      setLoginError(err.message || 'Failed to send OTP.');
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
+  // ─────────────────────────────────────────────────────────────
+  // VERIFY OTP
+  // ─────────────────────────────────────────────────────────────
+  const handleVerifyOtp = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoginError('');
+    if (!otp.trim() || otp.length !== 6) return setLoginError('Please enter the 6-digit OTP.');
+    setLoginLoading(true);
+    try {
+      const { token, user } = await api.verifyOtp(loginEmail, otp);
+      login(token, user);
+      navigate('/profile');
+    } catch (err: any) {
+      setLoginError(err.message || 'OTP verification failed.');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────
   return (
     <>
       <main>
-      <section className="register-section">
-        <div className="register-bg" aria-hidden="true">
-          <span className="register-bg-num">01</span>
-          <span className="register-bg-num two">02</span>
-        </div>
-        <div className="register-wrap">
-          <div className="register-eyebrow">REGISTER YOUR INTEREST</div>
-          <h1 className="register-title">
-            Save your seat in the next <span className="accent-italic">Lead with AI</span> cohort.
-          </h1>
-          <p className="register-sub">
-            Share a few details  to get more updates
-          </p>
+        <section className="register-section">
+          <div className="register-bg" aria-hidden="true">
+            <span className="register-bg-num">01</span>
+            <span className="register-bg-num two">02</span>
+          </div>
 
-          {submitted ? (
-            <div className="register-success" role="status">
-              <div className="register-success-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </div>
-              <h3>Thank you, {name.split(" ")[0]}.</h3>
-              <p>
-                Proceeding to Payment Gateway...
-              </p>
+          <div className="register-wrap">
+            {/* ── Eyebrow ── */}
+            <div className="register-eyebrow">LEAD WITH AI · 2-DAY WORKSHOP</div>
+            <h1 className="register-title">
+              Save your seat in the next <span className="accent-italic">Lead with AI</span> cohort.
+            </h1>
+
+            {/* ── Tabs ── */}
+            <div className="reg-tabs" role="tablist">
               <button
-                type="button"
-                className="btn-secondary"
-                style={{ marginTop: "1.5rem" }}
-                onClick={() => {
-                  setSubmitted(false);
-                  setName("");
-                  setEmail("");
-                  setPhone("");
-                }}
+                role="tab"
+                aria-selected={activeTab === 'register'}
+                className={`reg-tab ${activeTab === 'register' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('register'); setRegError(''); }}
               >
-                Go back
+                Register
+              </button>
+              <button
+                role="tab"
+                aria-selected={activeTab === 'login'}
+                className={`reg-tab ${activeTab === 'login' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('login'); setLoginError(''); }}
+              >
+                Login
               </button>
             </div>
-          ) : (
-            <form className="register-form" onSubmit={handleSubmit} noValidate>
-              <div className="register-field">
-                <label htmlFor="reg-name">Full name</label>
-                <input
-                  id="reg-name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Anjali Menon"
-                  autoComplete="name"
-                  required
-                />
-              </div>
-              <div className="register-field">
-                <label htmlFor="reg-email">Email address</label>
-                <input
-                  id="reg-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  required
-                />
-              </div>
-              <div className="register-field">
-                <label htmlFor="reg-phone">Phone number</label>
-                <input
-                  id="reg-phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g. +91 9876543210"
-                  autoComplete="tel"
-                  required
-                />
-              </div>
-              {error && <div className="register-error" role="alert">{error}</div>}
-              <button type="submit" className="btn-primary register-submit" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
-                <span>Enroll Now →</span>
-                <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.9 }}>(Pay ₹500)</span>
-              </button>
-              <p className="register-note">
-                Prefer email? Reach us directly at{" "}
-                <a href="mailto:genquiry@globalknowledgetech.com" className="register-link">genquiry@globalknowledgetech.com</a>
-              </p>
-            </form>
-          )}
 
-        </div>
-      </section>
-    </main>
-    {showModal && (
-      <div className="modal-overlay">
-        <div className="modal-content">
-          <h3>Confirm Enrollment</h3>
-          <p style={{ marginTop: '1rem', marginBottom: '2rem', color: 'var(--color-ink)' }}>Are you sure you want to proceed to payment (₹500)?</p>
-          <div className="modal-actions">
-            <button onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
-            <button onClick={handleConfirmPayment} className="btn-primary">Yes, Proceed</button>
+            {/* ══════════════════════════════════════
+                REGISTER TAB
+            ══════════════════════════════════════ */}
+            {activeTab === 'register' && (
+              <>
+                {paymentDone ? (
+                  /* ── Payment Success State ── */
+                  <div className="register-success" role="status">
+                    <div className="register-success-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </div>
+                    <h3>You're in, {fullName.split(' ')[0]}!</h3>
+                    <p>Payment confirmed. A receipt has been sent to <strong>{email}</strong>.</p>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ marginTop: '1.5rem' }}
+                      onClick={() => navigate('/profile')}
+                    >
+                      View My Profile →
+                    </button>
+                  </div>
+                ) : regSuccess ? (
+                  /* ── Registered, payment pending ── */
+                  <div className="register-success" role="status">
+                    <div className="register-success-icon" style={{ background: 'rgba(196,149,106,0.12)', color: 'var(--color-sienna)' }} aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    </div>
+                    <h3>Registered! Complete Payment</h3>
+                    <p>Your account has been created. Please complete the ₹500 payment to confirm your seat.</p>
+                    {regError && <div className="register-error" role="alert" style={{ marginTop: '1rem' }}>{regError}</div>}
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ marginTop: '1.5rem' }}
+                      onClick={() => launchRazorpay(regToken, {})}
+                    >
+                      Pay ₹500 Now →
+                    </button>
+                  </div>
+                ) : (
+                  /* ── Register Form ── */
+                  <form className="register-form" onSubmit={handleRegisterSubmit} noValidate encType="multipart/form-data">
+                    <p className="register-sub">Share your details to reserve your spot.</p>
+
+                    {/* Basic info row */}
+                    <div className="register-grid-2">
+                      <div className="register-field">
+                        <label htmlFor="reg-name">Full Name *</label>
+                        <input
+                          id="reg-name"
+                          type="text"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="e.g. Anjali Menon"
+                          autoComplete="name"
+                          required
+                        />
+                      </div>
+                      <div className="register-field">
+                        <label htmlFor="reg-phone">Phone Number *</label>
+                        <input
+                          id="reg-phone"
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                          placeholder="e.g. 9876543210"
+                          autoComplete="tel"
+                          maxLength={10}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="register-field">
+                      <label htmlFor="reg-email">Email Address *</label>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <input
+                            id="reg-email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => {
+                              setEmail(e.target.value);
+                              setIsEmailVerified(false);
+                              setRegOtpSent(false);
+                              setRegOtp('');
+                            }}
+                            placeholder="you@example.com"
+                            autoComplete="email"
+                            required
+                            disabled={isEmailVerified}
+                          />
+                        </div>
+                        {!isEmailVerified && (
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}
+                            onClick={handleSendRegOtp}
+                            disabled={verifyLoading}
+                          >
+                            {verifyLoading && !regOtpSent ? 'Sending...' : 'Send OTP'}
+                          </button>
+                        )}
+                        {isEmailVerified && (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', color: '#22c55e' }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {regOtpSent && !isEmailVerified && (
+                      <div className="register-field">
+                        <label htmlFor="reg-otp">Enter OTP *</label>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1 }}>
+                            <input
+                              id="reg-otp"
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={6}
+                              value={regOtp}
+                              onChange={(e) => setRegOtp(e.target.value.replace(/\D/g, ''))}
+                              placeholder="6-digit OTP"
+                              required
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}
+                            onClick={handleVerifyRegOtp}
+                            disabled={verifyLoading}
+                          >
+                            {verifyLoading && regOtpSent ? 'Verifying...' : 'Verify Email'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Student / Working Toggle */}
+                    <div className="register-field">
+                      <label>I am a *</label>
+                      <div className="reg-toggle">
+                        <button
+                          type="button"
+                          className={`reg-toggle-btn ${userType === 'student' ? 'active' : ''}`}
+                          onClick={() => setUserType('student')}
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M21.42 10.922a2 2 0 0 0-.019-3.838L12.83 4.34a2 2 0 0 0-1.66 0L2.6 7.08a2 2 0 0 0 0 3.832l8.57 3.698a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
+                          Student
+                        </button>
+                        <button
+                          type="button"
+                          className={`reg-toggle-btn ${userType === 'working' ? 'active' : ''}`}
+                          onClick={() => setUserType('working')}
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                          Working Professional
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Student-specific fields */}
+                    {userType === 'student' && (
+                      <div className="reg-conditional-fields">
+                        <div className="register-field" style={{ marginBottom: '1.5rem' }}>
+                          <label htmlFor="reg-idcard">
+                            College ID Card *
+                            {isScanningId && <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)' }}>Scanning ID...</span>}
+                          </label>
+                          <div
+                            className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
+                            onClick={() => !isScanningId && fileInputRef.current?.click()}
+                            style={{ cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
+                          >
+                            <input
+                              ref={fileInputRef}
+                              id="reg-idcard"
+                              type="file"
+                              accept=".jpg,.jpeg,.png,.pdf"
+                              style={{ display: 'none' }}
+                              onChange={async (e: ChangeEvent<HTMLInputElement>) => {
+                                const f = e.target.files?.[0] || null;
+                                setIdFile(f);
+                                if (f) {
+                                  setIsScanningId(true);
+                                  try {
+                                    const parsed = await api.parseIdCard(f);
+                                    if (parsed.college) setCollegeName(parsed.college);
+                                    if (parsed.course) setCourse(parsed.course);
+                                    if (parsed.year) setYear(parsed.year);
+                                  } catch (err) {
+                                    console.error('ID Parse Error:', err);
+                                    alert('Could not extract details automatically. Please fill manually.');
+                                  } finally {
+                                    setIsScanningId(false);
+                                  }
+                                }
+                              }}
+                            />
+                            {idFile ? (
+                              <span className="upload-filename">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                {idFile.name}
+                              </span>
+                            ) : (
+                              <span className="upload-placeholder">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Upload ID (JPG/PNG/PDF)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="register-grid-2">
+                          <div className="register-field">
+                            <label htmlFor="reg-college">College Name *</label>
+                            <input
+                              id="reg-college"
+                              type="text"
+                              value={collegeName}
+                              onChange={(e) => setCollegeName(e.target.value)}
+                              placeholder="e.g. PSG College of Technology"
+                              required
+                            />
+                          </div>
+                          <div className="register-field">
+                            <label htmlFor="reg-course">Course *</label>
+                            <input
+                              id="reg-course"
+                              type="text"
+                              value={course}
+                              onChange={(e) => setCourse(e.target.value)}
+                              placeholder="e.g. B.Tech CSE"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div className="register-field" style={{ marginTop: '1.5rem' }}>
+                          <label htmlFor="reg-year">Year *</label>
+                          <select
+                            id="reg-year"
+                            value={year}
+                            onChange={(e) => setYear(e.target.value)}
+                            className="register-select"
+                            required
+                          >
+                            <option value="">Select year</option>
+                            <option value="1st Year">1st Year</option>
+                            <option value="2nd Year">2nd Year</option>
+                            <option value="3rd Year">3rd Year</option>
+                            <option value="4th Year">4th Year</option>
+                            <option value="5th Year">5th Year</option>
+                            <option value="Postgraduate">Postgraduate</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Working professional fields */}
+                    {userType === 'working' && (
+                      <div className="reg-conditional-fields">
+                        <div className="register-field">
+                          <label htmlFor="reg-domain">Domain / Field of Work *</label>
+                          <Autocomplete
+                            id="reg-domain"
+                            value={domain}
+                            onChange={setDomain}
+                            placeholder="e.g. Software Engineering, Marketing, Finance…"
+                            options={DOMAIN_OPTIONS}
+                            required
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {regError && <div className="register-error" role="alert">{regError}</div>}
+
+                    <button
+                      type="submit"
+                      className="btn-primary register-submit"
+                      disabled={regLoading || !isEmailVerified}
+                    >
+                      {regLoading ? (
+                        <span className="btn-loading">
+                          <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                        </span>
+                      ) : (
+                        <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay ₹500)</span></>
+                      )}
+                    </button>
+
+                    <p className="register-note">
+                      Already registered?{' '}
+                      <button type="button" className="register-link register-link-btn" onClick={() => setActiveTab('login')}>
+                        Log in here
+                      </button>
+                    </p>
+                  </form>
+                )}
+              </>
+            )}
+
+            {/* ══════════════════════════════════════
+                LOGIN TAB
+            ══════════════════════════════════════ */}
+            {activeTab === 'login' && (
+              <>
+                {otpStep === 'email' ? (
+                  <form className="register-form" onSubmit={handleSendOtp} noValidate>
+                    <p className="register-sub">Enter your registered email to receive a one-time password.</p>
+
+                    <div className="register-field">
+                      <label htmlFor="login-email">Email Address *</label>
+                      <input
+                        id="login-email"
+                        type="email"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        autoComplete="email"
+                        required
+                      />
+                    </div>
+
+                    {loginError && <div className="register-error" role="alert">{loginError}</div>}
+
+                    <button type="submit" className="btn-primary register-submit" disabled={loginLoading}>
+                      {loginLoading ? (
+                        <span className="btn-loading">
+                          <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                        </span>
+                      ) : 'Send OTP →'}
+                    </button>
+
+                    <p className="register-note">
+                      Don't have an account?{' '}
+                      <button type="button" className="register-link register-link-btn" onClick={() => setActiveTab('register')}>
+                        Register here
+                      </button>
+                    </p>
+                  </form>
+                ) : (
+                  <form className="register-form" onSubmit={handleVerifyOtp} noValidate>
+                    <p className="register-sub">
+                      We've sent a 6-digit OTP to <strong>{loginEmail}</strong>. Enter it below.
+                    </p>
+
+                    <div className="register-field">
+                      <label htmlFor="login-otp">One-Time Password *</label>
+                      <input
+                        id="login-otp"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="\d{6}"
+                        maxLength={6}
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                        placeholder="6-digit OTP"
+                        autoComplete="one-time-code"
+                        required
+                        className="otp-input"
+                      />
+                    </div>
+
+                    {loginError && <div className="register-error" role="alert">{loginError}</div>}
+
+                    <button type="submit" className="btn-primary register-submit" disabled={loginLoading}>
+                      {loginLoading ? (
+                        <span className="btn-loading">
+                          <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                        </span>
+                      ) : 'Verify & Login →'}
+                    </button>
+
+                    <p className="register-note">
+                      Didn't receive it?{' '}
+                      <button
+                        type="button"
+                        className="register-link register-link-btn"
+                        onClick={() => { setOtpStep('email'); setOtp(''); setLoginError(''); }}
+                      >
+                        Resend OTP
+                      </button>
+                    </p>
+                  </form>
+                )}
+              </>
+            )}
           </div>
-        </div>
-      </div>
-    )}
+        </section>
+      </main>
     </>
   );
 }

@@ -1,10 +1,12 @@
 import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 export function NavBar() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { isLoggedIn, user, logout } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -20,6 +22,11 @@ export function NavBar() {
   }, [location]);
 
   const isActive = (path: string) => location === path;
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
 
   return (
     <nav className={scrolled ? "nav-scrolled" : ""}>
@@ -41,9 +48,24 @@ export function NavBar() {
           <Link href="/speakers" className={`nav-link ${isActive("/speakers") ? "active" : ""}`}>
             Speakers
           </Link>
-          <Link href="/register" className="btn-primary nav-btn">
-            Register Now
-          </Link>
+
+          {isLoggedIn ? (
+            <>
+              <Link
+                href="/profile"
+                className={`nav-link ${isActive("/profile") ? "active" : ""}`}
+              >
+                My Profile
+              </Link>
+              <button className="btn-secondary nav-btn nav-logout-btn" onClick={handleLogout}>
+                Logout
+              </button>
+            </>
+          ) : (
+            <Link href="/register" className="btn-primary nav-btn">
+              Register / Login
+            </Link>
+          )}
         </div>
 
         <button 
@@ -63,7 +85,16 @@ export function NavBar() {
           <Link href="/" className="mobile-nav-link">Home</Link>
           <Link href="/program" className="mobile-nav-link">Program</Link>
           <Link href="/speakers" className="mobile-nav-link">Speakers</Link>
-          <Link href="/register" className="mobile-nav-link">Register Now</Link>
+          {isLoggedIn ? (
+            <>
+              <Link href="/profile" className="mobile-nav-link">My Profile</Link>
+              <button className="mobile-nav-link mobile-logout-btn" onClick={handleLogout}>
+                Logout
+              </button>
+            </>
+          ) : (
+            <Link href="/register" className="mobile-nav-link">Register / Login</Link>
+          )}
         </div>
       </div>
     </nav>
