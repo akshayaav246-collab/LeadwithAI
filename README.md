@@ -448,7 +448,7 @@ PORT=4000
 CLIENT_URL=http://localhost:5173
 
 # MongoDB
-MONGODB_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/leadwithai
+MONGO_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/leadwithai
 
 # JWT
 JWT_SECRET=your_jwt_secret_key

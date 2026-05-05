@@ -1,4 +1,11 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const fallbackBase = `${window.location.protocol}//${window.location.hostname}:4000`;
+// const serverApiUrl = 'https://project.globalknowledgetech.com:4000';
+const envBase = (import.meta.env.VITE_API_URL || '').trim();
+// const isProductionHost = window.location.hostname === 'project.globalknowledgetech.com';
+// const resolvedBase = envBase || (isProductionHost ? serverApiUrl : fallbackBase);
+
+const resolvedBase = envBase || fallbackBase;
+const BASE_URL = resolvedBase;
 
 async function request<T>(
   path: string,

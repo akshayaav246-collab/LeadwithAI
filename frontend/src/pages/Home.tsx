@@ -1,7 +1,27 @@
 import { Link } from "wouter";
 import { SixThings } from "@/components/SixThings";
+import { useEffect } from "react";
 
 export function Home() {
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+    );
+
+    document.querySelectorAll('.scroll-fade-up, .scroll-scale-up, .scroll-slide-right, .scroll-slide-left').forEach((el) => {
+      observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <main>
       <section className="hero-section">
@@ -37,7 +57,7 @@ export function Home() {
       <SixThings />
 
       <section className="section schedule-section">
-        <div className="container schedule-container">
+        <div className="container schedule-container scroll-scale-up">
           <div className="text-center">
             <span className="section-label">THE SCHEDULE</span>
             <h2 className="section-headline" style={{ color: 'var(--color-white)' }}>Two days. Four modules. One cohort that learns by doing.</h2>
@@ -110,15 +130,15 @@ export function Home() {
       <section className="section who-section">
         <div className="container">
           <div className="who-grid">
-            <div className="who-content-left">
+            <div className="who-content-left scroll-slide-right">
               <span className="section-label">WHO SHOULD ATTEND</span>
-              <h2 className="section-headline" style={{ textAlign: "left", margin: "0 0 1rem 0" }}>Designed for people who are done waiting for AI to "figure itself out"</h2>
+              <h2 className="section-headline">Designed for people who are done waiting for AI to "figure itself out"</h2>
               
               <p style={{ color: 'var(--color-umber)', fontSize: '1.1rem', marginBottom: '2rem' }}>
                 This program is curated for visionaries who understand that the future isn't about choosing between technology and humanity, but about mastering their intersection.
               </p>
 
-              <div className="audience-chips" style={{ justifyContent: "flex-start", marginBottom: "0" }}>
+              <div className="audience-chips" style={{ marginBottom: "0" }}>
                 <div className="audience-chip" tabIndex={0}>Students &amp; Recent Graduates</div>
                 <div className="audience-chip" tabIndex={0}>Early-Career Professionals</div>
                 <div className="audience-chip" tabIndex={0}>Educators &amp; Trainers</div>
@@ -127,17 +147,26 @@ export function Home() {
                 <div className="audience-chip" tabIndex={0}>Career Switchers into AI-Adjacent Roles</div>
               </div>
             </div>
-            
-            <div className="who-content-right">
-              <div className="who-quote-card">
-                <p className="who-quote-text">
-                  "AI will not replace humans, but humans who lead with AI will replace those who do not."
+
+            {/* ── Certificate Preview Card ── */}
+            <div className="who-content-right scroll-slide-left">
+              <div className="who-cert-card">
+                <p className="who-cert-heading">What You Will Earn</p>
+                <p className="who-cert-title">A Certificate of Completion</p>
+                <p className="who-cert-subtitle">
+                  Recognised proof of your AI skills — issued upon successfully completing both days of the program.
                 </p>
+
+                {/* Certificate visual */}
+                <div className="who-cert-frame" style={{ padding: 0 }}>
+                  <img src="/Certificate.png" alt="Certificate of Completion" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
+
     </main>
   );
 }

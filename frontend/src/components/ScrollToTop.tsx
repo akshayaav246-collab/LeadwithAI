@@ -5,7 +5,11 @@ export function ScrollToTop() {
   const [location] = useLocation();
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    // Wait for the next paint before scrolling so the new DOM is fully laid out
+    // and browser's native scroll restoration doesn't override it.
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    });
   }, [location]);
 
   return null;

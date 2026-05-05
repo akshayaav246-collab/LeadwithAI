@@ -52,4 +52,4 @@ userSchema.methods.verifyOtp = async function (otpPlain) {
   return bcrypt.compare(otpPlain, this.otpHash);
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', userSchema, process.env.COLLECTION_NAME || 'users');
