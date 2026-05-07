@@ -10,18 +10,22 @@
 1. [Overview](#overview)
 2. [Tech Stack](#tech-stack)
 3. [Project Structure](#project-structure)
-4. [Architecture](#architecture)
-5. [Pages & Features](#pages--features)
-6. [API Reference](#api-reference)
-7. [Database Schema](#database-schema)
-8. [Authentication & Security](#authentication--security)
-9. [Payment Flow](#payment-flow)
-10. [AI-Powered ID Card Scanning](#ai-powered-id-card-scanning)
-11. [Email System](#email-system)
-12. [Admin Panel](#admin-panel)
-13. [Environment Variables](#environment-variables)
-14. [Getting Started](#getting-started)
-15. [Available Scripts](#available-scripts)
+4. [System Architecture](#system-architecture)
+5. [Workflow Diagrams](#workflow-diagrams)
+   - [Registration Flow](#registration-flow)
+   - [Login Flow](#login-flow)
+   - [Payment Flow](#payment-flow)
+   - [AI ID Card Scanning Flow](#ai-id-card-scanning-flow)
+6. [Pages & Features](#pages--features)
+7. [API Reference](#api-reference)
+8. [Database Schema](#database-schema)
+9. [Authentication & Security](#authentication--security)
+10. [Email System](#email-system)
+11. [Admin Panel](#admin-panel)
+12. [Environment Variables](#environment-variables)
+13. [Getting Started](#getting-started)
+14. [Available Scripts](#available-scripts)
+15. [Design System](#design-system)
 
 ---
 
@@ -30,11 +34,11 @@
 **Lead with AI** is a full-stack web application that serves as the marketing and registration platform for a 2-day hands-on AI program. It combines a luxury-editorial frontend with a robust Node.js/Express backend to deliver:
 
 - A rich, animated public-facing marketing site with program details, speaker bios, and curriculum
-- OTP-based passwordless authentication for attendees
-- AI-powered student ID card scanning (using Google Gemini + Tesseract OCR fallback) to auto-fill registration details
+- OTP-based passwordless authentication with mandatory email verification before registration
+- AI-powered student ID card scanning (Google Gemini 2.5 Flash + Tesseract OCR fallback) to auto-fill registration details
 - Integrated Razorpay payment gateway for ₹500 program fee collection
 - A secure admin panel to view registrations, track payments, and send bulk emails
-- Automated transactional emails (registration confirmation, login OTP, payment confirmation)
+- Automated transactional emails — registration confirmation, login OTP, payment receipt with Google Calendar `.ics` attachment, and a cron-triggered reminder email 1 day before the event
 
 ---
 
@@ -52,7 +56,7 @@
 | Form Handling | React Hook Form + Zod |
 | UI Primitives | Radix UI |
 | Icons | Lucide React + React Icons |
-| State/Data | TanStack React Query |
+| State / Data | TanStack React Query |
 | Charts | Recharts |
 | Fonts | Playfair Display, EB Garamond, DM Sans (Google Fonts) |
 
@@ -63,14 +67,14 @@
 | Runtime | Node.js |
 | Framework | Express 4 |
 | Database | MongoDB (via Mongoose 8) |
-| Authentication | JWT (jsonwebtoken) + bcryptjs OTPs |
+| Authentication | JWT (jsonwebtoken) + bcryptjs OTP hashing |
 | Payments | Razorpay SDK |
-| File Uploads | Multer |
-| AI OCR (Primary) | Google Gemini 1.5 Flash (`@google/genai`) |
+| File Uploads | Multer (JPEG / PNG / PDF, max 10 MB) |
+| AI OCR (Primary) | Google Gemini 2.5 Flash (`@google/genai`) |
 | OCR Fallback | Tesseract.js 7 + Sharp (image preprocessing) |
-| Email | Nodemailer |
-| PDF Parsing | pdf-parse, pdf2json |
-| Excel Parsing | xlsx |
+| Email | Nodemailer (SMTP) |
+| Cron Jobs | node-cron (reminder emails) |
+| PDF / Excel Parsing | pdf-parse, pdf2json, xlsx |
 
 ---
 
@@ -86,17 +90,17 @@ Next-Lead/
 │   │   │   ├── auth.js                # JWT auth middleware (user)
 │   │   │   └── adminAuth.js           # JWT auth middleware (admin)
 │   │   ├── models/
-│   │   │   └── User.js                # Mongoose User schema
+│   │   │   └── User.js                # Mongoose User schema + OTP methods
 │   │   ├── routes/
 │   │   │   ├── auth.js                # Registration, OTP, login, ID parse
 │   │   │   ├── payment.js             # Razorpay order creation & verification
 │   │   │   ├── data.js                # College search API
-│   │   │   └── admin.js              # Admin stats, users, bulk email
-│   │   ├── utils/
-│   │   │   └── email.js               # Nodemailer email templates
-│   │   ├── eng.traineddata            # Tesseract OCR language data (English)
-│   │   └── index.js                   # Express app entry point
+│   │   │   └── admin.js               # Admin stats, users, bulk email
+│   │   └── utils/
+│   │       └── email.js               # Nodemailer email templates
 │   ├── uploads/                       # Uploaded ID card images (gitignored)
+│   ├── eng.traineddata                # Tesseract OCR language data (English)
+│   ├── index.js                       # Express app entry point + cron scheduler
 │   ├── .env                           # Backend environment variables (gitignored)
 │   └── package.json
 │
@@ -110,13 +114,14 @@ Next-Lead/
 │   │   │   └── ScrollToTop.tsx        # Route-change scroll reset
 │   │   ├── context/
 │   │   │   └── AuthContext.tsx        # Global auth state (JWT + user data)
+│   │   ├── lib/
+│   │   │   └── api.ts                 # Axios instance with env-aware base URL
 │   │   ├── pages/
 │   │   │   ├── Home.tsx               # Landing / hero page
 │   │   │   ├── Program.tsx            # Curriculum & schedule
 │   │   │   ├── Speakers.tsx           # Speaker bios
 │   │   │   ├── Register.tsx           # Registration + payment flow
-│   │   │   ├── Profile.tsx            # Attendee profile & certificate
-│   │   │   ├── Certificate.tsx        # Certificate page
+│   │   │   ├── Profile.tsx            # Attendee profile & certificate access
 │   │   │   └── admin/
 │   │   │       ├── AdminLogin.tsx     # Admin login page
 │   │   │       ├── AdminLayout.tsx    # Admin shell + sidebar
@@ -138,42 +143,204 @@ Next-Lead/
 
 ---
 
-## Architecture
+## System Architecture
 
+```mermaid
+graph TB
+    subgraph Browser["🌐 User's Browser"]
+        SPA["React 19 + Vite SPA"]
+        subgraph Pages["Pages"]
+            PUB["Public Pages\nHome / Program / Speakers"]
+            REG["Register\n(OTP → Form → Payment)"]
+            PRO["Profile / Certificate"]
+            ADM["Admin Panel\nOverview / Users / Email"]
+        end
+        AC["AuthContext\n(JWT + user state)"]
+        SPA --> Pages
+        Pages --> AC
+    end
+
+    subgraph Backend["⚙️ Express Backend (Node.js)"]
+        MW["CORS + JSON Middleware\nRequest Logger"]
+        subgraph Routes["API Routes"]
+            AUTH["/api/auth\nOTP · Register · Login · parse-id"]
+            PAY["/api/payment\ncreate-order · verify"]
+            DATA["/api/data\nCollege Search"]
+            ADMIN_R["/api/admin\nStats · Users · Bulk Email"]
+        end
+        CRON["node-cron\nReminder Email @ 9AM IST"]
+        MW --> Routes
+    end
+
+    subgraph DB["🗄️ MongoDB Atlas"]
+        USERS["users collection\n(COLLECTION_NAME env var)"]
+    end
+
+    subgraph External["☁️ External Services"]
+        GEMINI["Google Gemini 2.5 Flash\n(ID Card OCR)"]
+        TESS["Tesseract.js + Sharp\n(OCR Fallback)"]
+        RZP["Razorpay\n(Payment Gateway)"]
+        SMTP["Nodemailer / SMTP\n(Transactional Email)"]
+    end
+
+    Browser -- "HTTP REST\nAuthorization: Bearer JWT" --> Backend
+    Routes --> DB
+    AUTH --> GEMINI
+    AUTH --> TESS
+    PAY --> RZP
+    AUTH --> SMTP
+    PAY --> SMTP
+    ADMIN_R --> SMTP
+    CRON --> SMTP
+    CRON --> DB
 ```
-┌──────────────────────────────────────────────────────────┐
-│                      USER'S BROWSER                       │
-│                                                          │
-│   React 19 + Vite SPA (frontend/)                        │
-│   ┌────────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐  │
-│   │  Marketing │ │ Register │ │ Profile  │ │  Admin  │  │
-│   │   Pages    │ │   Flow   │ │  / Cert  │ │  Panel  │  │
-│   └────────────┘ └──────────┘ └──────────┘ └─────────┘  │
-└───────────────────────────┬──────────────────────────────┘
-                            │ HTTP / REST (JSON)
-                            │ Authorization: Bearer <JWT>
-┌───────────────────────────▼──────────────────────────────┐
-│              EXPRESS BACKEND (backend/)                   │
-│                                                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐   │
-│  │/api/auth │ │/api/pay  │ │/api/data │ │/api/admin │   │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘   │
-│       │            │            │              │         │
-│  ┌────▼────────────▼────────────▼──────────────▼──────┐  │
-│  │              Mongoose ODM                           │  │
-│  └────────────────────────┬────────────────────────────┘  │
-└───────────────────────────┼──────────────────────────────┘
-                            │
-       ┌────────────────────▼────────────────────┐
-       │           MongoDB Atlas / Local          │
-       │         Collections: users              │
-       └─────────────────────────────────────────┘
-                            
-       External Services:
-       ├── Google Gemini 1.5 Flash  (OCR for ID cards)
-       ├── Tesseract.js + Sharp     (OCR fallback)
-       ├── Razorpay                 (payment gateway)
-       └── Nodemailer / SMTP        (transactional email)
+
+---
+
+## Workflow Diagrams
+
+### Registration Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant FE as Register.tsx
+    participant BE as /api/auth
+    participant DB as MongoDB
+    participant Mail as Nodemailer
+
+    User->>FE: Enter email
+    FE->>BE: POST /send-register-otp
+    BE->>DB: Check if email exists
+    alt Email already registered
+        DB-->>BE: User found
+        BE-->>FE: 409 "User already exists"
+        FE-->>User: "Please login instead"
+    else New email
+        BE->>BE: Generate 6-digit OTP (in-memory store, 10 min TTL)
+        BE->>Mail: sendOtpEmail()
+        Mail-->>User: OTP email delivered
+        BE-->>FE: 200 "OTP sent"
+    end
+
+    User->>FE: Enter OTP
+    FE->>BE: POST /verify-register-otp
+    BE->>BE: Validate OTP & expiry
+    BE->>BE: Add email to verifiedEmails Set
+    BE-->>FE: 200 "Email verified"
+
+    User->>FE: Fill form (name, phone, type, college/domain)
+    FE->>BE: POST /register (multipart — optional idCard)
+    BE->>BE: Check verifiedEmails Set
+    BE->>DB: Duplicate email check
+    BE->>DB: Create User document
+    BE->>Mail: sendRegistrationEmail() (async, non-blocking)
+    BE-->>FE: 201 { token, user }
+    FE->>FE: AuthContext.login() → navigate to /profile
+```
+
+---
+
+### Login Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant FE as Register.tsx (Login tab)
+    participant BE as /api/auth
+    participant DB as MongoDB
+    participant Mail as Nodemailer
+
+    User->>FE: Enter registered email
+    FE->>BE: POST /send-otp
+    BE->>DB: Find user by email
+    alt User not found
+        BE-->>FE: 404 "Account does not exist"
+        FE-->>User: "Please register"
+    else User found
+        BE->>BE: generateOtp() → user.setOtp() (bcrypt hash, 10 min TTL)
+        BE->>DB: Save otpHash + otpExpiry
+        BE->>Mail: sendOtpEmail()
+        Mail-->>User: Login OTP email
+        BE-->>FE: 200 "OTP sent"
+    end
+
+    User->>FE: Enter OTP
+    FE->>BE: POST /verify-otp
+    BE->>DB: Find user, call verifyOtp()
+    BE->>BE: bcrypt.compare(otp, otpHash) + expiry check
+    alt Valid OTP
+        BE->>DB: Clear otpHash + otpExpiry
+        BE->>BE: signToken(userId) → JWT (30 days)
+        BE-->>FE: 200 { token, user }
+        FE->>FE: AuthContext.login() → navigate to /profile
+    else Invalid / Expired
+        BE-->>FE: 400 "Invalid or expired OTP"
+    end
+```
+
+---
+
+### Payment Flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant FE as Register.tsx / Profile.tsx
+    participant BE as /api/payment
+    participant RZP as Razorpay
+    participant DB as MongoDB
+    participant Mail as Nodemailer
+
+    User->>FE: Click "Pay ₹500"
+    FE->>BE: POST /api/payment/create-order (JWT)
+    BE->>RZP: Create order (₹500 = 50000 paise)
+    RZP-->>BE: { orderId, currency, amount }
+    BE-->>FE: { orderId, keyId, prefill data }
+
+    FE->>RZP: Open Razorpay Checkout modal
+    User->>RZP: Pay via UPI / Card / Net Banking
+    RZP-->>FE: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+
+    FE->>BE: POST /api/payment/verify (JWT)
+    BE->>BE: HMAC-SHA256 signature validation
+    alt Signature valid
+        BE->>DB: Update paymentStatus → "confirmed"
+        BE->>DB: Store razorpayOrderId + razorpayPaymentId
+        BE->>Mail: sendPaymentConfirmationEmail() with .ics calendar attachment
+        BE-->>FE: 200 "Payment confirmed"
+        FE-->>User: Success screen + calendar invite in email
+    else Invalid signature
+        BE-->>FE: 400 "Payment verification failed"
+    end
+```
+
+---
+
+### AI ID Card Scanning Flow
+
+```mermaid
+flowchart TD
+    A([Student uploads ID card\nJPEG / PNG / PDF]) --> B[Multer saves file\nto /uploads, max 10MB]
+    B --> C[Read file as base64]
+    C --> D{Try\nGemini 2.5 Flash}
+
+    D -->|Success| E[Parse JSON response\ncollege · course · academicYearRange]
+    D -->|Fail / Timeout| F[Fallback: Tesseract.js]
+
+    E --> G[parseYearFromRange\ne.g. 2022-2026 → 3rd Year]
+    
+    F --> F1{Is PDF?}
+    F1 -->|No| F2[Sharp: grayscale + normalize]
+    F1 -->|Yes| F3[Pass raw buffer]
+    F2 --> F4[Tesseract OCR]
+    F3 --> F4
+    F4 --> F5[Regex: college · course · year]
+    F5 --> G
+
+    G --> H[Return JSON\ncollege · course · year · source]
+    H --> I[Auto-fill registration form]
+    B --> J[Delete temp file\nfrom /uploads]
 ```
 
 ---
@@ -184,10 +351,11 @@ Next-Lead/
 
 | Route | Component | Description |
 |---|---|---|
-| `/` | `Home.tsx` | Hero section, "Six Core Takeaways" interactive grid with scroll-reveal animations, program highlights, day-wise schedule, and CTA buttons |
-| `/program` | `Program.tsx` | Full 2-day curriculum breakdown, module-wise detail view with speaker attribution and "What you'll learn / build" sections |
+| `/` | `Home.tsx` | Hero section, "Six Core Takeaways" interactive grid with scroll-reveal, program highlights, day-wise schedule, and CTA buttons |
+| `/program` | `Program.tsx` | Full 2-day curriculum breakdown, module-wise detail with speaker attribution and "What you'll learn / build" sections |
+| `/program/:moduleIndex` | `Program.tsx` | Deep-link to a specific module |
 | `/speakers` | `Speakers.tsx` | Speaker bio cards with profile images, designations, and expertise highlights |
-| `/register` | `Register.tsx` | Multi-step registration form: OTP email verification → profile form (student/professional) with AI ID scan → Razorpay payment |
+| `/register` | `Register.tsx` | Multi-step flow: OTP email verification → profile form (student/professional) with AI ID scan → Razorpay payment |
 | `/profile` | `Profile.tsx` | Post-login attendee profile with registration status, payment status, and certificate access |
 
 ### Admin Panel (Protected)
@@ -195,41 +363,39 @@ Next-Lead/
 | Route | Component | Description |
 |---|---|---|
 | `/admin/login` | `AdminLogin.tsx` | Admin credential login (email + password) |
-| `/admin/overview` | `AdminOverview.tsx` | Dashboard: total registrations, paid users, recent sign-ups |
+| `/admin/overview` | `AdminOverview.tsx` | Dashboard: total registrations, paid users, revenue indicator, recent sign-ups |
 | `/admin/users` | `AdminUsers.tsx` | Full registrant table with search, filter by type (student/professional), and payment status |
 | `/admin/email` | `AdminEmail.tsx` | Bulk email composer: send to all, paid-only, or custom recipient list |
 
 ### Key UI Components
 
-- **`SixThings.tsx`** — Animated grid showcasing the 6 core program takeaways. Supports click-to-flip dark mode states, ghost numerals, staggered scroll reveals, navigation dots, and an "exploration progress" tracker.
-- **`Autocomplete.tsx`** — Custom theme-aware college search dropdown with real-time API-backed filtering and support for saving new user-entered colleges to the database.
+- **`SixThings.tsx`** — Animated grid showcasing 6 core program takeaways. Supports click-to-flip dark states, ghost numerals, staggered scroll reveals, navigation dots, and an exploration progress tracker.
+- **`Autocomplete.tsx`** — Custom theme-aware college search dropdown with real-time API-backed filtering and support for saving user-entered colleges to the database.
 - **`NavBar.tsx`** — Sticky navigation with smooth scroll behavior and mobile responsiveness.
 - **`AuthContext.tsx`** — Global React context providing `user`, `token`, `login()`, and `logout()` across the app.
+- **`api.ts`** — Axios instance with environment-aware base URL resolution (local dev vs. production hostname).
 
 ---
 
 ## API Reference
 
-> Base URL: `http://localhost:4000` (development)  
-> All protected routes require: `Authorization: Bearer <JWT>`
+> **Base URL (dev):** `http://localhost:4002`  
+> **Protected routes require:** `Authorization: Bearer <JWT>`
 
 ### Auth — `/api/auth`
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `POST` | `/send-register-otp` | None | Send 6-digit OTP to email for new user verification |
-| `POST` | `/verify-register-otp` | None | Verify OTP; marks email as eligible for registration |
-| `POST` | `/parse-id` | None | Upload student ID card image/PDF; returns extracted college, course, year via AI OCR |
-| `POST` | `/register` | None | Create user account with optional ID card upload; sends confirmation email |
-| `POST` | `/send-otp` | None | Send login OTP to existing user's email |
-| `POST` | `/verify-otp` | None | Verify login OTP; returns JWT token + user object |
-| `GET` | `/me` | ✅ JWT | Returns full authenticated user profile |
+| `POST` | `/send-register-otp` | None | Check email uniqueness → send 6-digit OTP for new user verification |
+| `POST` | `/verify-register-otp` | None | Verify OTP; marks email as eligible for registration (in-memory Set) |
+| `POST` | `/parse-id` | None | Upload student ID card (JPEG/PNG/PDF, max 10 MB); returns extracted college, course, year via AI OCR |
+| `POST` | `/register` | None | Create user account (requires prior email verification); sends confirmation email |
+| `POST` | `/send-otp` | None | Send login OTP to an existing registered user |
+| `POST` | `/verify-otp` | None | Verify login OTP (bcrypt compare); returns JWT + user object |
+| `GET` | `/me` | ✅ JWT | Returns full authenticated user profile (excludes `otpHash`, `otpExpiry`) |
 
-#### `POST /api/auth/parse-id`
+#### `POST /api/auth/parse-id` — Response
 
-Accepts a `multipart/form-data` request with field `idCard` (JPEG/PNG/PDF, max 10 MB).
-
-**Response:**
 ```json
 {
   "college": "Sri Venkateswara College of Engineering",
@@ -247,9 +413,9 @@ Accepts a `multipart/form-data` request with field `idCard` (JPEG/PNG/PDF, max 1
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `POST` | `/create-order` | ✅ JWT | Creates a Razorpay order for ₹500; returns `orderId`, `keyId`, prefill data |
-| `POST` | `/verify` | ✅ JWT | Verifies Razorpay HMAC signature; marks payment as `confirmed`; sends confirmation email |
+| `POST` | `/verify` | ✅ JWT | Verifies Razorpay HMAC-SHA256 signature; marks payment `confirmed`; sends confirmation email with `.ics` attachment |
 
-#### `POST /api/payment/verify` Request Body
+#### `POST /api/payment/verify` — Request Body
 
 ```json
 {
@@ -265,7 +431,7 @@ Accepts a `multipart/form-data` request with field `idCard` (JPEG/PNG/PDF, max 1
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `GET` | `/colleges?q=<query>` | None | Search college names (returns top 50 matches) |
+| `GET` | `/colleges?q=<query>` | None | Search college names from dataset (returns top 50 matches) |
 | `POST` | `/colleges` | None | Add a new college name to the dataset |
 
 ---
@@ -274,12 +440,12 @@ Accepts a `multipart/form-data` request with field `idCard` (JPEG/PNG/PDF, max 1
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `POST` | `/login` | None | Authenticate with admin email + password; returns admin JWT |
+| `POST` | `/login` | None | Authenticate with admin email + password; returns admin JWT (24h) |
 | `GET` | `/stats` | ✅ Admin JWT | Returns total users, paid users count, and 5 most recent registrations |
 | `GET` | `/users` | ✅ Admin JWT | Returns all registrants with formatted details |
 | `POST` | `/send-email` | ✅ Admin JWT | Send bulk HTML email to `all`, `paid`, or `custom` recipient set |
 
-#### Admin Bulk Email Request Body
+#### Admin Bulk Email — Request Body
 
 ```json
 {
@@ -304,13 +470,14 @@ Accepts a `multipart/form-data` request with field `idCard` (JPEG/PNG/PDF, max 1
 
 ## Database Schema
 
-### `User` Collection
+### `User` Collection  
+*(collection name controlled by `COLLECTION_NAME` env var, defaults to `"users"`)*
 
 ```js
 {
-  fullName:   String (required),
-  email:      String (unique, lowercase),
-  phone:      String,
+  fullName:   String (required, trimmed),
+  email:      String (unique, lowercase, trimmed),
+  phone:      String (required, trimmed),
   userType:   "student" | "working",
 
   // Student-only fields
@@ -319,24 +486,25 @@ Accepts a `multipart/form-data` request with field `idCard` (JPEG/PNG/PDF, max 1
   year:        String,       // e.g. "3rd Year"
   idCardPath:  String,       // filename in /uploads
 
-  // Working professional-only
-  domain:     String,        // e.g. "Software Engineering"
+  // Working professional-only fields
+  domain:       String,      // e.g. "Software Engineering"
+  organization: String,      // Company / organisation name
 
-  // OTP auth
+  // OTP login fields
   otpHash:    String,        // bcrypt hash of 6-digit OTP
   otpExpiry:  Date,          // 10-minute TTL
 
-  // Payment/Event tracking
+  // Payment & event tracking
   registeredEvents: [{
-    eventName:        String,
-    razorpayOrderId:  String,
+    eventName:         String,
+    razorpayOrderId:   String,
     razorpayPaymentId: String,
-    paymentStatus:    "pending" | "confirmed" | "failed",
-    registeredAt:     Date,
+    paymentStatus:     "pending" | "confirmed" | "failed",
+    registeredAt:      Date,
   }],
 
-  createdAt: Date,
-  updatedAt: Date,
+  createdAt: Date,   // auto (timestamps: true)
+  updatedAt: Date,   // auto (timestamps: true)
 }
 ```
 
@@ -344,95 +512,71 @@ Accepts a `multipart/form-data` request with field `idCard` (JPEG/PNG/PDF, max 1
 
 ## Authentication & Security
 
-The application uses a **passwordless OTP-based** authentication system:
+The application uses a **passwordless OTP-based** authentication system with mandatory email pre-verification.
 
-### Registration Flow
-1. User submits email → backend checks for duplicates → sends 6-digit OTP via email
-2. User enters OTP → backend verifies & marks email as verified (10-min window)
-3. User completes registration form → account created, JWT issued
+### Registration Flow (2-step)
+
+1. **Email check + OTP send** → `POST /send-register-otp`
+   - Blocks with `409` if email already exists
+   - Stores OTP in **in-memory Map** with 10-minute TTL
+2. **OTP verify** → `POST /verify-register-otp`
+   - Adds email to **in-memory `verifiedEmails` Set**
+3. **Account creation** → `POST /register`
+   - Rejects with `403` if email is not in `verifiedEmails` Set
+   - Creates user, clears email from Set, issues JWT
 
 ### Login Flow
-1. User submits email → backend finds account → sends 6-digit OTP
-2. User enters OTP → bcrypt comparison against stored hash → JWT issued on success
-3. OTP cleared from DB after use (one-time)
+
+1. User submits email → backend verifies account exists → sends 6-digit OTP via email
+2. OTP stored as **bcrypt hash** in MongoDB with 10-min `otpExpiry`
+3. User enters OTP → `bcrypt.compare()` + expiry check → JWT issued on success
+4. OTP cleared from DB after successful use (one-time)
 
 ### JWT Details
-- **Algorithm:** HS256
-- **Expiry:** 30 days (user) / 1 day (admin)
-- **Claims:** `{ userId }` (user) or `{ adminId, isAdmin: true }` (admin)
-- **Transport:** `Authorization: Bearer <token>` header
 
----
-
-## Payment Flow
-
-```
-Register.tsx
-    │
-    ├─1─▶ POST /api/payment/create-order
-    │        └── Razorpay creates order (₹500 / 50000 paise)
-    │        └── Returns orderId, keyId, user prefill
-    │
-    ├─2─▶ Razorpay Checkout SDK opens in browser
-    │        └── User pays via UPI / Card / Net Banking
-    │
-    ├─3─▶ On payment success, frontend receives:
-    │        razorpay_order_id, razorpay_payment_id, razorpay_signature
-    │
-    └─4─▶ POST /api/payment/verify
-             └── HMAC-SHA256 signature validated
-             └── User's event status → "confirmed"
-             └── Payment confirmation email dispatched
-```
-
----
-
-## AI-Powered ID Card Scanning
-
-When a student uploads their college ID card, the backend runs a two-tier extraction pipeline:
-
-### Tier 1 — Google Gemini 1.5 Flash
-- Image/PDF converted to base64
-- Structured JSON prompt sent to Gemini Vision
-- Extracts: `college`, `course`, `academicYearRange`
-
-### Tier 2 — Tesseract.js + Sharp (Fallback)
-- Triggered if Gemini fails or is unavailable
-- Sharp preprocesses images (grayscale + normalize) for better OCR accuracy
-- Regex patterns extract college name, course code, and academic range
-
-### Year Calculation
-Academic range (e.g. `"2022-2026"`) is dynamically resolved to the current year of study:
-```
-Enrolled: 2022  |  Graduating: 2026  |  Duration: 4 years
-Current Year (2025) → Elapsed: 3 years → "3rd Year"
-```
+| Property | Value |
+|---|---|
+| Algorithm | HS256 |
+| Expiry (User) | 30 days |
+| Expiry (Admin) | 24 hours |
+| User claims | `{ userId }` |
+| Admin claims | `{ adminId, isAdmin: true }` |
+| Transport | `Authorization: Bearer <token>` header |
 
 ---
 
 ## Email System
 
-Transactional emails are sent via **Nodemailer** using SMTP. Three email templates are implemented in `backend/src/utils/email.js`:
+Transactional emails are sent via **Nodemailer** over SMTP. All emails are dispatched **asynchronously** (non-blocking) after the primary HTTP response is returned.
 
-| Function | Trigger | Recipient |
+| Function | Trigger | Key Feature |
 |---|---|---|
-| `sendOtpEmail()` | Registration OTP / Login OTP | Registrant |
-| `sendRegistrationEmail()` | Successful account creation | Registrant |
-| `sendPaymentConfirmationEmail()` | Razorpay payment verified (Includes `.ics` calendar attachment for Google Calendar integration) | Registrant |
-| `sendCustomBulkEmail()` | Admin bulk send | All / Paid / Custom |
+| `sendOtpEmail()` | Registration OTP / Login OTP | 6-digit code with branded HTML template |
+| `sendRegistrationEmail()` | Successful account creation | Welcome email with event details |
+| `sendPaymentConfirmationEmail()` | Razorpay payment verified | Receipt + `.ics` calendar attachment (Google Calendar native integration via `METHOD:PUBLISH`) |
+| `sendReminderEmail()` | Cron job — 1 day before event | Zoom link + event details to paid attendees |
+| `sendCustomBulkEmail()` | Admin bulk send | Send to All / Paid / Custom list |
 
-All emails are sent asynchronously (non-blocking) after the primary response is returned. The payment confirmation email specifically uses the `icalEvent` parameter (`METHOD:PUBLISH`) to natively trigger the "Add to Calendar" widget in clients like Gmail.
+### Cron Job — Event Reminder
+
+Runs **daily at 9:00 AM IST (03:30 UTC)** via `node-cron`. On the day before the event, it automatically queries all paid participants and dispatches reminder emails with the Zoom meeting link.
+
+```
+Event Date: May 16, 2026 (10:00 AM IST)
+Cron: 30 3 * * * (Asia/Kolkata timezone)
+Trigger: Fires if tomorrow === event date
+```
 
 ---
 
 ## Admin Panel
 
-The admin panel is a protected section of the same SPA, accessible only with admin credentials stored as environment variables.
+The admin panel is a protected section of the same SPA, accessible only with credentials set as environment variables.
 
 **Features:**
 - **Overview Dashboard** — Total registrations, paid count, revenue indicator, recent sign-up activity
-- **User Table** — Searchable and filterable list of all registrants (name, email, phone, type, college/domain, payment status, registration date)
-- **Bulk Email** — Compose rich HTML emails and dispatch to all registrants, only paid attendees, or a custom list
+- **User Table** — Searchable and filterable list of all registrants (name, email, phone, type, college/organization, payment status, date)
+- **Bulk Email** — Compose rich HTML emails and dispatch to all registrants, paid attendees only, or a custom list
 
 Admin JWT tokens expire in **24 hours**.
 
@@ -444,7 +588,7 @@ Admin JWT tokens expire in **24 hours**.
 
 ```env
 # Server
-PORT=4000
+PORT=4002
 CLIENT_URL=http://localhost:5173
 
 # MongoDB
@@ -478,9 +622,10 @@ FROM_NAME="Lead with AI"
 ### Frontend (`frontend/.env`)
 
 ```env
-VITE_API_BASE=http://localhost:5000
+VITE_API_BASE=http://localhost:4002
 ```
-Note: The frontend uses dynamic resolution in `src/lib/api.ts` to automatically detect the environment (local development vs. production server hostname) and route API calls to the appropriate backend URL.
+
+> The frontend uses dynamic resolution in `src/lib/api.ts` to automatically detect the environment (local development vs. production hostname) and route API calls to the appropriate backend URL.
 
 > ⚠️ **Never commit `.env` files.** Both are listed in `.gitignore`.
 
@@ -515,10 +660,10 @@ npm install
 ### Configure Environment
 
 ```bash
-# Copy and fill backend env
+# Create and fill backend env
 cp backend/.env.example backend/.env
 
-# Copy and fill frontend env
+# Create and fill frontend env
 cp frontend/.env.example frontend/.env
 ```
 
@@ -528,7 +673,7 @@ cp frontend/.env.example frontend/.env
 # Terminal 1 — Start Backend
 cd backend
 npm run dev
-# → http://localhost:4000
+# → http://localhost:4002
 
 # Terminal 2 — Start Frontend
 cd frontend
@@ -553,7 +698,7 @@ npm run dev
 |---|---|
 | `npm run dev` | Start Vite dev server at `http://localhost:5173` |
 | `npm run build` | Build production bundle to `dist/` |
-| `npm run serve` | Preview the production build |
+| `npm run serve` | Preview the production build locally |
 | `npm run typecheck` | Run TypeScript type-checking without emitting |
 
 ---
@@ -563,9 +708,10 @@ npm run dev
 The frontend uses a **bespoke luxury-editorial CSS design system** defined in `frontend/src/index.css`:
 
 - **Color palette:** Warm beige (`#f5f0e8`) backgrounds, espresso (`#2c1a0e`) headings, amber-gold accents
-- **Typography:** `Playfair Display` (display headings), `EB Garamond` (body text), `DM Sans` (UI/labels)
-- **Animations:** Staggered scroll-reveal (Intersection Observer), Framer Motion page transitions, hover lift effects
+- **Typography:** `Playfair Display` (display headings), `EB Garamond` (body text), `DM Sans` (UI / labels)
+- **Animations:** Staggered scroll-reveal (Intersection Observer API), Framer Motion page transitions, hover lift effects
 - **Responsive:** Mobile-first breakpoints at 768px and 1024px
+- **Admin styles:** Separate `admin.css` with a professional dark-sidebar layout
 
 ---
 

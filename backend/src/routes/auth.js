@@ -315,6 +315,11 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
         email: user.email,
         phone: user.phone,
         userType: user.userType,
+        collegeName: user.collegeName,
+        course: user.course,
+        year: user.year,
+        domain: user.domain,
+        organization: user.organization,
         registeredEvents: user.registeredEvents,
       },
     });
@@ -381,6 +386,11 @@ router.post('/verify-otp', async (req, res) => {
         email: user.email,
         phone: user.phone,
         userType: user.userType,
+        collegeName: user.collegeName,
+        course: user.course,
+        year: user.year,
+        domain: user.domain,
+        organization: user.organization,
         registeredEvents: user.registeredEvents,
       },
     });
