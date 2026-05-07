@@ -183,11 +183,21 @@ export function Profile() {
                 </>
               )}
 
-              {user.userType === 'working' && user.domain && (
-                <div className="profile-detail-item">
-                  <span className="profile-detail-label">Domain</span>
-                  <span className="profile-detail-value">{user.domain}</span>
-                </div>
+              {user.userType === 'working' && (
+                <>
+                  {user.domain && (
+                    <div className="profile-detail-item">
+                      <span className="profile-detail-label">Domain</span>
+                      <span className="profile-detail-value">{user.domain}</span>
+                    </div>
+                  )}
+                  {user.organization && (
+                    <div className="profile-detail-item">
+                      <span className="profile-detail-label">Organization</span>
+                      <span className="profile-detail-value">{user.organization}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

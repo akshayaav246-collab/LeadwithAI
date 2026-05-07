@@ -18,6 +18,7 @@ export interface AuthUser {
   course?: string;
   year?: string;
   domain?: string;
+  organization?: string;
   registeredEvents: RegisteredEvent[];
 }
 
