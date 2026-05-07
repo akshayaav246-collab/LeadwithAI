@@ -254,6 +254,7 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
       course,
       year,
       domain,
+      organization,
     } = req.body;
 
     // Validate required fields
@@ -280,6 +281,10 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
       email: email.toLowerCase().trim(),
       phone: phone.trim(),
       userType,
+      registeredEvents: [{
+        eventName: 'Lead with AI: Adopt, Implement and Transform',
+        paymentStatus: 'pending'
+      }]
     };
 
     if (userType === 'student') {
@@ -291,6 +296,7 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
       }
     } else {
       userData.domain = domain?.trim();
+      userData.organization = organization?.trim();
     }
 
     const user = await User.create(userData);
@@ -403,6 +409,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         course: user.course,
         year: user.year,
         domain: user.domain,
+        organization: user.organization,
         registeredEvents: user.registeredEvents,
         createdAt: user.createdAt,
       },

@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { publicAsset } from "@/lib/assets";
 
 export function Footer() {
   return (
@@ -30,7 +31,7 @@ export function Footer() {
               <li><Link href="/program">Program</Link></li>
               <li><Link href="/speakers">Speakers</Link></li>
               <li><Link href="/register">Register</Link></li>
-              <li><a href="/brochure.pdf" download>Download Brochure</a></li>
+              <li><a href={publicAsset("brochure.pdf")} download>Download Brochure</a></li>
             </ul>
           </div>
           
@@ -46,7 +47,7 @@ export function Footer() {
         </div>
         
         <div className="footer-bottom">
-          <div>© 2025 Global Knowledge Technologies. All rights reserved.</div>
+          <div>© 2026 Global Knowledge Technologies. All rights reserved.</div>
           <div>Lead with AI Program</div>
         </div>
       </div>

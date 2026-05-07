@@ -1,4 +1,5 @@
 import React from "react";
+import { publicAsset } from "@/lib/assets";
 
 export function Certificate() {
   return (
@@ -14,7 +15,7 @@ export function Certificate() {
           </p>
         </div>
         <div className="certificate-frame">
-          <img src="/Certificate.png" alt="Lead with AI Certificate" />
+          <img src={publicAsset("Certificate.png")} alt="Lead with AI Certificate" />
         </div>
       </div>
     </main>

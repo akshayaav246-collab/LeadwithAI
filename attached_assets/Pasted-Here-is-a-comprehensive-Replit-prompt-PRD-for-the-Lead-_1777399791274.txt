@@ -639,7 +639,7 @@ Background: `--color-espresso`. Color: stone/white. Padding: `3.5rem 0 2rem`.
 - A sienna-colored email placeholder: `info@gkt.edu.in`
 
 **Footer bottom bar** (border-top `rgba(255,255,255,0.1)`, margin-top 2.5rem, padding-top 1.25rem, flex space-between):
-- Left: `© 2025 Global Knowledge Technologies. All rights reserved.`
+- Left: `© 2026 Global Knowledge Technologies. All rights reserved.`
 - Right: `Lead with AI Program`
 
 Both in stone, 0.8rem.

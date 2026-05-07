@@ -28,6 +28,7 @@ const userSchema = new mongoose.Schema(
 
     // Working professional fields
     domain: { type: String, trim: true },
+    organization: { type: String, trim: true },
 
     // OTP for login
     otpHash: { type: String },

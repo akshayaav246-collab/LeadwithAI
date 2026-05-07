@@ -2,11 +2,11 @@
   "name": "leadwithai-backend",
   "version": "1.0.0",
   "description": "Backend API for Lead with AI registration & payments",
-  "main": "src/index.js",
+  "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
     "@google/genai": "^1.51.0",
@@ -17,6 +17,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.4.1",
     "multer": "^1.4.5-lts.1",
+    "node-cron": "^4.2.1",
     "nodemailer": "^8.0.7",
     "pdf-parse": "^1.1.1",
     "pdf2json": "^4.0.3",

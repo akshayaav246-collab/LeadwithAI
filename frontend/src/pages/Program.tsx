@@ -14,6 +14,7 @@ type Module = {
   speakerName: string;
   speakerRole: string;
   speakerInitials: string;
+  speakerId: string;
 };
 
 const MODULES: Module[] = [
@@ -22,7 +23,7 @@ const MODULES: Module[] = [
     badge: "BEGINNER",
     badgeClass: "level-beginner",
     day: "Day One · Saturday",
-    time: "10:30 AM – 1:00 PM",
+    time: "10:00 AM – 1:00 PM",
     title: "Getting Started with Generative AI",
     description:
       "Before you can use AI well, you need a clear mental model of what it actually is, and is not. This session cuts through the noise. You will understand how large language models generate text, where they are genuinely useful, where they fail, and how to build the right habits from day one.",
@@ -41,6 +42,7 @@ const MODULES: Module[] = [
     speakerName: "Sendhil Kumar S",
     speakerRole: "Founder & Chairman",
     speakerInitials: "SK",
+    speakerId: "sk",
   },
   {
     number: "02",
@@ -66,6 +68,7 @@ const MODULES: Module[] = [
     speakerName: "Dr. Radhika S",
     speakerRole: "VP Technical",
     speakerInitials: "RS",
+    speakerId: "rs",
   },
   {
     number: "03",
@@ -91,6 +94,7 @@ const MODULES: Module[] = [
     speakerName: "Peter Darius",
     speakerRole: "AI Technology Leader",
     speakerInitials: "PD",
+    speakerId: "pd",
   },
   {
     number: "04",
@@ -116,6 +120,7 @@ const MODULES: Module[] = [
     speakerName: "Dinesh T",
     speakerRole: "Chief Technology Officer",
     speakerInitials: "DT",
+    speakerId: "dt",
   },
 ];
 
@@ -170,9 +175,37 @@ export function Program() {
           <h1 className="program-hero-title">
             Four interactive modules. <span className="accent-italic">One transformation.</span>
           </h1>
-          <p className="program-hero-sub">
-            Every session is designed around one principle: learn by building. Pick a module to explore or move through them in order.
+          <p className="program-hero-sub" style={{ marginBottom: '1.25rem' }}>
+            Every session is designed around one principle: learn by building.<br/>
+            Pick a module to explore or move through them in order.
           </p>
+
+          <div style={{
+            background: 'var(--color-sienna)',
+            borderRadius: '8px',
+            padding: '0.8rem 1.25rem',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            marginBottom: '2.5rem',
+            color: 'var(--color-white)'
+          }}>
+            <div className="program-hero-sub" style={{ margin: 0, color: 'inherit', fontWeight: 500 }}>
+              <strong style={{ fontWeight: 700 }}>Graduation Ceremony</strong> · Day Two, 17th May 2026
+            </div>
+            <div style={{
+              border: '1px solid rgba(255,255,255,0.5)',
+              borderRadius: '100px',
+              padding: '0.3rem 0.8rem',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              letterSpacing: '0.02em'
+            }}>
+              5:00 – 6:00 PM IST
+            </div>
+          </div>
 
           <div className="program-modules-rail" role="tablist" aria-label="Modules">
             {MODULES.map((m, i) => (
@@ -269,7 +302,12 @@ export function Program() {
               <div>
                 <div className="program-led-label">LED BY</div>
                 <div className="program-led-name">
-                  <strong>{active.speakerName}</strong>
+                  <Link
+                    href={`/speakers#${active.speakerId}`}
+                    style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1.5px solid var(--color-sienna)', paddingBottom: '1px', fontWeight: 700 }}
+                  >
+                    {active.speakerName}
+                  </Link>
                   <span className="program-led-role">, {active.speakerRole}</span>
                 </div>
               </div>

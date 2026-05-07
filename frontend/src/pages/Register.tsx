@@ -31,18 +31,13 @@ const COURSE_OPTIONS = [
 ];
 
 const DOMAIN_OPTIONS = [
-  "Software Engineering",
-  "Data Science & Analytics",
-  "Artificial Intelligence / Machine Learning",
-  "Product Management",
-  "Marketing & Sales",
-  "Finance & Accounting",
-  "Human Resources",
-  "Operations & Supply Chain",
-  "Design (UI/UX, Graphic)",
-  "Consulting",
-  "Research & Development",
-  "Other"
+  "Information Technology (IT)",
+  "Manufacturing",
+  "Automobile / Automotive",
+  "Healthcare",
+  "Finance & Banking",
+  "Education",
+  "Retail & E-commerce",
 ];
 
 // ── Razorpay types ──────────────────────────────────────────────
@@ -74,10 +69,13 @@ export function Register() {
   const [year, setYear] = useState('');
   const [idFile, setIdFile] = useState<File | null>(null);
   const [isScanningId, setIsScanningId] = useState(false);
-  // Working field
+  // Working fields
   const [domain, setDomain] = useState('');
+  const [organization, setOrganization] = useState('');
 
-  const [regError, setRegError] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const clearError = (field: string) => setErrors(prev => ({ ...prev, [field]: '' }));
+
   const [regLoading, setRegLoading] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
   const [paymentDone, setPaymentDone] = useState(false);
@@ -94,7 +92,6 @@ export function Register() {
   const [loginEmail, setLoginEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [otpStep, setOtpStep] = useState<OtpStep>('email');
-  const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
 
@@ -137,12 +134,12 @@ export function Register() {
             });
             setPaymentDone(true);
           } catch (err: any) {
-            setRegError(err.message || 'Payment verification failed.');
+            setErrors({ global: err.message || 'Payment verification failed.' });
           }
         },
         modal: {
           ondismiss: () => {
-            setRegError('Payment was cancelled. You can try again from your profile.');
+            setErrors({ global: 'Payment was cancelled. You can try again from your profile.' });
           },
         },
       };
@@ -150,7 +147,7 @@ export function Register() {
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err: any) {
-      setRegError(err.message || 'Failed to initiate payment.');
+      setErrors({ global: err.message || 'Failed to initiate payment.' });
     }
   }
 
@@ -158,34 +155,36 @@ export function Register() {
   // REGISTER OTP
   // ─────────────────────────────────────────────────────────────
   const handleSendRegOtp = async () => {
-    setRegError('');
+    setErrors({});
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return setRegError('Please enter a valid email before sending OTP.');
+      return setErrors({ email: 'Please enter a valid email before sending OTP.' });
     }
     setVerifyLoading(true);
     try {
       await api.sendRegisterOtp(email);
       setRegOtpSent(true);
-      setRegError('OTP sent to your email.');
     } catch (err: any) {
-      setRegError(err.message || 'Failed to send OTP.');
+      let msg = err.message || 'Failed to send OTP.';
+      if (msg.toLowerCase().includes('rejected') || msg.toLowerCase().includes('not found')) {
+        msg = 'Email address could not be found or is invalid.';
+      }
+      setErrors({ email: msg });
     } finally {
       setVerifyLoading(false);
     }
   };
 
   const handleVerifyRegOtp = async () => {
-    setRegError('');
+    setErrors({});
     if (!regOtp || regOtp.length !== 6) {
-      return setRegError('Please enter the 6-digit OTP.');
+      return setErrors({ otp: 'Please enter the 6-digit OTP.' });
     }
     setVerifyLoading(true);
     try {
       await api.verifyRegisterOtp(email, regOtp);
       setIsEmailVerified(true);
-      setRegError('');
     } catch (err: any) {
-      setRegError(err.message || 'Invalid OTP.');
+      setErrors({ otp: err.message || 'Invalid OTP.' });
     } finally {
       setVerifyLoading(false);
     }
@@ -196,23 +195,30 @@ export function Register() {
   // ─────────────────────────────────────────────────────────────
   const handleRegisterSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setRegError('');
+    const newErrors: Record<string, string> = {};
 
-    if (!isEmailVerified) return setRegError('Please verify your email address before registering.');
+    if (!isEmailVerified) newErrors.email = 'Please verify your email address before registering.';
 
     // Validation
-    if (!fullName.trim()) return setRegError('Please enter your full name.');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setRegError('Please enter a valid email.');
+    if (!fullName.trim()) newErrors.fullName = 'Please enter your full name.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Please enter a valid email.';
     const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
-    if (!phoneRegex.test(phone.trim())) return setRegError('Please enter a valid 10-digit mobile number.');
+    if (!phoneRegex.test(phone.trim())) newErrors.phone = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
+    
     if (userType === 'student') {
-      if (!collegeName.trim()) return setRegError('Please enter your college name.');
-      if (!course.trim()) return setRegError('Please enter your course.');
-      if (!year) return setRegError('Please select your year.');
+      if (!collegeName.trim()) newErrors.collegeName = 'Please enter your college name.';
+      if (!course.trim()) newErrors.course = 'Please enter your course.';
+      if (!year) newErrors.year = 'Please select your year.';
     } else {
-      if (!domain.trim()) return setRegError('Please enter your domain/field.');
+      if (!domain.trim()) newErrors.domain = 'Please select your domain/field.';
     }
 
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    setErrors({});
     setRegLoading(true);
     try {
       const formData = new FormData();
@@ -227,6 +233,7 @@ export function Register() {
         if (idFile) formData.append('idCard', idFile);
       } else {
         formData.append('domain', domain.trim());
+        if (organization.trim()) formData.append('organization', organization.trim());
       }
 
       const { token, user } = await api.registerUser(formData);
@@ -239,8 +246,9 @@ export function Register() {
       login(token, user);
       setRegToken(token);
       setRegSuccess(true);
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     } catch (err: any) {
-      setRegError(err.message || 'Registration failed. Please try again.');
+      setErrors({ global: err.message || 'Registration failed. Please try again.', email: err.message.includes('User already exists') ? err.message : undefined });
     } finally {
       setRegLoading(false);
     }
@@ -251,9 +259,9 @@ export function Register() {
   // ─────────────────────────────────────────────────────────────
   const handleSendOtp = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoginError('');
+    setErrors({});
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)) {
-      return setLoginError('Please enter a valid email address.');
+      return setErrors({ loginEmail: 'Please enter a valid email address.' });
     }
     setLoginLoading(true);
     try {
@@ -261,7 +269,7 @@ export function Register() {
       setOtpSent(true);
       setOtpStep('otp');
     } catch (err: any) {
-      setLoginError(err.message || 'Failed to send OTP.');
+      setErrors({ loginEmail: err.message || 'Failed to send OTP.' });
     } finally {
       setLoginLoading(false);
     }
@@ -272,15 +280,15 @@ export function Register() {
   // ─────────────────────────────────────────────────────────────
   const handleVerifyOtp = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoginError('');
-    if (!otp.trim() || otp.length !== 6) return setLoginError('Please enter the 6-digit OTP.');
+    setErrors({});
+    if (!otp.trim() || otp.length !== 6) return setErrors({ loginOtp: 'Please enter the 6-digit OTP.' });
     setLoginLoading(true);
     try {
       const { token, user } = await api.verifyOtp(loginEmail, otp);
       login(token, user);
       navigate('/profile');
     } catch (err: any) {
-      setLoginError(err.message || 'OTP verification failed.');
+      setErrors({ loginOtp: err.message || 'OTP verification failed.' });
     } finally {
       setLoginLoading(false);
     }
@@ -311,7 +319,7 @@ export function Register() {
                 role="tab"
                 aria-selected={activeTab === 'register'}
                 className={`reg-tab ${activeTab === 'register' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('register'); setRegError(''); }}
+                onClick={() => { setActiveTab('register'); setErrors({}); }}
               >
                 Register
               </button>
@@ -319,7 +327,7 @@ export function Register() {
                 role="tab"
                 aria-selected={activeTab === 'login'}
                 className={`reg-tab ${activeTab === 'login' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('login'); setLoginError(''); }}
+                onClick={() => { setActiveTab('login'); setErrors({}); }}
               >
                 Login
               </button>
@@ -358,15 +366,15 @@ export function Register() {
                       </svg>
                     </div>
                     <h3>Registered! Complete Payment</h3>
-                    <p>Your account has been created. Please complete the ₹500 payment to confirm your seat.</p>
-                    {regError && <div className="register-error" role="alert" style={{ marginTop: '1rem' }}>{regError}</div>}
+                    <p>Your account has been created. Please complete the <span style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}>₹500</span> payment to confirm your seat.</p>
+                    {errors.global && <div className="register-error" role="alert" style={{ marginTop: '1rem' }}>{errors.global}</div>}
                     <button
                       type="button"
                       className="btn-primary"
                       style={{ marginTop: '1.5rem' }}
                       onClick={() => launchRazorpay(regToken, {})}
                     >
-                      Pay ₹500 Now →
+                      Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>₹500</span> Now →
                     </button>
                   </div>
                 ) : (
@@ -382,11 +390,12 @@ export function Register() {
                           id="reg-name"
                           type="text"
                           value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
+                          onChange={(e) => { setFullName(e.target.value); clearError('fullName'); }}
                           placeholder="e.g. Anjali Menon"
                           autoComplete="name"
                           required
                         />
+                        {errors.fullName && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.fullName}</div>}
                       </div>
                       <div className="register-field">
                         <label htmlFor="reg-phone">Phone Number *</label>
@@ -394,12 +403,19 @@ export function Register() {
                           id="reg-phone"
                           type="tel"
                           value={phone}
-                          onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                          onChange={(e) => { setPhone(e.target.value.replace(/\D/g, '')); clearError('phone'); }}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim();
+                            if (val && !/^(?:\+91[-\s]?)?[6-9]\d{9}$/.test(val)) {
+                              setErrors(prev => ({ ...prev, phone: 'Please enter a valid 10-digit mobile number.' }));
+                            }
+                          }}
                           placeholder="e.g. 9876543210"
                           autoComplete="tel"
                           maxLength={10}
                           required
                         />
+                        {errors.phone && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.phone}</div>}
                       </div>
                     </div>
 
@@ -416,6 +432,13 @@ export function Register() {
                               setIsEmailVerified(false);
                               setRegOtpSent(false);
                               setRegOtp('');
+                              clearError('email');
+                            }}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                                setErrors(prev => ({ ...prev, email: 'Please enter a valid email.' }));
+                              }
                             }}
                             placeholder="you@example.com"
                             autoComplete="email"
@@ -440,6 +463,12 @@ export function Register() {
                           </div>
                         )}
                       </div>
+                      {errors.email && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.email}</div>}
+                      {regOtpSent && !isEmailVerified && !errors.email && (
+                        <div style={{ color: '#22c55e', fontSize: '0.85rem', marginTop: '0.4rem', fontWeight: 500 }}>
+                          OTP sent! Please check your email.
+                        </div>
+                      )}
                     </div>
 
                     {regOtpSent && !isEmailVerified && (
@@ -453,10 +482,11 @@ export function Register() {
                               inputMode="numeric"
                               maxLength={6}
                               value={regOtp}
-                              onChange={(e) => setRegOtp(e.target.value.replace(/\D/g, ''))}
+                              onChange={(e) => { setRegOtp(e.target.value.replace(/\D/g, '')); clearError('otp'); }}
                               placeholder="6-digit OTP"
                               required
                             />
+                            {errors.otp && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.otp}</div>}
                           </div>
                           <button
                             type="button"
@@ -501,7 +531,7 @@ export function Register() {
                       <div className="reg-conditional-fields">
                         <div className="register-field" style={{ marginBottom: '1.5rem' }}>
                           <label htmlFor="reg-idcard">
-                            College ID Card *
+                            College ID Card
                             {isScanningId && <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)' }}>Scanning ID...</span>}
                           </label>
                           <div
@@ -555,10 +585,11 @@ export function Register() {
                               id="reg-college"
                               type="text"
                               value={collegeName}
-                              onChange={(e) => setCollegeName(e.target.value)}
+                              onChange={(e) => { setCollegeName(e.target.value); clearError('collegeName'); }}
                               placeholder="e.g. PSG College of Technology"
                               required
                             />
+                            {errors.collegeName && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.collegeName}</div>}
                           </div>
                           <div className="register-field">
                             <label htmlFor="reg-course">Course *</label>
@@ -566,10 +597,11 @@ export function Register() {
                               id="reg-course"
                               type="text"
                               value={course}
-                              onChange={(e) => setCourse(e.target.value)}
+                              onChange={(e) => { setCourse(e.target.value); clearError('course'); }}
                               placeholder="e.g. B.Tech CSE"
                               required
                             />
+                            {errors.course && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.course}</div>}
                           </div>
                         </div>
                         <div className="register-field" style={{ marginTop: '1.5rem' }}>
@@ -577,7 +609,7 @@ export function Register() {
                           <select
                             id="reg-year"
                             value={year}
-                            onChange={(e) => setYear(e.target.value)}
+                            onChange={(e) => { setYear(e.target.value); clearError('year'); }}
                             className="register-select"
                             required
                           >
@@ -589,6 +621,7 @@ export function Register() {
                             <option value="5th Year">5th Year</option>
                             <option value="Postgraduate">Postgraduate</option>
                           </select>
+                          {errors.year && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.year}</div>}
                         </div>
                       </div>
                     )}
@@ -596,21 +629,38 @@ export function Register() {
                     {/* Working professional fields */}
                     {userType === 'working' && (
                       <div className="reg-conditional-fields">
-                        <div className="register-field">
-                          <label htmlFor="reg-domain">Domain / Field of Work *</label>
-                          <Autocomplete
-                            id="reg-domain"
-                            value={domain}
-                            onChange={setDomain}
-                            placeholder="e.g. Software Engineering, Marketing, Finance…"
-                            options={DOMAIN_OPTIONS}
-                            required
-                          />
+                        <div className="register-grid-2">
+                          <div className="register-field">
+                            <label htmlFor="reg-domain">Domain *</label>
+                            <select
+                              id="reg-domain"
+                              value={domain}
+                              onChange={(e) => { setDomain(e.target.value); clearError('domain'); }}
+                              className="register-select"
+                              required
+                            >
+                              <option value="">Select your industry</option>
+                              {DOMAIN_OPTIONS.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                            {errors.domain && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.domain}</div>}
+                          </div>
+                          <div className="register-field">
+                            <label htmlFor="reg-org">Organization</label>
+                            <input
+                              id="reg-org"
+                              type="text"
+                              value={organization}
+                              onChange={(e) => setOrganization(e.target.value)}
+                              placeholder="e.g. Tata Consultancy Services"
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
 
-                    {regError && <div className="register-error" role="alert">{regError}</div>}
+                    {errors.global && <div className="register-error" role="alert">{errors.global}</div>}
 
                     <button
                       type="submit"
@@ -622,7 +672,7 @@ export function Register() {
                           <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
                         </span>
                       ) : (
-                        <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay ₹500)</span></>
+                        <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>₹500</span>)</span></>
                       )}
                     </button>
 
@@ -652,14 +702,15 @@ export function Register() {
                         id="login-email"
                         type="email"
                         value={loginEmail}
-                        onChange={(e) => setLoginEmail(e.target.value)}
+                        onChange={(e) => { setLoginEmail(e.target.value); clearError('loginEmail'); }}
                         placeholder="you@example.com"
                         autoComplete="email"
                         required
                       />
+                      {errors.loginEmail && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.loginEmail}</div>}
                     </div>
 
-                    {loginError && <div className="register-error" role="alert">{loginError}</div>}
+                    {errors.global && <div className="register-error" role="alert">{errors.global}</div>}
 
                     <button type="submit" className="btn-primary register-submit" disabled={loginLoading}>
                       {loginLoading ? (
@@ -679,7 +730,7 @@ export function Register() {
                 ) : (
                   <form className="register-form" onSubmit={handleVerifyOtp} noValidate>
                     <p className="register-sub">
-                      We've sent a 6-digit OTP to <strong>{loginEmail}</strong>. Enter it below.
+                      OTP sent to <strong>{loginEmail}</strong>! Please check your email.
                     </p>
 
                     <div className="register-field">
@@ -691,15 +742,16 @@ export function Register() {
                         pattern="\d{6}"
                         maxLength={6}
                         value={otp}
-                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) => { setOtp(e.target.value.replace(/\D/g, '')); clearError('loginOtp'); }}
                         placeholder="6-digit OTP"
                         autoComplete="one-time-code"
                         required
                         className="otp-input"
                       />
+                      {errors.loginOtp && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.loginOtp}</div>}
                     </div>
 
-                    {loginError && <div className="register-error" role="alert">{loginError}</div>}
+                    {errors.global && <div className="register-error" role="alert">{errors.global}</div>}
 
                     <button type="submit" className="btn-primary register-submit" disabled={loginLoading}>
                       {loginLoading ? (
@@ -714,7 +766,7 @@ export function Register() {
                       <button
                         type="button"
                         className="register-link register-link-btn"
-                        onClick={() => { setOtpStep('email'); setOtp(''); setLoginError(''); }}
+                        onClick={() => { setOtpStep('email'); setOtp(''); setErrors({}); }}
                       >
                         Resend OTP
                       </button>

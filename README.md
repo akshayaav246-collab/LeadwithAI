@@ -418,10 +418,10 @@ Transactional emails are sent via **Nodemailer** using SMTP. Three email templat
 |---|---|---|
 | `sendOtpEmail()` | Registration OTP / Login OTP | Registrant |
 | `sendRegistrationEmail()` | Successful account creation | Registrant |
-| `sendPaymentConfirmationEmail()` | Razorpay payment verified | Registrant |
+| `sendPaymentConfirmationEmail()` | Razorpay payment verified (Includes `.ics` calendar attachment for Google Calendar integration) | Registrant |
 | `sendCustomBulkEmail()` | Admin bulk send | All / Paid / Custom |
 
-All emails are sent asynchronously (non-blocking) after the primary response is returned.
+All emails are sent asynchronously (non-blocking) after the primary response is returned. The payment confirmation email specifically uses the `icalEvent` parameter (`METHOD:PUBLISH`) to natively trigger the "Add to Calendar" widget in clients like Gmail.
 
 ---
 
@@ -448,7 +448,9 @@ PORT=4000
 CLIENT_URL=http://localhost:5173
 
 # MongoDB
-MONGO_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/leadwithai
+MONGO_URI=mongodb://127.0.0.1:27017/
+MONGO_DB_NAME=LeadWithAI
+COLLECTION_NAME=Users
 
 # JWT
 JWT_SECRET=your_jwt_secret_key
@@ -469,14 +471,16 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your_email@gmail.com
 SMTP_PASS=your_app_password
-EMAIL_FROM="Lead with AI <noreply@leadwithai.com>"
+FROM_EMAIL=your_email@gmail.com
+FROM_NAME="Lead with AI"
 ```
 
 ### Frontend (`frontend/.env`)
 
 ```env
-VITE_API_URL=http://localhost:4000
+VITE_API_BASE=http://localhost:5000
 ```
+Note: The frontend uses dynamic resolution in `src/lib/api.ts` to automatically detect the environment (local development vs. production server hostname) and route API calls to the appropriate backend URL.
 
 > ⚠️ **Never commit `.env` files.** Both are listed in `.gitignore`.
 

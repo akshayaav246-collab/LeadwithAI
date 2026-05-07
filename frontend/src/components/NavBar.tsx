@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { publicAsset } from "@/lib/assets";
 
 export function NavBar() {
   const [location, navigate] = useLocation();
@@ -32,9 +33,9 @@ export function NavBar() {
     <nav className={scrolled ? "nav-scrolled" : ""}>
       <div className="nav-container">
         <Link href="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-          <div>
-            <span className="nav-logo-text">Lead with AI</span>
-            <span className="nav-logo-sub">by Global Knowledge Technologies</span>
+          <div className="nav-logo-group">
+            <img src={publicAsset("Logo.png")} alt="GKT Logo" className="nav-logo-img" />
+            <span className="nav-logo-text">Global Knowledge Technologies</span>
           </div>
         </Link>
         

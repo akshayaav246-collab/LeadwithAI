@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { publicAsset } from "@/lib/assets";
 
 type Speaker = {
   initials: string;
@@ -20,7 +21,7 @@ const SPEAKERS: Speaker[] = [
     module: "Module 1: Getting Started with Generative AI",
     moduleLabel: "MODULE 1 · GETTING STARTED WITH GENERATIVE AI",
     bio: "Sendhil has spent his career at the intersection of technology, learning, and entrepreneurship. As Founder and Chairman of Global Knowledge Technologies, he leads initiatives that help individuals and organisations move from passive AI awareness to active, responsible adoption.",
-    imageUrl: "/Sendhil sir.jpg",
+    imageUrl: publicAsset("Sendhil sir.jpg"),
     linkedin: "https://www.linkedin.com/in/sendhil-kumar-a6aa13122/",
     highlights: [
       "Leads practical AI adoption with a strong focus on real-world applications",
@@ -35,7 +36,7 @@ const SPEAKERS: Speaker[] = [
     module: "Module 2: Building Personalised AI Agents",
     moduleLabel: "MODULE 2 · BUILDING PERSONALISED AI AGENTS",
     bio: "Dr. Radhika is a distinguished computer science academic and research leader holding MCA, ME, M.Phil., and a Ph.D. As VP Technical at GKT, she bridges research-grade thinking with practical product education for participants from any background.",
-    imageUrl: "/radhika mam.jpg",
+    imageUrl: publicAsset("radhika mam.jpg"),
     linkedin: "https://www.linkedin.com/in/dr-s-radhika-pandiyan-8b263116/",
     highlights: [
       "Expert in AI research with deep knowledge in machine learning and neural networks",
@@ -50,7 +51,7 @@ const SPEAKERS: Speaker[] = [
     module: "Module 3: Building Products Using AI",
     moduleLabel: "MODULE 3 · BUILDING PRODUCTS USING AI",
     bio: "Peter brings over two decades of technology training and hands-on AI leadership, spanning machine learning, deep learning, neural networks, NLP, computer vision, and large language models. His sessions are known for being rigorous and practical in equal measure.",
-    imageUrl: "/peter sir.jpg",
+    imageUrl: publicAsset("peter sir.jpg"),
     linkedin: "https://www.linkedin.com/in/pmdarius/",
     highlights: [
       "20+ years experience across AI, programming, and emerging technologies",
@@ -65,7 +66,7 @@ const SPEAKERS: Speaker[] = [
     module: "Module 4: Visual Storytelling & Content Creation",
     moduleLabel: "MODULE 4 · VISUAL STORYTELLING & CONTENT CREATION",
     bio: "Dinesh operates at an unusual intersection: AI, storytelling, learning design, and strategic communication. As CTO at GKT, he leads digital programs and AI-led content initiatives with an editorial eye and a technologist's precision.",
-    imageUrl: "/dinesh sir.jpg",
+    imageUrl: publicAsset("dinesh sir.jpg"),
     linkedin: "https://www.linkedin.com/in/dineshthan/",
     highlights: [
       "Expert in AI-driven storytelling and digital communication strategies",
@@ -97,6 +98,7 @@ function SpeakerRow({ speaker, index }: { speaker: Speaker; index: number }) {
 
   return (
     <section
+      id={speaker.initials.toLowerCase()}
       ref={ref}
       className={`speaker-row ${reverse ? "is-reverse" : ""} ${visible ? "is-visible" : ""}`}
     >
@@ -140,6 +142,16 @@ function SpeakerRow({ speaker, index }: { speaker: Speaker; index: number }) {
 }
 
 export function Speakers() {
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const el = document.querySelector(hash);
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+      }
+    }
+  }, []);
+
   return (
     <main>
       <section className="page-header">

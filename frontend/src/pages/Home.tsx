@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { SixThings } from "@/components/SixThings";
 import { useEffect } from "react";
+import { publicAsset } from "@/lib/assets";
 
 export function Home() {
   useEffect(() => {
@@ -33,7 +34,7 @@ export function Home() {
           </p>
           <div className="hero-ctas">
             <Link href="/register" className="btn-primary">Register Now →</Link>
-            <a href="/brochure.pdf" download className="btn-secondary-light">Download the Brochure ↓</a>
+            <a href={publicAsset("brochure.pdf")} download className="btn-secondary-light">Download the Brochure ↓</a>
           </div>
           <div className="hero-trust">
             <div className="hero-trust-item">
@@ -69,7 +70,7 @@ export function Home() {
                 <div className="schedule-number">01</div>
                 <div className="schedule-level level-beginner">BEGINNER</div>
                 <div className="schedule-day">DAY ONE · SATURDAY, MAY 16TH</div>
-                <div className="schedule-time">10:30 AM – 1:00 PM</div>
+                <div className="schedule-time">10:00 AM – 1:00 PM</div>
               </div>
               <h3 className="schedule-module">Getting Started with Generative AI</h3>
               <p className="schedule-desc">
@@ -159,7 +160,7 @@ export function Home() {
 
                 {/* Certificate visual */}
                 <div className="who-cert-frame" style={{ padding: 0 }}>
-                  <img src="/Certificate.png" alt="Certificate of Completion" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                  <img src={publicAsset("Certificate.png")} alt="Certificate of Completion" style={{ width: '100%', height: 'auto', display: 'block' }} />
                 </div>
               </div>
             </div>

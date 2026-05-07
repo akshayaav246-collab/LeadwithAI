@@ -1,11 +1,12 @@
-const fallbackBase = `${window.location.protocol}//${window.location.hostname}:4000`;
-// const serverApiUrl = 'https://project.globalknowledgetech.com:4000';
+//const fallbackBase = `${window.location.protocol}//${window.location.hostname}:4000`;
+const serverApiUrl = 'https://project.globalknowledgetech.com:4007/';
 const envBase = (import.meta.env.VITE_API_URL || '').trim();
-// const isProductionHost = window.location.hostname === 'project.globalknowledgetech.com';
-// const resolvedBase = envBase || (isProductionHost ? serverApiUrl : fallbackBase);
+const isProductionHost = window.location.hostname === 'project.globalknowledgetech.com';
+const fallbackBase = `${window.location.protocol}//${window.location.hostname}:4007`;
+const resolvedBase = envBase || (isProductionHost ? serverApiUrl : fallbackBase);
 
-const resolvedBase = envBase || fallbackBase;
-const BASE_URL = resolvedBase;
+// Remove trailing slash if present to avoid double slashes when paths start with /
+const BASE_URL = resolvedBase.replace(/\/$/, '');
 
 async function request<T>(
   path: string,

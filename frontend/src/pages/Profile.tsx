@@ -218,25 +218,54 @@ export function Profile() {
                           <span>Registered {new Date(evt.registeredAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                         )}
                       </div>
+                      {evt.paymentStatus === 'confirmed' && (
+                        <p style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: 'var(--color-sienna)', fontFamily: 'var(--font-sans)' }}>
+                          Check your mail for more updates
+                        </p>
+                      )}
                     </div>
                     <div className="ticket-card-right">
-                      <span 
-                        className={`ticket-badge badge-${evt.paymentStatus}`}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                      >
-                        {evt.paymentStatus === 'confirmed' ? (
-                          <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>Payment Completed</>
-                        ) : evt.paymentStatus === 'failed' ? (
-                          <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Payment Failed</>
-                        ) : (
-                          <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Payment Pending</>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <span
+                          className={`ticket-badge badge-${evt.paymentStatus}`}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          {evt.paymentStatus === 'confirmed' ? (
+                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>Payment Completed</>
+                          ) : evt.paymentStatus === 'failed' ? (
+                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Payment Failed</>
+                          ) : (
+                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Payment Pending</>
+                          )}
+                        </span>
+                        {evt.paymentStatus === 'confirmed' && (
+                          <a
+                            href="https://zoom.us/j/00000000000"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              background: 'rgba(37,99,235,0.08)',
+                              color: '#1d4ed8',
+                              border: '1px solid rgba(37,99,235,0.2)',
+                              borderRadius: '100px',
+                              padding: '0.3rem 0.9rem',
+                              fontSize: '0.82rem',
+                              fontFamily: 'var(--font-sans)',
+                              fontWeight: 600,
+                              textDecoration: 'none',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.845v6.31a1 1 0 0 1-1.447.894L15 14M3 8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/></svg>
+                            Join Zoom Meeting
+                          </a>
                         )}
-                      </span>
+                      </div>
                       {evt.paymentStatus === 'pending' && (
                         <button className="btn-primary" onClick={handlePayNow} style={{ marginTop: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'inline-block' }}>Complete Payment →</button>
-                      )}
-                      {evt.paymentStatus === 'confirmed' && (
-                        <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--color-sienna)' }}>Check your mail for more updates!!!</p>
                       )}
                     </div>
                   </div>
