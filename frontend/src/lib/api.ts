@@ -1,9 +1,10 @@
-//const fallbackBase = `${window.location.protocol}//${window.location.hostname}:4000`;
 const serverApiUrl = 'https://project.globalknowledgetech.com:4007/';
 const envBase = (import.meta.env.VITE_API_URL || '').trim();
 const isProductionHost = window.location.hostname === 'project.globalknowledgetech.com';
-const fallbackBase = `${window.location.protocol}//${window.location.hostname}:4007`;
-const resolvedBase = envBase || (isProductionHost ? serverApiUrl : fallbackBase);
+const fallbackBase = isProductionHost
+  ? serverApiUrl
+  : `${window.location.protocol}//${window.location.hostname}:4000`;
+const resolvedBase = envBase || fallbackBase;
 
 // Remove trailing slash if present to avoid double slashes when paths start with /
 const BASE_URL = resolvedBase.replace(/\/$/, '');

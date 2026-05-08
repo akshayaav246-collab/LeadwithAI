@@ -34,8 +34,16 @@ export function NavBar() {
       <div className="nav-container">
         <Link href="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
           <div className="nav-logo-group">
-            <img src={publicAsset("Logo.png")} alt="GKT Logo" className="nav-logo-img" />
-            <span className="nav-logo-text">Global Knowledge Technologies</span>
+            <div style={{
+              background: 'var(--color-sienna)',
+              borderRadius: '6px',
+              padding: '0.5rem 1.25rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <img src={publicAsset("Logo.png")} alt="Global Knowledge Technologies" className="nav-logo-img" style={{ height: '72px', width: 'auto' }} />
+            </div>
           </div>
         </Link>
         

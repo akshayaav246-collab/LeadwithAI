@@ -206,6 +206,7 @@ export function Register() {
     if (!phoneRegex.test(phone.trim())) newErrors.phone = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
     
     if (userType === 'student') {
+      if (!idFile) newErrors.idCard = 'Please upload your College ID Card.';
       if (!collegeName.trim()) newErrors.collegeName = 'Please enter your college name.';
       if (!course.trim()) newErrors.course = 'Please enter your course.';
       if (!year) newErrors.year = 'Please select your year.';
@@ -366,7 +367,7 @@ export function Register() {
                       </svg>
                     </div>
                     <h3>Registered! Complete Payment</h3>
-                    <p>Your account has been created. Please complete the <span style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}>₹500</span> payment to confirm your seat.</p>
+                    <p>Your account has been created. Please complete the <span style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}>{userType === 'student' ? '₹500' : '₹999'}</span> payment to confirm your seat.</p>
                     {errors.global && <div className="register-error" role="alert" style={{ marginTop: '1rem' }}>{errors.global}</div>}
                     <button
                       type="button"
@@ -374,7 +375,7 @@ export function Register() {
                       style={{ marginTop: '1.5rem' }}
                       onClick={() => launchRazorpay(regToken, {})}
                     >
-                      Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>₹500</span> Now →
+                      Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹500' : '₹999'}</span> Now →
                     </button>
                   </div>
                 ) : (
@@ -521,7 +522,7 @@ export function Register() {
                           style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                          Working Professional
+                          Working Professional/Others
                         </button>
                       </div>
                     </div>
@@ -531,7 +532,7 @@ export function Register() {
                       <div className="reg-conditional-fields">
                         <div className="register-field" style={{ marginBottom: '1.5rem' }}>
                           <label htmlFor="reg-idcard">
-                            College ID Card
+                            College ID Card *
                             {isScanningId && <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)' }}>Scanning ID...</span>}
                           </label>
                           <div
@@ -576,6 +577,7 @@ export function Register() {
                               </span>
                             )}
                           </div>
+                          {errors.idCard && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.idCard}</div>}
                         </div>
 
                         <div className="register-grid-2">
@@ -631,7 +633,7 @@ export function Register() {
                       <div className="reg-conditional-fields">
                         <div className="register-grid-2">
                           <div className="register-field">
-                            <label htmlFor="reg-domain">Domain *</label>
+                            <label htmlFor="reg-domain">Domain</label>
                             <select
                               id="reg-domain"
                               value={domain}
@@ -672,7 +674,7 @@ export function Register() {
                           <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
                         </span>
                       ) : (
-                        <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>₹500</span>)</span></>
+                        <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹500' : '₹999'}</span>)</span></>
                       )}
                     </button>
 

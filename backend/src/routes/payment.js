@@ -13,7 +13,8 @@ const razorpay = new Razorpay({
 });
 
 const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
-const AMOUNT_PAISE = 50000; // ₹500 in paise
+const AMOUNT_STUDENT_PAISE = 50000;  // ₹500 for students
+const AMOUNT_WORKING_PAISE = 99900;  // ₹999 for working professionals/others
 
 // ─────────────────────────────────────────────
 // POST /api/payment/create-order  (protected)
@@ -31,8 +32,11 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       return res.status(409).json({ error: 'You have already paid for this event.' });
     }
 
+    // Determine amount based on user type
+    const amountPaise = user.userType === 'student' ? AMOUNT_STUDENT_PAISE : AMOUNT_WORKING_PAISE;
+
     const order = await razorpay.orders.create({
-      amount: AMOUNT_PAISE,
+      amount: amountPaise,
       currency: 'INR',
       receipt: `rcpt_${user._id.toString().slice(-6)}_${Date.now()}`,
       notes: {
@@ -106,7 +110,7 @@ router.post('/verify', authMiddleware, async (req, res) => {
     // Send payment confirmation email (non-blocking)
     sendPaymentConfirmationEmail(user, EVENT_NAME, razorpay_payment_id).catch((err) =>
       console.error('Payment email error:', err)
-    );
+    ); 
 
     return res.json({
       message: 'Payment verified and confirmed!',
