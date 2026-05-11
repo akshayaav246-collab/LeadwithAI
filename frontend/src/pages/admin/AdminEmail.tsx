@@ -46,7 +46,7 @@ export function AdminEmail() {
 
   return (
     <div className="admin-page">
-      <h2 className="admin-page-title">Send Broadcast Email</h2>
+      <h2 className="admin-page-title">Send Email</h2>
       
       <div className="admin-card">
         {status.message && (
@@ -95,7 +95,6 @@ export function AdminEmail() {
 
           <div className="form-group">
             <label>Message Content</label>
-            <div className="admin-help-text">Line breaks will be automatically preserved in the email.</div>
             <textarea 
               value={content}
               onChange={e => setContent(e.target.value)}
@@ -107,7 +106,7 @@ export function AdminEmail() {
           </div>
 
           <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'Sending Emails...' : 'Send Broadcast Email'}
+            {loading ? 'Sending...' : 'Send Email'}
           </button>
         </form>
       </div>

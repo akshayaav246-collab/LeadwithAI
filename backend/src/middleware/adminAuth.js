@@ -1,5 +1,10 @@
 const jwt = require('jsonwebtoken');
 
+/**
+ * adminAuth middleware
+ * Validates Bearer token issued to any admin (stored in 'admins' collection).
+ * All admins have equal permissions.
+ */
 module.exports = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;

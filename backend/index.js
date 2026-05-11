@@ -8,13 +8,14 @@ const authRoutes = require('./src/routes/auth');
 const paymentRoutes = require('./src/routes/payment');
 const adminRoutes = require('./src/routes/admin');
 const User = require('./src/models/User');
-const { sendReminderEmail } = require('./src/utils/email');
+const { sendReminderEmail, sendDay2ReminderEmail } = require('./src/utils/email');
 const app = express();
 const PORT = process.env.PORT || 4002;
 // Event details
 const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
-const MEETING_LINK = 'https://zoom.us/j/00000000000'; // Replace with actual Zoom link
-const EVENT_DATE = new Date('2026-05-16T04:30:00Z'); // May 16 10:00 AM IST = 04:30 UTC
+const MEETING_LINK = process.env.ZOOM_LINK || 'https://zoom.us/j/00000000000';
+const EVENT_DATE_DAY1 = new Date('2026-05-16T04:30:00Z'); // May 16 10:00 AM IST
+const EVENT_DATE_DAY2 = new Date('2026-05-16T12:30:00Z'); // May 16 6:00 PM IST (end of Day 1)
 // --- Middleware ------------------------------
 // Request Logging
 app.use((req, res, next) => {
@@ -46,9 +47,9 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
-// --- Reminder Email Cron Job -----------------
-// Runs at 9:00 AM IST (03:30 UTC) every day
-// Sends reminder if tomorrow is the event date (May 16 2026)
+// --- Reminder Email Cron Jobs ---------------
+// DAY 1 REMINDER: Runs at 9:00 AM IST (03:30 UTC) on May 15th
+// Sends "starts TOMORROW" reminder to all paid participants
 function scheduleReminderEmails() {
   cron.schedule('30 3 * * *', async () => {
     try {
@@ -56,18 +57,16 @@ function scheduleReminderEmails() {
       const tomorrow = new Date(now);
       tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
       const isTomorrow =
-        tomorrow.getUTCFullYear() === EVENT_DATE.getUTCFullYear() &&
-        tomorrow.getUTCMonth() === EVENT_DATE.getUTCMonth() &&
-        tomorrow.getUTCDate() === EVENT_DATE.getUTCDate();
+        tomorrow.getUTCFullYear() === EVENT_DATE_DAY1.getUTCFullYear() &&
+        tomorrow.getUTCMonth() === EVENT_DATE_DAY1.getUTCMonth() &&
+        tomorrow.getUTCDate() === EVENT_DATE_DAY1.getUTCDate();
       if (!isTomorrow) {
-        console.log(`[Cron] Today is not 1 day before the event. Skipping reminders.`);
+        console.log(`[Cron Day1] Not 1 day before event. Skipping.`);
         return;
       }
-      console.log('[Cron] Event is tomorrow! Sending reminder emails to paid participants...');
+      console.log('[Cron Day1] Sending Day 1 reminder emails...');
       const paidUsers = await User.find({
-        'registeredEvents': {
-          $elemMatch: { eventName: EVENT_NAME, paymentStatus: 'confirmed' }
-        }
+        registeredEvents: { $elemMatch: { eventName: EVENT_NAME, paymentStatus: 'confirmed' } }
       });
       let sent = 0;
       for (const user of paidUsers) {
@@ -75,17 +74,48 @@ function scheduleReminderEmails() {
           await sendReminderEmail(user, EVENT_NAME, MEETING_LINK);
           sent++;
         } catch (err) {
-          console.error(`[Cron] Failed to send reminder to ${user.email}:`, err.message);
+          console.error(`[Cron Day1] Failed for ${user.email}:`, err.message);
         }
       }
-      console.log(`[Cron] Reminder emails sent: ${sent}/${paidUsers.length}`);
+      console.log(`[Cron Day1] Sent: ${sent}/${paidUsers.length}`);
     } catch (err) {
-      console.error('[Cron] Reminder job error:', err.message);
+      console.error('[Cron Day1] Job error:', err.message);
     }
-  }, {
-    timezone: 'Asia/Kolkata',
-  });
-  console.log('? Reminder email cron job scheduled (runs daily at 9:00 AM IST)');
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('✓ Day 1 reminder cron scheduled (9:00 AM IST on May 15th)');
+
+  // DAY 2 REMINDER: Runs at 6:30 PM IST (13:00 UTC) on May 16th
+  // Sends "get ready for Day 2" email after Day 1 ends
+  cron.schedule('0 13 * * *', async () => {
+    try {
+      const now = new Date();
+      const isDay1 =
+        now.getUTCFullYear() === EVENT_DATE_DAY1.getUTCFullYear() &&
+        now.getUTCMonth() === EVENT_DATE_DAY1.getUTCMonth() &&
+        now.getUTCDate() === EVENT_DATE_DAY1.getUTCDate();
+      if (!isDay1) {
+        console.log(`[Cron Day2] Not May 16th. Skipping.`);
+        return;
+      }
+      console.log('[Cron Day2] Sending Day 2 reminder emails...');
+      const paidUsers = await User.find({
+        registeredEvents: { $elemMatch: { eventName: EVENT_NAME, paymentStatus: 'confirmed' } }
+      });
+      let sent = 0;
+      for (const user of paidUsers) {
+        try {
+          await sendDay2ReminderEmail(user, EVENT_NAME, MEETING_LINK);
+          sent++;
+        } catch (err) {
+          console.error(`[Cron Day2] Failed for ${user.email}:`, err.message);
+        }
+      }
+      console.log(`[Cron Day2] Sent: ${sent}/${paidUsers.length}`);
+    } catch (err) {
+      console.error('[Cron Day2] Job error:', err.message);
+    }
+  }, { timezone: 'Asia/Kolkata' });
+  console.log('✓ Day 2 reminder cron scheduled (6:30 PM IST on May 16th)');
 }
 // --- MongoDB + Start Server ------------------
 mongoose
