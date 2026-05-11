@@ -40,8 +40,8 @@ export function Footer() {
             <div style={{ marginBottom: '0.5rem', color: 'rgba(255, 255, 255, 0.78)' }}>
               +91-80-43003611
             </div>
-            <a href="mailto:genquiry@globalknowledgetech.com" className="footer-email">
-              genquiry@globalknowledgetech.com
+            <a href="mailto:events@gktech.ai" className="footer-email">
+              events@gktech.ai
             </a>
           </div>
         </div>

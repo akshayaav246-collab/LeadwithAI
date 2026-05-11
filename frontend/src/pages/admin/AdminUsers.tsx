@@ -174,7 +174,7 @@ export function AdminUsers() {
                 <th>Email</th>
                 <th>Phone</th>
                 <th>Type</th>
-                <th>College / Domain</th>
+                <th>College / Organization</th>
                 <th>Payment</th>
                 <th>Registered</th>
               </tr>
@@ -205,7 +205,7 @@ export function AdminUsers() {
                       </span>
                     </td>
                     <td style={{ fontSize: '0.88rem', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {user.userType === 'student' ? user.collegeName : user.domain}
+                      {user.userType === 'student' ? user.collegeName : user.organization}
                     </td>
                     <td>
                       <span className={`admin-badge ${user.isPaid ? 'success' : 'warning'}`}>

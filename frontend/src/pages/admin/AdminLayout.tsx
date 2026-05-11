@@ -3,7 +3,7 @@ import { useLocation, Route, Switch } from 'wouter';
 import { AdminOverview } from './AdminOverview';
 import { AdminUsers } from './AdminUsers';
 import { AdminEmail } from './AdminEmail';
-import logoSrc from '/Logo.png';
+import { publicAsset } from '../../lib/assets';
 
 export function AdminLayout() {
   const [location, setLocation] = useLocation();
@@ -32,7 +32,7 @@ export function AdminLayout() {
         {/* Header with logo + role badge */}
         <div className="admin-sidebar-header">
           <img
-            src={logoSrc}
+            src={publicAsset('Logo.png')}
             alt="Global Knowledge Technologies"
             className="admin-sidebar-logo"
           />
