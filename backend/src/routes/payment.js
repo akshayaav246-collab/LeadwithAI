@@ -32,6 +32,16 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       return res.status(409).json({ error: 'You have already paid for this event.' });
     }
 
+    // Block payment until admin approves the profile review
+    // Also catches legacy records where reviewStatus defaulted to 'not_required' but needsAdminReview is true
+    const paymentBlocked = user.needsAdminReview && user.reviewStatus !== 'approved';
+    if (paymentBlocked) {
+      return res.status(403).json({
+        error: 'Your registration is currently under review. Payment will be enabled once our team approves your profile.',
+        reviewPending: true,
+      });
+    }
+
     // Determine amount based on user type
     const amountPaise = user.userType === 'student' ? AMOUNT_STUDENT_PAISE : AMOUNT_WORKING_PAISE;
 

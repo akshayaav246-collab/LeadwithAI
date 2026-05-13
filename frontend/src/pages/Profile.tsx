@@ -275,7 +275,24 @@ export function Profile() {
                         )}
                       </div>
                       {evt.paymentStatus === 'pending' && (
-                        <button className="btn-primary" onClick={handlePayNow} style={{ marginTop: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'inline-block' }}>Complete Payment →</button>
+                        (user.needsAdminReview && user.reviewStatus !== 'approved') ? (
+                          <div style={{
+                            marginTop: '0.6rem',
+                            padding: '0.65rem 1rem',
+                            background: 'var(--color-parchment)',
+                            border: '1px solid var(--color-sand)',
+                            borderLeft: '3px solid var(--color-sienna)',
+                            borderRadius: '4px',
+                            fontSize: '0.88rem',
+                            color: 'var(--color-umber)',
+                            fontFamily: 'var(--font-body)',
+                            lineHeight: 1.6,
+                          }}>
+                            Your registration is under review. Payment will be enabled once our team approves your profile.
+                          </div>
+                        ) : (
+                          <button className="btn-primary" onClick={handlePayNow} style={{ marginTop: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'inline-block' }}>Complete Payment →</button>
+                        )
                       )}
                     </div>
                   </div>

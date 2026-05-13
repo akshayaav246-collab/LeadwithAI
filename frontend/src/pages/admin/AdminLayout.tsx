@@ -32,7 +32,7 @@ export function AdminLayout() {
         {/* Header with logo + role badge */}
         <div className="admin-sidebar-header">
           <img
-            src={publicAsset('Logo.png')}
+            src={publicAsset('LogoAdmin.png')}
             alt="Global Knowledge Technologies"
             className="admin-sidebar-logo"
           />

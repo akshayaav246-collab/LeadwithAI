@@ -19,6 +19,8 @@ export interface AuthUser {
   year?: string;
   domain?: string;
   organization?: string;
+  needsAdminReview?: boolean;
+  reviewStatus?: 'not_required' | 'pending' | 'approved';
   registeredEvents: RegisteredEvent[];
 }
 

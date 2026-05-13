@@ -25,6 +25,12 @@ const userSchema = new mongoose.Schema(
     course: { type: String, trim: true },
     year: { type: String, trim: true },
     idCardPath: { type: String },
+    needsAdminReview: { type: Boolean, default: false }, // set when AI verification was skipped
+    reviewStatus: {
+      type: String,
+      enum: ['not_required', 'pending', 'approved'],
+      default: 'not_required',
+    },
 
     // Working professional fields
     domain: { type: String, trim: true },

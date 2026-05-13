@@ -47,6 +47,52 @@ async function sendRegistrationEmail(user) {
 }
 
 /**
+ * Send email verification OTP (used during registration — before account creation)
+ */
+async function sendVerificationOtpEmail(email, otp) {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: Georgia, serif; color: #2A1F14; background: #FAF7F2; margin: 0; padding: 0; }
+        .wrapper { max-width: 600px; margin: 0 auto; background: #fff; border: 1px solid #E2D9CC; border-radius: 8px; overflow: hidden; }
+        .header { background: #3B2F2F; padding: 2.5rem 2rem; text-align: center; }
+        .header h1 { color: #C4956A; font-size: 1.8rem; margin: 0; }
+        .otp-box { background: #3B2F2F; color: #C4956A; font-size: 2.5rem; font-weight: bold; text-align: center; padding: 1.5rem; letter-spacing: 0.4em; border-radius: 6px; margin: 1.5rem 0; font-family: 'Courier New', monospace; }
+        .body { padding: 2.5rem 2rem; }
+        .footer { background: #F5F0E8; padding: 1.5rem 2rem; text-align: center; font-size: 0.85rem; color: #8C7B6B; }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
+        <div class="header">
+          <h1>Lead with AI</h1>
+        </div>
+        <div class="body">
+          <h2 style="color: #3B2F2F; margin-top: 0;">Your OTP for Email Verification</h2>
+          <p>Use the following one-time password to verify your email address and complete your registration:</p>
+          <div class="otp-box">${otp}</div>
+          <p style="color: #8C7B6B; font-size: 0.9rem;">This OTP is valid for <strong>10 minutes</strong>. Do not share it with anyone.</p>
+          <p style="color: #8C7B6B; font-size: 0.9rem;">If you did not initiate this, you can safely ignore this email.</p>
+          ${SHARED_FOOTER}
+        </div>
+        ${FOOTER_BAR}
+      </div>
+    </body>
+    </html>
+  `;
+
+  await transporter.sendMail({
+    from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
+    to: email,
+    subject: `Your OTP for Email Verification — Lead with AI`,
+    html,
+  });
+}
+
+/**
  * Send OTP login email
  */
 async function sendOtpEmail(email, otp, name) {
@@ -345,11 +391,34 @@ async function sendDay2ReminderEmail(user, eventName, meetingLink) {
   });
 }
 
+/**
+ * Send profile approval notification (plain text)
+ * Sent when an admin approves a student's manual-review registration.
+ */
+async function sendProfileApprovedEmail(user) {
+  const text =
+    `Dear ${user.fullName},\n\n` +
+    `Our team has reviewed your registration details for the Lead with AI: Adopt, Implement and Transform workshop and your profile has been approved.\n\n` +
+    `You can now log in to your account and complete the payment of ₹500 to confirm your seat.\n\n` +
+    `Login here: ${process.env.SITE_URL || 'https://project.globalknowledgetech.com/leadwithAI'}\n\n` +
+    `If you have any questions, feel free to reach us at ${process.env.FROM_EMAIL || 'events@gktech.ai'}.\n\n` +
+    `Warm regards,\nTeam Global Knowledge Technologies`;
+
+  await transporter.sendMail({
+    from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
+    to: user.email,
+    subject: `Your Profile Has Been Approved — Lead with AI Workshop`,
+    text,
+  });
+}
+
 module.exports = {
   sendRegistrationEmail,
+  sendVerificationOtpEmail,
   sendOtpEmail,
   sendPaymentConfirmationEmail,
   sendCustomBulkEmail,
   sendReminderEmail,
   sendDay2ReminderEmail,
+  sendProfileApprovedEmail,
 };

@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
+const rateLimit = require('express-rate-limit');
 const authRoutes = require('./src/routes/auth');
 const paymentRoutes = require('./src/routes/payment');
 const adminRoutes = require('./src/routes/admin');
@@ -30,7 +31,37 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Serve uploaded files (student ID cards)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// --- Rate Limiters --------------------------
+// Limits OTP send requests: max 5 per IP per 15 minutes
+const otpSendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many OTP requests from this IP. Please try again after 15 minutes.' },
+});
+// Limits OTP verification attempts: max 10 per IP per 15 minutes
+const otpVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification attempts. Please try again after 15 minutes.' },
+});
+// Limits registrations: max 3 per IP per hour
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many registration attempts from this IP. Please try again after an hour.' },
+});
 // --- Routes ---------------------------------
+app.use('/api/auth/send-otp', otpSendLimiter);
+app.use('/api/auth/send-register-otp', otpSendLimiter);
+app.use('/api/auth/verify-otp', otpVerifyLimiter);
+app.use('/api/auth/verify-register-otp', otpVerifyLimiter);
+app.use('/api/auth/register', registerLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/admin', adminRoutes);

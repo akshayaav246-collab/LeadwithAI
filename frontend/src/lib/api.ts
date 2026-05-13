@@ -53,10 +53,10 @@ export function verifyOtp(email: string, otp: string) {
   });
 }
 
-export function sendRegisterOtp(email: string) {
+export function sendRegisterOtp(email: string, userType?: string) {
   return request<{ message: string }>('/api/auth/send-register-otp', {
     method: 'POST',
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, userType }),
   });
 }
 
@@ -137,12 +137,36 @@ export function sendAdminEmail(token: string, payload: any) {
   }, token);
 }
 
+export function setUserReviewStatus(token: string, userId: string, action: 'approve' | 'reject') {
+  return request<{ message: string; reviewStatus: string }>(
+    `/api/admin/users/${userId}/review-status`,
+    { method: 'PATCH', body: JSON.stringify({ action }) },
+    token
+  );
+}
+
 // ─── ID Parse API ────────────────────────────
 
-export function parseIdCard(file: File) {
+export type IdCardResult = {
+  is_id_card: boolean;
+  is_valid_college: boolean;
+  is_current_student: boolean;
+  is_student_not_staff: boolean;
+  college: string | null;
+  course: string | null;
+  academicYearRange: string | null;
+  year_of_study: string | null;
+  confidence: 'high' | 'medium' | 'low';
+  verdict: 'APPROVED' | 'REJECTED' | 'REVIEW';
+  rejection_reason: string | null;
+  source: 'gemini' | 'tesseract';
+};
+
+export function parseIdCard(file: File, email?: string) {
   const formData = new FormData();
   formData.append('idCard', file);
-  return request<{ college: string; course: string; year: string; source: string }>('/api/auth/parse-id', {
+  if (email) formData.append('email', email);
+  return request<IdCardResult>('/api/auth/parse-id', {
     method: 'POST',
     body: formData,
   });

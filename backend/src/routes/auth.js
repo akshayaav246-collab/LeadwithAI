@@ -3,8 +3,12 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const crypto = require('crypto');
+const ExcelJS = require('exceljs');
+const { GoogleGenAI } = require('@google/genai');
+const fs = require('fs').promises;
 const User = require('../models/User');
-const { sendRegistrationEmail, sendOtpEmail } = require('../utils/email');
+const CollegeDomain = require('../models/CollegeDomain');
+const { sendRegistrationEmail, sendOtpEmail, sendVerificationOtpEmail } = require('../utils/email');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
@@ -14,12 +18,64 @@ const registerOtps = new Map();
 const verifiedEmails = new Set();
 
 // ─────────────────────────────────────────────
+// COLLEGE NAME NORMALISATION & XLSX CACHE
+// ─────────────────────────────────────────────
+let cachedCollegeSet = null;
+
+/**
+ * Strips dots, lowercases, collapses whitespace.
+ * "K.S.R. College of Engineering" → "ksr college of engineering"
+ */
+function normalizeCollegeName(name) {
+  return String(name)
+    .toLowerCase()
+    .replace(/\./g, '')       // remove dots
+    .replace(/[''`]/g, '')    // remove apostrophes
+    .replace(/\s+/g, ' ')    // collapse spaces
+    .trim();
+}
+
+async function getCollegeSet() {
+  if (cachedCollegeSet) return cachedCollegeSet;
+  try {
+    const xlsxPath = path.join(__dirname, '../../../frontend/public/colleges.xlsx');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(xlsxPath);
+    const sheet = workbook.worksheets[0];
+    const names = new Set();
+    sheet.eachRow((row) => {
+      const val = row.getCell(1).value;
+      if (val) names.add(normalizeCollegeName(String(val)));
+    });
+    cachedCollegeSet = names;
+    console.log(`[CollegeSet] Loaded ${names.size} colleges from xlsx`);
+    return names;
+  } catch (err) {
+    console.warn('[CollegeSet] Could not load colleges.xlsx:', err.message);
+    cachedCollegeSet = new Set();
+    return cachedCollegeSet;
+  }
+}
+
+// ─────────────────────────────────────────────
 // POST /api/auth/send-register-otp
 // ─────────────────────────────────────────────
 router.post('/send-register-otp', async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, userType } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+    // ── Domain restriction: students must use official college email ──
+    if (userType === 'student') {
+      const emailLower = email.toLowerCase();
+      const validDomains = ['.ac.in', '.edu.in', '.edu'];
+      const hasValidDomain = validDomains.some(d => emailLower.endsWith(d));
+      if (!hasValidDomain) {
+        return res.status(400).json({
+          error: 'Please use your official college email address (.ac.in or .edu.in only)'
+        });
+      }
+    }
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
@@ -32,7 +88,7 @@ router.post('/send-register-otp', async (req, res) => {
       expiry: Date.now() + 10 * 60 * 1000 // 10 mins
     });
 
-    await sendOtpEmail(email.toLowerCase(), otp, 'Future Participant');
+    await sendVerificationOtpEmail(email.toLowerCase(), otp);
     return res.json({ message: 'Registration OTP sent successfully.' });
   } catch (err) {
     console.error('Send register OTP error:', err);
@@ -94,143 +150,213 @@ function generateOtp() {
 // ─────────────────────────────────────────────
 // POST /api/auth/parse-id
 // ─────────────────────────────────────────────
-const { GoogleGenAI } = require('@google/genai');
-const Tesseract = require('tesseract.js');
-const sharp = require('sharp');
-const fs = require('fs').promises;
-
 router.post('/parse-id', upload.single('idCard'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No ID card image provided.' });
   }
 
   const filePath = req.file.path;
+  const studentEmail = (req.body.email || '').toLowerCase().trim();
 
-  // Helper: calculate year of study from academic year range
+  // ── Year helpers ──────────────────────────────────────────────
   function calcYearFromRange(startYear, endYear) {
     const currentYear = new Date().getFullYear();
-    const totalYears = endYear - startYear;
     const elapsed = currentYear - startYear;
-    const yearNum = Math.min(Math.max(elapsed, 1), totalYears);
+    const yearNum = Math.min(Math.max(elapsed, 1), endYear - startYear);
     const suffix = ['1st', '2nd', '3rd', '4th', '5th'];
     return (suffix[yearNum - 1] || yearNum + 'th') + ' Year';
   }
 
-  // Helper: extract year from academic range string like "2022-2026" or "2022 - 2026"
   function parseYearFromRange(rawText) {
+    if (!rawText) return '';
     const rangeMatch = rawText.match(/(\d{4})\s*[-–]\s*(\d{4})/);
     if (rangeMatch) {
       const start = parseInt(rangeMatch[1]);
-      const end = parseInt(rangeMatch[2]);
-      if (end > start && (end - start) <= 6) {
-        return calcYearFromRange(start, end);
-      }
+      const end   = parseInt(rangeMatch[2]);
+      if (end > start && (end - start) <= 6) return calcYearFromRange(start, end);
     }
-    // Try explicit year text
     const explicitMatch = rawText.match(/(1st|2nd|3rd|4th|5th|I{1,4}|VI?I{0,2})\s*(Year|Yr)/i);
     if (explicitMatch) return explicitMatch[0];
     return '';
   }
 
+  function getEndYear(academicYearRange) {
+    if (!academicYearRange) return null;
+    const m = academicYearRange.match(/(\d{4})\s*[-–]\s*(\d{4})/);
+    return m ? parseInt(m[2]) : null;
+  }
+
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-    // Convert file to base64 for Gemini
     const imageBuffer = await fs.readFile(filePath);
     const base64Image = imageBuffer.toString('base64');
+    const currentYear = new Date().getFullYear();
 
-    const prompt = `You are an OCR assistant. Carefully read this student college ID card image and extract the following details:
+    // ── STEP 1: Gemini — extract + 3 checks ──────────────────────
+    const prompt = `You are a strict ID card verification assistant. Carefully analyze this image (it may show one or both sides of a physical ID card, including PDF scans of both sides).
 
-1. College Name: Look for the college/university/institute name — it may appear as text, a header, a logo label, or a watermark. Return the full name.
-2. Course: The degree program. Examples: B.E(CSE), B.Tech, MBA, MCA, BSc, MSc. Include the branch in parentheses if present (e.g., "B.E(CSE)").
-3. Academic Year Range: The enrollment period shown on the card (e.g., "2022 - 2026", "2023-2025"). Return exactly as printed.
+TASK 1 — Is it a genuine physical printed institutional ID card?
+Accept: printed college/university/institute ID cards (front or back), PDF scans of both sides.
+Reject if it is: a screenshot of any kind, handwritten paper or note, random photograph of a person, digitally created or typed document, or anything that is NOT a printed ID card.
 
-Return ONLY raw JSON — no markdown, no explanation:
+TASK 2 — If it IS a valid ID card, extract:
+- college: Full institution name exactly as printed (header, logo label, or watermark)
+- course: Full degree and branch (e.g., "B.Tech CSE", "B.E.(ECE)", "MBA", "MCA", "B.Sc CS")
+- academicYearRange: Enrollment period exactly as printed (e.g., "2022-2026", "2023 - 2025")
+
+TASK 3 — Is it a CURRENT student (not an alumnus)?
+- Current year is ${currentYear}
+- Extract the end year from academicYearRange
+- end year >= ${currentYear} → is_current_student: true
+- end year < ${currentYear} OR no year range found → is_current_student: false
+
+TASK 4 — Is it a STUDENT card, not staff/faculty?
+- Card shows a recognized degree or course → is_student_not_staff: true
+- Card explicitly shows: Faculty, Professor, Lecturer, Staff, Admin, Employee → is_student_not_staff: false
+- Course present but no staff role label → is_student_not_staff: true
+
+Return ONLY raw JSON, no markdown, no code fences:
 {
-  "college": "",
-  "course": "",
-  "academicYearRange": ""
+  "is_id_card": true or false,
+  "is_current_student": true or false,
+  "is_student_not_staff": true or false,
+  "college": "string or null",
+  "course": "string or null",
+  "academicYearRange": "string or null",
+  "confidence": "high or medium or low"
 }
 
-If a field cannot be found, use an empty string "".`;
+If a field cannot be determined, use null.`;
+
+    let geminiResult = null;
 
     try {
-      // 1. Try Gemini
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [
           prompt,
-          {
-            inlineData: {
-              data: base64Image,
-              mimeType: req.file.mimetype,
-            },
-          },
+          { inlineData: { data: base64Image, mimeType: req.file.mimetype } },
         ],
       });
-
-      // Strip markdown code fences if present
       let rawText = response.text.trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
-      const parsed = JSON.parse(rawText);
-
-      const year = parseYearFromRange(parsed.academicYearRange || '');
-
+      geminiResult = JSON.parse(rawText);
+    } catch (geminiErr) {
+      console.warn('Gemini ID scan failed:', geminiErr.message);
       return res.json({
-        college: parsed.college || '',
-        course: parsed.course || '',
-        year,
+        is_id_card: false,
+        is_valid_college: false,
+        is_current_student: false,
+        is_student_not_staff: false,
+        college: null, course: null, academicYearRange: null, year_of_study: null,
+        confidence: 'low',
+        verdict: 'REVIEW',
+        rejection_reason: 'Please fill in your college details manually below. Your registration will be reviewed by our team.',
         source: 'gemini',
       });
-    } catch (geminiErr) {
-      console.warn('Gemini extraction failed, falling back to Tesseract OCR:', geminiErr.message);
+    }
 
-      // 2. Fallback to Tesseract
-      // For PDFs, sharp can't rasterise, so we pass the raw buffer and let Tesseract attempt it.
-      // For images, preprocess with sharp for better OCR quality.
-      let ocrBuffer = imageBuffer;
-      const isPdf = req.file.mimetype === 'application/pdf';
-
-      if (!isPdf) {
-        try {
-          ocrBuffer = await sharp(imageBuffer)
-            .grayscale()
-            .normalize()
-            .toBuffer();
-        } catch (sharpErr) {
-          console.warn('Sharp preprocessing failed, using raw buffer:', sharpErr.message);
-        }
-      }
-
-      const { data: { text } } = await Tesseract.recognize(ocrBuffer, 'eng');
-
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-      const fullText = lines.join(' ');
-
-      let college = '';
-      let course = '';
-      let year = '';
-
-      const courseRegex = /(B\.E|B\.Tech|MBA|MCA|BSc|MSc)(\([^)]+\))?/i;
-      const collegeRegex = /(college|institute|university)/i;
-
-      for (const line of lines) {
-        if (!college && collegeRegex.test(line)) college = line;
-        if (!course) {
-          const match = line.match(courseRegex);
-          if (match) course = match[0];
-        }
-      }
-
-      // Try to get year from academic range in the full text
-      year = parseYearFromRange(fullText);
-
+    // ── STEP 2: Early reject if not a valid ID card ──────────────
+    if (!geminiResult.is_id_card) {
       return res.json({
-        college,
-        course,
-        year,
-        source: 'tesseract',
+        is_id_card: false,
+        is_valid_college: false,
+        is_current_student: false,
+        is_student_not_staff: false,
+        college: null, course: null, academicYearRange: null, year_of_study: null,
+        confidence: geminiResult.confidence || 'high',
+        verdict: 'REJECTED',
+        rejection_reason: 'The uploaded image does not appear to be a genuine printed college ID card. Please upload a clear photo or scan of your physical ID card.',
+        source: 'gemini',
       });
     }
+
+    // ── STEP 3: Validate college against xlsx + Gemini fallback ──
+    const collegeSet = await getCollegeSet();
+    const normalizedExtracted = normalizeCollegeName(geminiResult.college || '');
+    let isValidCollege = normalizedExtracted ? collegeSet.has(normalizedExtracted) : false;
+
+    if (!isValidCollege && geminiResult.college) {
+      // Second Gemini call: ask if it's a recognised Indian institution
+      try {
+        const checkResponse = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [`Is "${geminiResult.college}" a recognised college, university, or educational institution in India? Reply with ONLY a raw JSON object: {"recognised": true or false, "reason": "brief reason"}`],
+        });
+        let checkRaw = checkResponse.text.trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+        const checkParsed = JSON.parse(checkRaw);
+        isValidCollege = checkParsed.recognised === true;
+      } catch (checkErr) {
+        console.warn('College recognition check failed:', checkErr.message);
+        isValidCollege = false;
+      }
+    }
+
+    // ── STEP 4: Check end year for current student ───────────────
+    const endYear = getEndYear(geminiResult.academicYearRange);
+    const isCurrentStudent = geminiResult.is_current_student === true && endYear !== null && endYear >= currentYear;
+
+    // ── STEP 5: Build verdict ────────────────────────────────────
+    const checks = {
+      is_id_card:          true, // already passed step 2
+      is_valid_college:    isValidCollege,
+      is_current_student:  isCurrentStudent,
+      is_student_not_staff: geminiResult.is_student_not_staff === true,
+    };
+
+    let verdict = 'APPROVED';
+    let rejection_reason = null;
+
+    if (!checks.is_valid_college) {
+      verdict = 'REJECTED';
+      rejection_reason = `"${geminiResult.college || 'The institution shown'}" could not be verified as a recognised Indian college or university.`;
+    } else if (!checks.is_current_student) {
+      verdict = 'REJECTED';
+      rejection_reason = endYear && endYear < currentYear
+        ? `Your academic year ended in ${endYear}. This portal is for current students only, not alumni.`
+        : 'Could not confirm you are a current student. Please ensure the academic year range is visible on your ID card.';
+    } else if (!checks.is_student_not_staff) {
+      verdict = 'REJECTED';
+      rejection_reason = 'The ID card appears to belong to a faculty or staff member, not a student.';
+    }
+
+    const year_of_study = parseYearFromRange(geminiResult.academicYearRange || '');
+
+    // ── STEP 6: Save CollegeDomain on APPROVED ───────────────────
+    if (verdict === 'APPROVED' && studentEmail && geminiResult.college) {
+      try {
+        const atIndex = studentEmail.lastIndexOf('@');
+        const emailDomain = atIndex !== -1 ? studentEmail.slice(atIndex + 1) : null;
+        if (emailDomain) {
+          await CollegeDomain.findOneAndUpdate(
+            { email_domain: emailDomain },
+            {
+              $setOnInsert: {
+                college_name: geminiResult.college,
+                email_domain: emailDomain,
+                verified: true,
+                verified_at: new Date(),
+                source: 'student_verification',
+              },
+            },
+            { upsert: true, new: true }
+          );
+        }
+      } catch (domainErr) {
+        console.warn('CollegeDomain save failed (non-fatal):', domainErr.message);
+      }
+    }
+
+    return res.json({
+      ...checks,
+      college:           geminiResult.college   || null,
+      course:            geminiResult.course    || null,
+      academicYearRange: geminiResult.academicYearRange || null,
+      year_of_study,
+      confidence:        geminiResult.confidence || 'medium',
+      verdict,
+      rejection_reason,
+      source: 'gemini',
+    });
 
   } catch (err) {
     console.error('Parse ID error:', err);
@@ -255,6 +381,7 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
       year,
       domain,
       organization,
+      needsAdminReview,
     } = req.body;
 
     // Validate required fields
@@ -294,6 +421,11 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
       if (req.file) {
         userData.idCardPath = req.file.filename;
       }
+      // Flag for admin review if AI scanning was unavailable
+      if (needsAdminReview === 'true' || needsAdminReview === true) {
+        userData.needsAdminReview = true;
+        userData.reviewStatus = 'pending';
+      }
     } else {
       userData.domain = domain?.trim();
       userData.organization = organization?.trim();
@@ -320,6 +452,8 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
         year: user.year,
         domain: user.domain,
         organization: user.organization,
+        needsAdminReview: user.needsAdminReview || false,
+        reviewStatus: user.reviewStatus || 'not_required',
         registeredEvents: user.registeredEvents,
       },
     });
@@ -391,6 +525,8 @@ router.post('/verify-otp', async (req, res) => {
         year: user.year,
         domain: user.domain,
         organization: user.organization,
+        needsAdminReview: user.needsAdminReview || false,
+        reviewStatus: user.reviewStatus || 'not_required',
         registeredEvents: user.registeredEvents,
       },
     });
@@ -420,6 +556,8 @@ router.get('/me', authMiddleware, async (req, res) => {
         year: user.year,
         domain: user.domain,
         organization: user.organization,
+        needsAdminReview: user.needsAdminReview || false,
+        reviewStatus: user.reviewStatus || 'not_required',
         registeredEvents: user.registeredEvents,
         createdAt: user.createdAt,
       },
