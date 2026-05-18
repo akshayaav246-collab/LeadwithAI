@@ -10,6 +10,7 @@ const registeredEventSchema = new mongoose.Schema({
     enum: ['pending', 'confirmed', 'failed'],
     default: 'pending',
   },
+  zoomJoinUrl: { type: String },
   registeredAt: { type: Date, default: Date.now },
 });
 
@@ -25,12 +26,6 @@ const userSchema = new mongoose.Schema(
     course: { type: String, trim: true },
     year: { type: String, trim: true },
     idCardPath: { type: String },
-    needsAdminReview: { type: Boolean, default: false }, // set when AI verification was skipped
-    reviewStatus: {
-      type: String,
-      enum: ['not_required', 'pending', 'approved'],
-      default: 'not_required',
-    },
 
     // Working professional fields
     domain: { type: String, trim: true },
@@ -39,6 +34,18 @@ const userSchema = new mongoose.Schema(
     // OTP for login
     otpHash: { type: String },
     otpExpiry: { type: Date },
+
+    // Registration metadata
+    heardFrom: { type: String, required: true },
+    isWaitlisted: { type: Boolean, default: false },
+    referralCode: { type: String, default: null },
+
+    // Feedback for the 4 sessions
+    feedback: [{
+      session: { type: String, required: true },
+      text: { type: String, required: true }
+    }],
+    isFeedbackSubmitted: { type: Boolean, default: false },
 
     // Events booked
     registeredEvents: [registeredEventSchema],

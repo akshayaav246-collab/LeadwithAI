@@ -1,4 +1,4 @@
-import { useState, useRef, type FormEvent, type ChangeEvent } from 'react';
+import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/context/AuthContext';
 import * as api from '@/lib/api';
@@ -55,6 +55,22 @@ export function Register() {
   const { login } = useAuth();
   const [, navigate] = useLocation();
 
+  // Read referral code from URL or persistent storage
+  const urlParams = new URLSearchParams(window.location.search);
+  // Read referral code only from global storage (set by landing page)
+  const refCode = localStorage.getItem('referralCode') || '';
+
+  useEffect(() => {
+    // If someone tries to use a ref link directly on the register page,
+    // bounce them to the landing page so they see the full event details
+    // and the global tracker can catch it.
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('ref')) {
+      const ref = urlParams.get('ref');
+      window.location.href = `/?ref=${ref}`;
+    }
+  }, []);
+
   // ── Tab state ────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>('register');
 
@@ -80,7 +96,6 @@ export function Register() {
   const [idVerdict, setIdVerdict] = useState<'APPROVED' | 'REJECTED' | 'REVIEW' | null>(null);
   const [idRejectionReason, setIdRejectionReason] = useState('');
   const [showIdModal, setShowIdModal] = useState(false);
-  const [needsAdminReview, setNeedsAdminReview] = useState(false);
 
   function closeIdModal() { setShowIdModal(false); }
   function resetIdUpload() {
@@ -88,19 +103,13 @@ export function Register() {
     setIdVerdict(null);
     setIdRejectionReason('');
     setShowIdModal(false);
-    setNeedsAdminReview(false);
     setCollegeName('');
     setCourse('');
     setYear('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
-  // ── Helper: validate college email domain ─────────────────
-  function isValidStudentEmail(val: string): boolean {
-    if (!val.includes('@')) return false;
-    const lower = val.toLowerCase();
-    return lower.endsWith('.ac.in') || lower.endsWith('.edu.in') || lower.endsWith('.edu');
-  }
+
 
   const [regLoading, setRegLoading] = useState(false);
   const [regSuccess, setRegSuccess] = useState(false);
@@ -111,8 +120,14 @@ export function Register() {
   const [regOtp, setRegOtp] = useState('');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [heardFrom, setHeardFrom] = useState('');
+  const [heardFromOther, setHeardFromOther] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Derived: true when the student's email is from an institutional domain
+  const isInstitutionalEmail =
+    userType === 'student' && /\.(ac|edu)\.in$/i.test(email.trim());
 
   // ── Login form state ─────────────────────────────────────────
   const [loginEmail, setLoginEmail] = useState('');
@@ -185,10 +200,6 @@ export function Register() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return setErrors({ email: 'Please enter a valid email before sending OTP.' });
     }
-    // Front-end guard (mirrors backend)
-    if (userType === 'student' && !isValidStudentEmail(email)) {
-      return setErrors({ email: 'Please use your official college email address (.ac.in or .edu.in only).' });
-    }
     setVerifyLoading(true);
     try {
       await api.sendRegisterOtp(email, userType);
@@ -236,14 +247,26 @@ export function Register() {
     if (!phoneRegex.test(phone.trim())) newErrors.phone = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
     
     if (userType === 'student') {
-      if (!idFile) newErrors.idCard = 'Please upload your College ID Card.';
-      // Block submit if ID was scanned but rejected
-      if (idVerdict === 'REJECTED') newErrors.idCard = 'Your ID card could not be verified. Please re-upload a valid card.';
+      // ID card is mandatory for all students
+      if (!idFile) {
+        newErrors.idCard = 'Please upload your College ID Card.';
+      } else if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
+        // LLM validation result only blocks non-institutional users
+        newErrors.idCard = 'The ID card is not found to be valid. Please upload a valid ID.';
+      } else if (!isInstitutionalEmail && isScanningId) {
+        newErrors.idCard = 'Please wait — your ID card is being validated.';
+      }
       if (!collegeName.trim()) newErrors.collegeName = 'Please enter your college name.';
       if (!course.trim()) newErrors.course = 'Please enter your course.';
       if (!year) newErrors.year = 'Please select your year.';
     } else {
       if (!domain.trim()) newErrors.domain = 'Please select your domain/field.';
+    }
+
+    if (!heardFrom) {
+      newErrors.heardFrom = 'Please let us know how you heard about this.';
+    } else if (heardFrom === 'Others' && !heardFromOther.trim()) {
+      newErrors.heardFromOther = 'Please specify how you heard about this.';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -264,10 +287,16 @@ export function Register() {
         formData.append('course', course.trim());
         formData.append('year', year);
         if (idFile) formData.append('idCard', idFile);
-        if (needsAdminReview) formData.append('needsAdminReview', 'true');
       } else {
         formData.append('domain', domain.trim());
         if (organization.trim()) formData.append('organization', organization.trim());
+      }
+
+      const finalHeardFrom = heardFrom === 'Others' ? heardFromOther.trim() : heardFrom;
+      formData.append('heardFrom', finalHeardFrom);
+      
+      if (refCode) {
+        formData.append('referralCode', refCode);
       }
 
       const { token, user } = await api.registerUser(formData);
@@ -417,31 +446,16 @@ export function Register() {
                     </button>
                   </div>
                 ) : regSuccess ? (
-                  /* ── Registered — payment pending or under review ── */
+                  /* ── Registered — payment pending ── */
                   <div className="register-success" role="status">
                     <div className="register-success-icon" style={{ background: 'rgba(196,149,106,0.12)', color: 'var(--color-sienna)' }} aria-hidden="true">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                       </svg>
                     </div>
-
-                    {needsAdminReview ? (
-                      <>
-                        <h3>Registered — Pending Review</h3>
-                        <p>Your account has been created. Our team will review your profile and enable payment once verified. You will be able to pay from your profile page after approval.</p>
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          style={{ marginTop: '1.5rem' }}
-                          onClick={() => navigate('/profile')}
-                        >
-                          View My Profile →
-                        </button>
-                      </>
-                    ) : (
                       <>
                         <h3>Registered! Complete Payment</h3>
-                        <p>Your account has been created. Please complete the <span style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}>{userType === 'student' ? '₹500' : '₹999'}</span> payment to confirm your seat.</p>
+                        <p>Your account has been created. Please complete the <span style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}>{userType === 'student' ? '₹499' : '₹999'}</span> payment to confirm your seat.</p>
                         {errors.global && <div className="register-error" role="alert" style={{ marginTop: '1rem' }}>{errors.global}</div>}
                         <button
                           type="button"
@@ -449,10 +463,9 @@ export function Register() {
                           style={{ marginTop: '1.5rem' }}
                           onClick={() => launchRazorpay(regToken, {})}
                         >
-                          Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹500' : '₹999'}</span> Now →
+                          Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span> Now →
                         </button>
                       </>
-                    )}
                   </div>
                 ) : (
                   /* ── Register Form ── */
@@ -517,7 +530,7 @@ export function Register() {
                                 setErrors(prev => ({ ...prev, email: 'Please enter a valid email.' }));
                               }
                             }}
-                            placeholder={userType === 'student' ? 'you@college.ac.in' : 'you@example.com'}
+                            placeholder="you@example.com"
                             autoComplete="email"
                             required
                             disabled={isEmailVerified}
@@ -529,10 +542,7 @@ export function Register() {
                             className="btn-primary"
                             style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}
                             onClick={handleSendRegOtp}
-                            disabled={
-                              verifyLoading ||
-                              (userType === 'student' && !isValidStudentEmail(email))
-                            }
+                            disabled={verifyLoading}
                           >
                             {verifyLoading && !regOtpSent ? 'Sending...' : 'Send OTP'}
                           </button>
@@ -544,13 +554,15 @@ export function Register() {
                         )}
                       </div>
                       {errors.email && <div className="field-error">{errors.email}</div>}
-                      {/* Real-time college email domain hint for students */}
-                      {userType === 'student' && email.includes('@') && !isValidStudentEmail(email) && !errors.email && (
-                        <div className="field-hint">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                          Please use your official college email (.ac.in or .edu.in only)
+
+                      {/* Friendly email hint */}
+                      {!errors.email && !isEmailVerified && (
+                        <div className="field-hint email-hint">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          If you have a college domain email , use it.Otherwise use your personal email.
                         </div>
                       )}
+
                       {regOtpSent && !isEmailVerified && !errors.email && (
                         <div className="field-success">
                           OTP sent! Please check your email.
@@ -616,11 +628,20 @@ export function Register() {
                     {/* Student-specific fields */}
                     {userType === 'student' && (
                       <div className="reg-conditional-fields">
+                        {/* ── ID Card section (always visible) ── */}
                         <div className="register-field" style={{ marginBottom: '1.5rem' }}>
+
+
                           <label htmlFor="reg-idcard">
                             College ID Card *
-                            {isScanningId && <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)' }}>Scanning ID...</span>}
+                            {isScanningId && (
+                              <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                Validating...
+                              </span>
+                            )}
                           </label>
+
                           <div
                             className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
                             onClick={() => !isScanningId && fileInputRef.current?.click()}
@@ -635,42 +656,28 @@ export function Register() {
                               onChange={async (e: ChangeEvent<HTMLInputElement>) => {
                                 const f = e.target.files?.[0] || null;
                                 setIdFile(f);
-                                // reset verdict on new file pick
+                                if (f) clearError('idCard');
                                 setIdVerdict(null);
                                 setIdRejectionReason('');
                                 setShowIdModal(false);
-                                setNeedsAdminReview(false);
-                                if (f) {
+
+                                // LLM validation only for non-institutional emails
+                                if (f && !isInstitutionalEmail) {
                                   setIsScanningId(true);
                                   try {
                                     const parsed = await api.parseIdCard(f, email || undefined);
                                     setIdVerdict(parsed.verdict);
                                     if (parsed.verdict === 'APPROVED') {
-                                      if (parsed.college)       setCollegeName(parsed.college);
-                                      if (parsed.course)        setCourse(parsed.course);
-                                      if (parsed.year_of_study) setYear(parsed.year_of_study);
                                       setIdRejectionReason('');
-                                      setNeedsAdminReview(false);
                                     } else if (parsed.verdict === 'REJECTED') {
-                                      // AI verified but checks failed — open modal, block submit
-                                      setIdRejectionReason(parsed.rejection_reason || 'ID card could not be verified.');
-                                      setShowIdModal(true);
-                                      setNeedsAdminReview(false);
-                                      setCollegeName('');
-                                      setCourse('');
-                                      setYear('');
+                                      setIdRejectionReason('The ID card is not found to be valid.');
                                     } else {
-                                      // REVIEW = system/AI failure — allow manual fill, flag for admin
-                                      setIdRejectionReason(parsed.rejection_reason || 'Scanning unavailable. Please fill details below.');
-                                      setNeedsAdminReview(true);
-                                      setShowIdModal(false);
+                                      setIdRejectionReason('');
                                     }
                                   } catch (err) {
                                     console.error('ID Parse Error:', err);
                                     setIdVerdict('REVIEW');
-                                    setNeedsAdminReview(true);
-                                    setShowIdModal(false);
-                                    setIdRejectionReason('Scanning unavailable. Please fill details below.');
+                                    setIdRejectionReason('');
                                   } finally {
                                     setIsScanningId(false);
                                   }
@@ -685,27 +692,44 @@ export function Register() {
                             ) : (
                               <span className="upload-placeholder">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                Upload ID (JPG/PNG/PDF)
+                                Upload ID Card (JPG / PNG / PDF)
                               </span>
                             )}
                           </div>
-                          {errors.idCard && <div style={{ color: '#9b3a3a', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.idCard}</div>}
 
-                          {/* ── APPROVED badge ── */}
-                          {idVerdict === 'APPROVED' && (
-                            <div className="id-approved-badge">
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                              ID Verified — details auto-filled below
-                            </div>
+                          {/* Inline validation feedback for non-institutional */}
+                          {!isInstitutionalEmail && idFile && !isScanningId && (
+                            <>
+                              {idVerdict === 'APPROVED' && (
+                                <div className="id-verdict-line">
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                  <span>The ID is found to be valid.</span>
+                                </div>
+                              )}
+                              {idVerdict === 'REJECTED' && (
+                                <div className="id-rejected-block">
+                                  <div className="id-verdict-line">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                    <span>The ID is not found to be valid.</span>
+                                  </div>
+                                  <div className="id-rejected-hint">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    If you are a working professional or from an organisation, please{' '}
+                                    <button
+                                      type="button"
+                                      className="id-rejected-switch-btn"
+                                      onClick={() => { setUserType('working'); resetIdUpload(); }}
+                                    >
+                                      register under Working Professional / Others
+                                    </button>
+                                    {' '}instead.
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           )}
 
-                          {/* ── REVIEW: system failure — silent notice, allow manual fill ── */}
-                          {idVerdict === 'REVIEW' && idRejectionReason && (
-                            <div className="id-scan-notice">
-                              {idRejectionReason}
-                            </div>
-                          )}
-
+                          {errors.idCard && <div className="field-error">{errors.idCard}</div>}
                         </div>
 
                         <div className="register-grid-2">
@@ -719,7 +743,7 @@ export function Register() {
                               placeholder="e.g. PSG College of Technology"
                               required
                             />
-                            {errors.collegeName && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.collegeName}</div>}
+                            {errors.collegeName && <div className="field-error">{errors.collegeName}</div>}
                           </div>
                           <div className="register-field">
                             <label htmlFor="reg-course">Course *</label>
@@ -731,7 +755,7 @@ export function Register() {
                               placeholder="e.g. B.Tech CSE"
                               required
                             />
-                            {errors.course && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.course}</div>}
+                            {errors.course && <div className="field-error">{errors.course}</div>}
                           </div>
                         </div>
                         <div className="register-field" style={{ marginTop: '1.5rem' }}>
@@ -751,7 +775,7 @@ export function Register() {
                             <option value="5th Year">5th Year</option>
                             <option value="Postgraduate">Postgraduate</option>
                           </select>
-                          {errors.year && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.year}</div>}
+                          {errors.year && <div className="field-error">{errors.year}</div>}
                         </div>
                       </div>
                     )}
@@ -774,7 +798,7 @@ export function Register() {
                                 <option key={opt} value={opt}>{opt}</option>
                               ))}
                             </select>
-                            {errors.domain && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginTop: '0.4rem' }}>{errors.domain}</div>}
+                            {errors.domain && <div className="field-error">{errors.domain}</div>}
                           </div>
                           <div className="register-field">
                             <label htmlFor="reg-org">Organization</label>
@@ -790,6 +814,39 @@ export function Register() {
                       </div>
                     )}
 
+                    {/* How did you hear about us? */}
+                    <div className="register-field" style={{ marginTop: '1.5rem' }}>
+                      <label htmlFor="reg-heardFrom">How did you get to know about this? *</label>
+                      <select
+                        id="reg-heardFrom"
+                        value={heardFrom}
+                        onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+                        className="register-select"
+                        required
+                      >
+                        <option value="">Select an option</option>
+                        <option value="Social Media">Social Media</option>
+                        <option value="Newspaper">Newspaper</option>
+                        <option value="Others">Others</option>
+                      </select>
+                      {errors.heardFrom && <div className="field-error">{errors.heardFrom}</div>}
+                    </div>
+
+                    {heardFrom === 'Others' && (
+                      <div className="register-field" style={{ marginTop: '1rem' }}>
+                        <label htmlFor="reg-heardFromOther">Please specify *</label>
+                        <input
+                          id="reg-heardFromOther"
+                          type="text"
+                          value={heardFromOther}
+                          onChange={(e) => { setHeardFromOther(e.target.value); clearError('heardFromOther'); }}
+                          placeholder="e.g. Friend, Professor, etc."
+                          required
+                        />
+                        {errors.heardFromOther && <div className="field-error">{errors.heardFromOther}</div>}
+                      </div>
+                    )}
+
                     {errors.global && <div className="register-error" role="alert">{errors.global}</div>}
 
                     <button
@@ -802,7 +859,7 @@ export function Register() {
                           <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
                         </span>
                       ) : (
-                        <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹500' : '₹999'}</span>)</span></>
+                        <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span>)</span></>
                       )}
                     </button>
 

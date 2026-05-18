@@ -2011,8 +2011,7 @@ footer span {
   color: var(--color-stone);
   font-weight: 500;
 }
-.register-field input,
-.register-select {
+.register-field input {
   font-family: var(--font-body);
   font-size: 1.05rem;
   padding: 0.85rem 1rem;
@@ -2022,6 +2021,23 @@ footer span {
   color: var(--color-ink);
   transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
   width: 100%;
+}
+.register-select {
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  padding: 0.85rem 2.5rem 0.85rem 1rem;
+  border: 1px solid var(--color-sand);
+  border-radius: 4px;
+  background-color: var(--color-cream);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%232A1F1F' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  appearance: none;
+  -webkit-appearance: none;
+  color: var(--color-ink);
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  width: 100%;
+  cursor: pointer;
 }
 .register-field input::placeholder { color: var(--color-stone); opacity: 0.7; }
 .register-field input:focus,
@@ -2280,6 +2296,120 @@ footer span {
   font-size: 0.9rem;
   color: var(--color-sienna);
   font-weight: 600;
+}
+
+/* Minimal ID verdict line — icon + plain site-color text */
+.id-verdict-line {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  color: var(--color-umber);
+  animation: register-in 0.2s ease both;
+}
+.id-verdict-line svg { flex-shrink: 0; }
+
+/* Rejected block: verdict line + hint together */
+.id-rejected-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+/* Soft hint suggesting to switch user type */
+.id-rejected-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-family: var(--font-body);
+  font-size: 0.87rem;
+  color: var(--color-stone);
+  line-height: 1.5;
+  animation: register-in 0.25s ease both;
+}
+.id-rejected-hint svg { flex-shrink: 0; margin-top: 2px; }
+
+/* Inline text-link button for switching to professional */
+.id-rejected-switch-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: inherit;
+  color: var(--color-sienna);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  line-height: inherit;
+}
+.id-rejected-switch-btn:hover { color: var(--color-sienna-dark); }
+
+/* Institutional email bypass badge */
+.id-institutional-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  background: rgba(34, 197, 94, 0.07);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-left: 3px solid #22c55e;
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  color: #166534;
+  line-height: 1.5;
+  animation: register-in 0.3s ease both;
+}
+.id-institutional-badge svg {
+  flex-shrink: 0;
+  stroke: #22c55e;
+}
+.id-institutional-badge em {
+  font-style: normal;
+  font-weight: 600;
+  color: #15803d;
+}
+
+/* Rejected inline banner */
+.id-rejected-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+  padding: 0.55rem 0.85rem;
+  background: rgba(239, 68, 68, 0.07);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-left: 3px solid #ef4444;
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: #b91c1c;
+  line-height: 1.5;
+  animation: register-in 0.25s ease both;
+}
+.id-rejected-banner svg {
+  flex-shrink: 0;
+  stroke: #ef4444;
+}
+
+/* Email hint below email field */
+.email-hint {
+  padding: 0.45rem 0;
+  color: var(--color-stone);
+}
+.email-hint em {
+  font-style: normal;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85em;
+  color: var(--color-umber);
+}
+
+/* Spin animation for validating icon */
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
 }
 
 /* ── Register Tabs ── */
@@ -2656,6 +2786,82 @@ footer {
   gap: 2rem;
 }
 
+@media (min-width: 900px) {
+  .profile-container {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    align-items: start;
+    gap: 1.5rem;
+  }
+  .container.profile-container {
+    max-width: 1280px;
+  }
+}
+
+.profile-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* ── Modal Styles ── */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 3vh;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+}
+.modal-content {
+  background: var(--color-white);
+  border-radius: 8px;
+  width: 94%;
+  max-width: 780px;
+  max-height: 96vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+}
+.modal-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--color-sand);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-parchment);
+  border-radius: 8px 8px 0 0;
+}
+.modal-header h2 {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  margin: 0;
+  color: var(--color-espresso);
+}
+.modal-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-stone);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+.modal-close:hover {
+  color: var(--color-espresso);
+}
+.modal-body {
+  padding: 1rem 1.5rem 1.25rem;
+}
+
 /* ── Profile Cards ── */
 .profile-card {
   background: var(--color-white);
@@ -2686,7 +2892,7 @@ footer {
 /* ── Details Grid ── */
 .profile-details-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
   gap: 0;
   padding: 0.5rem 0;
 }

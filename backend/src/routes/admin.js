@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { sendCustomBulkEmail, sendProfileApprovedEmail } = require('../utils/email');
 const adminAuth = require('../middleware/adminAuth');
 
@@ -141,13 +142,14 @@ router.get('/users', adminAuth, async (req, res) => {
         email:        u.email,
         phone:        u.phone,
         userType:     u.userType,
+        heardFrom:    u.heardFrom || '-',
+        isWaitlisted: u.isWaitlisted || false,
+        referralCode: u.referralCode || '-',
         // Student fields
         collegeName:  u.collegeName  || '-',
         course:       u.course       || '-',
         year:         u.year         || '-',
         idCardPath:   u.idCardPath   || null,
-        needsAdminReview: u.needsAdminReview || false,
-        reviewStatus:     u.reviewStatus || 'not_required',
         // Working professional fields
         domain:       u.domain       || '-',
         organization: u.organization || '-',
@@ -182,13 +184,13 @@ router.get('/users/:id', adminAuth, async (req, res) => {
       email:        user.email,
       phone:        user.phone,
       userType:     user.userType,
+      heardFrom:    user.heardFrom || '-',
+      isWaitlisted: user.isWaitlisted || false,
       // Student fields
       collegeName:  user.collegeName  || '-',
       course:       user.course       || '-',
       year:         user.year         || '-',
       idCardPath:   user.idCardPath   || null,
-      needsAdminReview: user.needsAdminReview || false,
-      reviewStatus:     user.reviewStatus || 'not_required',
       // Working professional fields
       domain:       user.domain       || '-',
       organization: user.organization || '-',
@@ -260,40 +262,48 @@ router.post('/send-email', adminAuth, async (req, res) => {
   }
 });
 
+
+
 // ─────────────────────────────────────────────
-// PATCH /api/admin/users/:id/review-status
-// Approve or reject a pending profile review
+// GET /api/admin/settings
+// Get system settings
 // ─────────────────────────────────────────────
-router.patch('/users/:id/review-status', adminAuth, async (req, res) => {
+router.get('/settings', adminAuth, async (req, res) => {
   try {
-    const { action } = req.body; // 'approve' | 'reject'
-    if (!['approve', 'reject'].includes(action)) {
-      return res.status(400).json({ error: 'action must be "approve" or "reject"' });
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = await Settings.create({ feedbackEnabled: false });
     }
-
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ error: 'User not found.' });
-
-    if (action === 'approve') {
-      user.reviewStatus = 'approved';
-      await user.save();
-      // Send approval email non-blocking
-      sendProfileApprovedEmail(user).catch(err => console.error('Approval email error:', err));
-      return res.json({
-        message: 'Profile approved. Payment is now enabled.',
-        reviewStatus: user.reviewStatus,
-      });
-    } else {
-      user.reviewStatus = 'pending'; // stays pending — admin can re-approve later
-      await user.save();
-      return res.json({
-        message: 'Profile kept as pending.',
-        reviewStatus: user.reviewStatus,
-      });
-    }
+    res.json(settings);
   } catch (err) {
-    console.error('Review status update error:', err);
-    res.status(500).json({ error: 'Failed to update review status.' });
+    console.error('Admin get settings error:', err);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// PATCH /api/admin/settings/feedback
+// Toggle feedback enabled status
+// ─────────────────────────────────────────────
+router.patch('/settings/feedback', adminAuth, async (req, res) => {
+  try {
+    const { feedbackEnabled } = req.body;
+    if (typeof feedbackEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'feedbackEnabled boolean is required' });
+    }
+
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = await Settings.create({ feedbackEnabled });
+    } else {
+      settings.feedbackEnabled = feedbackEnabled;
+      await settings.save();
+    }
+
+    res.json(settings);
+  } catch (err) {
+    console.error('Admin update settings error:', err);
+    res.status(500).json({ error: 'Failed to update settings' });
   }
 });
 

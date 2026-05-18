@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { getAdminStats } from '../../lib/api';
+import { getAdminStats, getAdminSettings, updateAdminSettings } from '../../lib/api';
 
 export function AdminOverview() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [feedbackEnabled, setFeedbackEnabled] = useState(false);
+  const [updatingSetting, setUpdatingSetting] = useState(false);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem('adminToken') || '';
         const data = await getAdminStats(token);
+        const settings = await getAdminSettings(token);
         setStats(data);
+        setFeedbackEnabled(settings.feedbackEnabled);
       } catch (err: any) {
         setError('Failed to load stats. ' + (err.message || ''));
       } finally {
@@ -25,9 +29,40 @@ export function AdminOverview() {
   if (error) return <div className="admin-error">{error}</div>;
   if (!stats) return null;
 
+  const toggleFeedback = async () => {
+    setUpdatingSetting(true);
+    try {
+      const token = localStorage.getItem('adminToken') || '';
+      const res = await updateAdminSettings(token, !feedbackEnabled);
+      setFeedbackEnabled(res.feedbackEnabled);
+    } catch (err: any) {
+      alert('Failed to update setting: ' + err.message);
+    } finally {
+      setUpdatingSetting(false);
+    }
+  };
+
   return (
     <div className="admin-page">
-      <h2 className="admin-page-title">Dashboard Overview</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 className="admin-page-title">Dashboard Overview</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontWeight: 500, color: '#152446' }}>Post-Session Feedback:</span>
+          <button 
+            className="btn-primary" 
+            onClick={toggleFeedback}
+            disabled={updatingSetting}
+            style={{ 
+              padding: '6px 12px', 
+              fontSize: '14px', 
+              backgroundColor: feedbackEnabled ? '#2e7d32' : '#C4956A',
+              borderColor: feedbackEnabled ? '#2e7d32' : '#C4956A',
+            }}
+          >
+            {updatingSetting ? 'Updating...' : (feedbackEnabled ? 'Enabled (Turn Off)' : 'Disabled (Turn On)')}
+          </button>
+        </div>
+      </div>
       
       <div className="admin-stats-grid">
         <div className="admin-stat-card">

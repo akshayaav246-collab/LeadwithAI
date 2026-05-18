@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getAdminUsers, setUserReviewStatus } from '../../lib/api';
+import { getAdminUsers } from '../../lib/api';
+import { CertificateGenerator } from '../../components/admin/CertificateGenerator';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/$/, '');
 
@@ -49,9 +50,10 @@ export function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPaid, setFilterPaid] = useState('all');
   const [filterType, setFilterType] = useState('all');
-  const [filterReview, setFilterReview] = useState('all'); // 'all' | 'pending'
+  const [filterWaitlist, setFilterWaitlist] = useState('all');
+  const [filterReferral, setFilterReferral] = useState('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [reviewLoading, setReviewLoading] = useState<string | null>(null); // userId being actioned
+  const [certificateUser, setCertificateUser] = useState<any>(null);
 
   const adminToken = localStorage.getItem('adminToken') || '';
 
@@ -70,19 +72,39 @@ export function AdminUsers() {
     fetchUsers();
   }, []);
 
+  const filteredUsers = users.filter(u => {
+    if (filterPaid === 'paid' && !u.isPaid) return false;
+    if (filterPaid === 'unpaid' && u.isPaid) return false;
+    if (filterType !== 'all' && u.userType !== filterType) return false;
+    if (filterWaitlist === 'waitlisted' && !u.isWaitlisted) return false;
+    if (filterWaitlist === 'regular' && u.isWaitlisted) return false;
+    if (filterReferral !== 'all' && u.referralCode !== filterReferral) return false;
+    if (searchTerm) {
+      const t = searchTerm.toLowerCase();
+      return (
+        u.fullName.toLowerCase().includes(t) ||
+        u.email.toLowerCase().includes(t) ||
+        (u.collegeName && u.collegeName.toLowerCase().includes(t)) ||
+        (u.organization && u.organization.toLowerCase().includes(t))
+      );
+    }
+    return true;
+  });
+
   const handleExportCSV = () => {
-    if (users.length === 0) return;
+    if (filteredUsers.length === 0) return;
     const headers = [
       'Name', 'Email', 'Phone', 'Type',
       'College', 'Course', 'Year',
       'Domain', 'Organization',
-      'Review Status', 'Payment Status', 'Payment ID', 'Registered On'
+      'Waitlisted', 'Heard From', 'Referral Code',
+      'Payment Status', 'Payment ID', 'Registered On'
     ];
-    const rows = users.map(u => [
+    const rows = filteredUsers.map(u => [
       `"${u.fullName}"`, `"${u.email}"`, `"${u.phone}"`, `"${u.userType}"`,
       `"${u.collegeName}"`, `"${u.course}"`, `"${u.year}"`,
       `"${u.domain}"`, `"${u.organization}"`,
-      `"${u.reviewStatus || 'not_required'}"`,
+      u.isWaitlisted ? 'Yes' : 'No', `"${u.heardFrom || '-'}"`, `"${u.referralCode || '-'}"`,
       u.isPaid ? 'Paid' : 'Unpaid',
       `"${u.paymentId || '-'}"`,
       `"${new Date(u.createdAt).toLocaleString()}"`,
@@ -97,39 +119,6 @@ export function AdminUsers() {
     link.click();
     document.body.removeChild(link);
   };
-
-  async function handleReviewAction(userId: string, action: 'approve' | 'reject') {
-    setReviewLoading(userId);
-    try {
-      const res = await setUserReviewStatus(adminToken, userId, action);
-      setUsers(prev =>
-        prev.map(u => u.id === userId ? { ...u, reviewStatus: res.reviewStatus } : u)
-      );
-    } catch (err: any) {
-      alert('Failed: ' + (err.message || 'Unknown error'));
-    } finally {
-      setReviewLoading(null);
-    }
-  }
-
-  const pendingReviewCount = users.filter(u => u.needsAdminReview && u.reviewStatus === 'pending').length;
-
-  const filteredUsers = users.filter(u => {
-    if (filterPaid === 'paid' && !u.isPaid) return false;
-    if (filterPaid === 'unpaid' && u.isPaid) return false;
-    if (filterType !== 'all' && u.userType !== filterType) return false;
-    if (filterReview === 'pending' && !(u.needsAdminReview && u.reviewStatus === 'pending')) return false;
-    if (searchTerm) {
-      const t = searchTerm.toLowerCase();
-      return (
-        u.fullName.toLowerCase().includes(t) ||
-        u.email.toLowerCase().includes(t) ||
-        (u.collegeName && u.collegeName.toLowerCase().includes(t)) ||
-        (u.organization && u.organization.toLowerCase().includes(t))
-      );
-    }
-    return true;
-  });
 
   const toggleRow = (id: string) => setExpandedId(prev => (prev === id ? null : id));
 
@@ -159,23 +148,6 @@ export function AdminUsers() {
             <span style={{ fontSize: '0.8rem', color: '#8C7B6B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</span>
           </div>
         ))}
-        {/* Pending Review badge — only shows when there are pending reviews */}
-        {pendingReviewCount > 0 && (
-          <div
-            style={{
-              background: '#fff8f0', border: '2px solid #C4956A', borderRadius: 10,
-              padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center',
-              cursor: 'pointer',
-            }}
-            onClick={() => setFilterReview(filterReview === 'pending' ? 'all' : 'pending')}
-            title="Click to filter pending reviews"
-          >
-            <span style={{ fontSize: '1.3rem', fontWeight: 700, color: '#C4956A' }}>{pendingReviewCount}</span>
-            <span style={{ fontSize: '0.8rem', color: '#C4956A', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Pending Review {filterReview === 'pending' ? '(filtered)' : ''}
-            </span>
-          </div>
-        )}
       </div>
 
       <div className="admin-controls">
@@ -196,9 +168,16 @@ export function AdminUsers() {
           <option value="student">Students</option>
           <option value="working">Professionals</option>
         </select>
-        <select value={filterReview} onChange={e => setFilterReview(e.target.value)} className="admin-select">
-          <option value="all">All Review Status</option>
-          <option value="pending">Pending Review Only</option>
+        <select value={filterWaitlist} onChange={e => setFilterWaitlist(e.target.value)} className="admin-select">
+          <option value="all">All Cohorts</option>
+          <option value="regular">First 1000</option>
+          <option value="waitlisted">Waitlisted (1000+)</option>
+        </select>
+        <select value={filterReferral} onChange={e => setFilterReferral(e.target.value)} className="admin-select">
+          <option value="all">All Referrals</option>
+          {Array.from(new Set(users.map(u => u.referralCode).filter(Boolean))).map(code => (
+            <option key={code as string} value={code as string}>{code}</option>
+          ))}
         </select>
       </div>
 
@@ -217,7 +196,9 @@ export function AdminUsers() {
                 <th>Phone</th>
                 <th>Type</th>
                 <th>College / Organization</th>
-                <th>Review</th>
+                <th>Waitlisted</th>
+                <th>Source</th>
+                <th>Referral Code</th>
                 <th>Payment</th>
                 <th>Registered</th>
               </tr>
@@ -227,7 +208,7 @@ export function AdminUsers() {
                 <React.Fragment key={user.id}>
                   {/* Main row */}
                   <tr
-                    style={{ cursor: 'pointer', background: user.needsAdminReview && user.reviewStatus === 'pending' ? '#fff8f0' : undefined }}
+                    style={{ cursor: 'pointer' }}
                     onClick={() => toggleRow(user.id)}
                   >
                     <td style={{ width: 32, textAlign: 'center', color: '#C4956A', fontSize: '0.8rem' }}>
@@ -251,13 +232,15 @@ export function AdminUsers() {
                       {user.userType === 'student' ? user.collegeName : user.organization}
                     </td>
                     <td>
-                      {user.needsAdminReview ? (
-                        <span className={`admin-badge ${user.reviewStatus === 'approved' ? 'success' : 'warning'}`}>
-                          {user.reviewStatus === 'approved' ? 'Approved' : 'Pending'}
-                        </span>
-                      ) : (
-                        <span style={{ color: '#bbb', fontSize: '0.8rem' }}>—</span>
-                      )}
+                      <span className={`admin-badge ${user.isWaitlisted ? 'warning' : 'success'}`} style={{ opacity: user.isWaitlisted ? 1 : 0.6 }}>
+                        {user.isWaitlisted ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: '0.88rem', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user.heardFrom || '-'}
+                    </td>
+                    <td style={{ fontSize: '0.88rem', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user.referralCode || '-'}
                     </td>
                     <td>
                       <span className={`admin-badge ${user.isPaid ? 'success' : 'warning'}`}>
@@ -270,7 +253,7 @@ export function AdminUsers() {
                   {/* Expanded detail row */}
                   {expandedId === user.id && (
                     <tr>
-                      <td colSpan={9} style={{ background: '#FAF7F2', padding: '1.2rem 2rem' }}>
+                      <td colSpan={11} style={{ background: '#FAF7F2', padding: '1.2rem 2rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: user.userType === 'student' && user.idCardPath ? '1fr 1fr 180px' : '1fr 1fr', gap: '1.5rem' }}>
 
                           {/* Left column - Personal */}
@@ -320,47 +303,16 @@ export function AdminUsers() {
                               )}
                             </div>
 
-                            {/* Admin Review section — only for flagged users */}
-                            {user.needsAdminReview && (
-                              <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px solid #E2D9CC' }}>
-                                <div style={{ fontWeight: 700, color: '#3B2F2F', marginBottom: '0.5rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                  Profile Review
-                                </div>
-                                {user.isPaid ? (
-                                  /* User already paid — review is moot */
-                                  <span style={{ fontSize: '0.85rem', color: '#16a34a', fontWeight: 600 }}>
-                                    Approved &amp; Paid — registration complete
-                                  </span>
-                                ) : user.reviewStatus === 'approved' ? (
-                                  /* Approved, waiting for student to pay */
-                                  <span style={{ fontSize: '0.85rem', color: '#16a34a', fontWeight: 600 }}>
-                                    Approved — payment enabled, awaiting student payment
-                                  </span>
-                                ) : (
-                                  /* Pending — show approve button */
-                                  <>
-                                    <div style={{ fontSize: '0.85rem', color: '#8C7B6B', marginBottom: '0.75rem' }}>
-                                      This student registered without AI ID verification. Review their ID card and details before approving payment.
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '0.6rem' }}>
-                                      <button
-                                        style={{
-                                          background: '#C4956A', color: '#fff', border: 'none',
-                                          borderRadius: 4, padding: '0.5rem 1.1rem',
-                                          fontFamily: 'var(--font-heading)', fontWeight: 600,
-                                          fontSize: '0.85rem', cursor: reviewLoading === user.id ? 'not-allowed' : 'pointer',
-                                          opacity: reviewLoading === user.id ? 0.6 : 1,
-                                        }}
-                                        onClick={e => { e.stopPropagation(); handleReviewAction(user.id, 'approve'); }}
-                                        disabled={reviewLoading === user.id}
-                                      >
-                                        {reviewLoading === user.id ? 'Saving…' : 'Approve & Enable Payment'}
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            )}
+                            <div style={{ marginTop: '1.5rem' }}>
+                              <button 
+                                className="btn-primary" 
+                                onClick={(e) => { e.stopPropagation(); setCertificateUser(user); }}
+                                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                              >
+                                Generate Certificate
+                              </button>
+                            </div>
+
                           </div>
 
                           {/* ID Card column (students only) */}
@@ -388,6 +340,13 @@ export function AdminUsers() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {certificateUser && (
+        <CertificateGenerator 
+          user={certificateUser} 
+          onClose={() => setCertificateUser(null)} 
+        />
       )}
     </div>
   );

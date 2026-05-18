@@ -3,11 +3,11 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const crypto = require('crypto');
-const ExcelJS = require('exceljs');
+
 const { GoogleGenAI } = require('@google/genai');
 const fs = require('fs').promises;
 const User = require('../models/User');
-const CollegeDomain = require('../models/CollegeDomain');
+
 const { sendRegistrationEmail, sendOtpEmail, sendVerificationOtpEmail } = require('../utils/email');
 const authMiddleware = require('../middleware/auth');
 
@@ -17,45 +17,7 @@ const router = express.Router();
 const registerOtps = new Map();
 const verifiedEmails = new Set();
 
-// ─────────────────────────────────────────────
-// COLLEGE NAME NORMALISATION & XLSX CACHE
-// ─────────────────────────────────────────────
-let cachedCollegeSet = null;
 
-/**
- * Strips dots, lowercases, collapses whitespace.
- * "K.S.R. College of Engineering" → "ksr college of engineering"
- */
-function normalizeCollegeName(name) {
-  return String(name)
-    .toLowerCase()
-    .replace(/\./g, '')       // remove dots
-    .replace(/[''`]/g, '')    // remove apostrophes
-    .replace(/\s+/g, ' ')    // collapse spaces
-    .trim();
-}
-
-async function getCollegeSet() {
-  if (cachedCollegeSet) return cachedCollegeSet;
-  try {
-    const xlsxPath = path.join(__dirname, '../../../frontend/public/colleges.xlsx');
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(xlsxPath);
-    const sheet = workbook.worksheets[0];
-    const names = new Set();
-    sheet.eachRow((row) => {
-      const val = row.getCell(1).value;
-      if (val) names.add(normalizeCollegeName(String(val)));
-    });
-    cachedCollegeSet = names;
-    console.log(`[CollegeSet] Loaded ${names.size} colleges from xlsx`);
-    return names;
-  } catch (err) {
-    console.warn('[CollegeSet] Could not load colleges.xlsx:', err.message);
-    cachedCollegeSet = new Set();
-    return cachedCollegeSet;
-  }
-}
 
 // ─────────────────────────────────────────────
 // POST /api/auth/send-register-otp
@@ -65,17 +27,7 @@ router.post('/send-register-otp', async (req, res) => {
     const { email, userType } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required.' });
 
-    // ── Domain restriction: students must use official college email ──
-    if (userType === 'student') {
-      const emailLower = email.toLowerCase();
-      const validDomains = ['.ac.in', '.edu.in', '.edu'];
-      const hasValidDomain = validDomains.some(d => emailLower.endsWith(d));
-      if (!hasValidDomain) {
-        return res.status(400).json({
-          error: 'Please use your official college email address (.ac.in or .edu.in only)'
-        });
-      }
-    }
+
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
@@ -192,41 +144,98 @@ router.post('/parse-id', upload.single('idCard'), async (req, res) => {
     const base64Image = imageBuffer.toString('base64');
     const currentYear = new Date().getFullYear();
 
-    // ── STEP 1: Gemini — extract + 3 checks ──────────────────────
-    const prompt = `You are a strict ID card verification assistant. Carefully analyze this image (it may show one or both sides of a physical ID card, including PDF scans of both sides).
+    // ── STEP 1: Gemini — extract + forensic checks ──────────────────────
+    const prompt = `You are a forensic document examiner. Your job is to analyze whether this image shows a genuine, physically-held Indian college or school ID card. It may contain a scan of both sides of the card. Be skeptical by default.
 
-TASK 1 — Is it a genuine physical printed institutional ID card?
-Accept: printed college/university/institute ID cards (front or back), PDF scans of both sides.
-Reject if it is: a screenshot of any kind, handwritten paper or note, random photograph of a person, digitally created or typed document, or anything that is NOT a printed ID card.
+═══════════════════════════════════════
+STEP 1 — PHYSICAL REALITY CHECK
+═══════════════════════════════════════
+A real physical card, photographed in the real world, will show at least 2-3 of these:
 
-TASK 2 — If it IS a valid ID card, extract:
-- college: Full institution name exactly as printed (header, logo label, or watermark)
-- course: Full degree and branch (e.g., "B.Tech CSE", "B.E.(ECE)", "MBA", "MCA", "B.Sc CS")
-- academicYearRange: Enrollment period exactly as printed (e.g., "2022-2026", "2023 - 2025")
+ACCEPT signals (physical card evidence):
+- Uneven or slightly curved edges (real PVC cards bend/warp slightly)
+- Lamination sheen, glare, or lens flare catching light unevenly
+- Micro-shadows at card edges where it rests on a surface
+- Lanyard punch hole at the top
+- Slight perspective distortion (card not perfectly flat to camera)
+- Background surface visible (table, hand, fabric, wall)
+- Photo ID portrait with slightly compressed/printed look (not crisp digital)
+- Wear, minor scratches, fingerprint smudges, or handling marks
+- QR/barcode that appears physically printed (slightly pixelated, not vector-crisp)
 
-TASK 3 — Is it a CURRENT student (not an alumnus)?
-- Current year is ${currentYear}
-- Extract the end year from academicYearRange
-- end year >= ${currentYear} → is_current_student: true
-- end year < ${currentYear} OR no year range found → is_current_student: false
+REJECT signals (digital/fake card evidence):
+- Perfectly flat, perfectly rectangular, zero-shadow card on a pure white/transparent background
+- Card edges are razor-sharp with no environmental context whatsoever
+- All text is perfectly kerned, pixel-perfect — looks like a live Canva document, not a printed card
+- The portrait photo looks undeniably AI-generated: unnaturally smooth skin texture, 
+  perfectly symmetrical face, studio-clean lighting that contradicts the card's environment,
+  eyes that look glassy or too sharp
+- Smart chip graphic has no physical depth or light reflection — looks pasted
+- QR code or barcode looks vector-drawn (too perfect, no print grain)
+- Card appears to float with a drop-shadow (this is a digital mockup)
+- Phone UI elements visible: status bar, battery icon, time display, nav buttons
 
-TASK 4 — Is it a STUDENT card, not staff/faculty?
-- Card shows a recognized degree or course → is_student_not_staff: true
-- Card explicitly shows: Faculty, Professor, Lecturer, Staff, Admin, Employee → is_student_not_staff: false
-- Course present but no staff role label → is_student_not_staff: true
+═══════════════════════════════════════
+STEP 2 — SCREENSHOT / SCREEN DETECTION
+═══════════════════════════════════════
+Immediately return is_id_card: false if:
+- You can see a phone/browser/app interface around the card
+- There is a moiré pattern (wavy interference lines from photographing a screen)
+- The image has the flat, backlit look of a screen rather than a physical object
+- Pixel density looks uniform and digital rather than having print grain
 
-Return ONLY raw JSON, no markdown, no code fences:
+═══════════════════════════════════════
+STEP 3 — DOCUMENT TYPE CHECK
+═══════════════════════════════════════
+Reject if it is NOT a college/university/school/institution ID card:
+- Handwritten notes, printed paper documents, receipts → reject
+- Aadhaar, PAN, driving license, voter ID → reject (not institutional)
+- Random selfie or photo of a person with no card → reject
+- Business cards, corporate employee badges, gym/club memberships → reject strictly
+
+Accept:
+- College / university / polytechnic / institute / school student ID
+- Staff/faculty ID from an educational institution
+
+═══════════════════════════════════════
+STEP 4 — EXPIRY CHECK
+═══════════════════════════════════════
+Current year: ${currentYear}
+
+- If card shows explicit expiry date (e.g., "Valid Until: Dec 2023") and it is past → REJECT
+- If card shows academic batch/year range (e.g., "2019-2023") and end year < ${currentYear} → REJECT
+- If card shows "Valid Upto: [Month] [Year]" and that date is past → REJECT
+- If no date is present on a student card → ACCEPT with confidence: "low"
+- Staff/faculty cards with no expiry → ACCEPT
+
+═══════════════════════════════════════
+STEP 5 — INSTITUTION VALIDITY
+═══════════════════════════════════════
+- Extract the institution name exactly as printed
+- Determine if this is a real, recognized Indian college, university, or institute
+- Consider: IITs, NITs, state universities, autonomous colleges, deemed universities, 
+  polytechnics, affiliated colleges under UGC/AICTE
+- If the institution name appears fabricated, misspelled, or unverifiable → set is_valid_college: false
+
+═══════════════════════════════════════
+IMPORTANT BEHAVIORAL INSTRUCTIONS
+═══════════════════════════════════════
+- Be SKEPTICAL. When in doubt, reject.
+- A card that looks "too perfect" — no glare, no shadow, no wear — is MORE suspicious, not less.
+- Do NOT be fooled by presence of logos, QR codes, or chips. These are trivial to add digitally.
+- Do NOT use text content alone to judge authenticity. Focus on PHYSICAL FORENSIC signals.
+- The reason field must specifically name which physical signals were present or absent.
+
+Return ONLY raw JSON, no markdown, no explanation outside the JSON:
 {
   "is_id_card": true or false,
-  "is_current_student": true or false,
-  "is_student_not_staff": true or false,
+  "is_valid_college": true or false,
   "college": "string or null",
-  "course": "string or null",
-  "academicYearRange": "string or null",
-  "confidence": "high or medium or low"
-}
-
-If a field cannot be determined, use null.`;
+  "confidence": "high | medium | low",
+  "physical_signals_detected": ["list", "of", "specific", "physical", "traits", "observed"],
+  "red_flags": ["list", "of", "any", "suspicious", "elements", "or", "empty", "array"],
+  "reason": "2-3 sentence forensic summary of why accepted or rejected."
+}`;
 
     let geminiResult = null;
 
@@ -245,12 +254,9 @@ If a field cannot be determined, use null.`;
       return res.json({
         is_id_card: false,
         is_valid_college: false,
-        is_current_student: false,
-        is_student_not_staff: false,
-        college: null, course: null, academicYearRange: null, year_of_study: null,
-        confidence: 'low',
+        college: null,
         verdict: 'REVIEW',
-        rejection_reason: 'Please fill in your college details manually below. Your registration will be reviewed by our team.',
+        rejection_reason: 'The id is not found to be valid',
         source: 'gemini',
       });
     }
@@ -260,47 +266,20 @@ If a field cannot be determined, use null.`;
       return res.json({
         is_id_card: false,
         is_valid_college: false,
-        is_current_student: false,
-        is_student_not_staff: false,
-        college: null, course: null, academicYearRange: null, year_of_study: null,
-        confidence: geminiResult.confidence || 'high',
+        college: null,
         verdict: 'REJECTED',
-        rejection_reason: 'The uploaded image does not appear to be a genuine printed college ID card. Please upload a clear photo or scan of your physical ID card.',
+        rejection_reason: 'The id is not found to be valid',
         source: 'gemini',
       });
     }
 
-    // ── STEP 3: Validate college against xlsx + Gemini fallback ──
-    const collegeSet = await getCollegeSet();
-    const normalizedExtracted = normalizeCollegeName(geminiResult.college || '');
-    let isValidCollege = normalizedExtracted ? collegeSet.has(normalizedExtracted) : false;
+    // ── STEP 3: Validate college via LLM (sole source of truth) ──
+    const isValidCollege = geminiResult.is_valid_college === true;
 
-    if (!isValidCollege && geminiResult.college) {
-      // Second Gemini call: ask if it's a recognised Indian institution
-      try {
-        const checkResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [`Is "${geminiResult.college}" a recognised college, university, or educational institution in India? Reply with ONLY a raw JSON object: {"recognised": true or false, "reason": "brief reason"}`],
-        });
-        let checkRaw = checkResponse.text.trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
-        const checkParsed = JSON.parse(checkRaw);
-        isValidCollege = checkParsed.recognised === true;
-      } catch (checkErr) {
-        console.warn('College recognition check failed:', checkErr.message);
-        isValidCollege = false;
-      }
-    }
-
-    // ── STEP 4: Check end year for current student ───────────────
-    const endYear = getEndYear(geminiResult.academicYearRange);
-    const isCurrentStudent = geminiResult.is_current_student === true && endYear !== null && endYear >= currentYear;
-
-    // ── STEP 5: Build verdict ────────────────────────────────────
+    // ── STEP 4: Build verdict ────────────────────────────────────
     const checks = {
-      is_id_card:          true, // already passed step 2
-      is_valid_college:    isValidCollege,
-      is_current_student:  isCurrentStudent,
-      is_student_not_staff: geminiResult.is_student_not_staff === true,
+      is_id_card:       true, // already passed step 2
+      is_valid_college: isValidCollege,
     };
 
     let verdict = 'APPROVED';
@@ -308,51 +287,12 @@ If a field cannot be determined, use null.`;
 
     if (!checks.is_valid_college) {
       verdict = 'REJECTED';
-      rejection_reason = `"${geminiResult.college || 'The institution shown'}" could not be verified as a recognised Indian college or university.`;
-    } else if (!checks.is_current_student) {
-      verdict = 'REJECTED';
-      rejection_reason = endYear && endYear < currentYear
-        ? `Your academic year ended in ${endYear}. This portal is for current students only, not alumni.`
-        : 'Could not confirm you are a current student. Please ensure the academic year range is visible on your ID card.';
-    } else if (!checks.is_student_not_staff) {
-      verdict = 'REJECTED';
-      rejection_reason = 'The ID card appears to belong to a faculty or staff member, not a student.';
-    }
-
-    const year_of_study = parseYearFromRange(geminiResult.academicYearRange || '');
-
-    // ── STEP 6: Save CollegeDomain on APPROVED ───────────────────
-    if (verdict === 'APPROVED' && studentEmail && geminiResult.college) {
-      try {
-        const atIndex = studentEmail.lastIndexOf('@');
-        const emailDomain = atIndex !== -1 ? studentEmail.slice(atIndex + 1) : null;
-        if (emailDomain) {
-          await CollegeDomain.findOneAndUpdate(
-            { email_domain: emailDomain },
-            {
-              $setOnInsert: {
-                college_name: geminiResult.college,
-                email_domain: emailDomain,
-                verified: true,
-                verified_at: new Date(),
-                source: 'student_verification',
-              },
-            },
-            { upsert: true, new: true }
-          );
-        }
-      } catch (domainErr) {
-        console.warn('CollegeDomain save failed (non-fatal):', domainErr.message);
-      }
+      rejection_reason = 'The id is not found to be valid';
     }
 
     return res.json({
       ...checks,
-      college:           geminiResult.college   || null,
-      course:            geminiResult.course    || null,
-      academicYearRange: geminiResult.academicYearRange || null,
-      year_of_study,
-      confidence:        geminiResult.confidence || 'medium',
+      college: geminiResult.college || null,
       verdict,
       rejection_reason,
       source: 'gemini',
@@ -381,11 +321,12 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
       year,
       domain,
       organization,
-      needsAdminReview,
+      heardFrom,
+      referralCode,
     } = req.body;
 
     // Validate required fields
-    if (!fullName || !email || !phone || !userType) {
+    if (!fullName || !email || !phone || !userType || !heardFrom) {
       return res.status(400).json({ error: 'Missing required fields.' });
     }
     if (!['student', 'working'].includes(userType)) {
@@ -402,12 +343,32 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
       return res.status(409).json({ error: 'User already exists.' });
     }
 
+    // Waitlist Logic: If 1000 or more users already exist, new users go to waitlist
+    const userCount = await User.countDocuments();
+    const isWaitlisted = userCount >= 1000;
+
+    const REFERRAL_MAP = {
+      gkt01: 'gkt01 - Chetana N',
+      gkt02: 'gkt02 - Dinesh T',
+      gkt03: 'gkt03 - Indupriyadarshini V',
+      gkt04: 'gkt04 - Balaji B',
+      gkt05: 'gkt05 - Unassigned',
+    };
+
+    let mappedReferral = null;
+    if (referralCode) {
+      mappedReferral = REFERRAL_MAP[referralCode.toLowerCase()] || referralCode;
+    }
+
     // Build user object
     const userData = {
       fullName: fullName.trim(),
       email: email.toLowerCase().trim(),
       phone: phone.trim(),
       userType,
+      heardFrom: heardFrom.trim(),
+      referralCode: mappedReferral,
+      isWaitlisted,
       registeredEvents: [{
         eventName: 'Lead with AI: Adopt, Implement and Transform',
         paymentStatus: 'pending'
@@ -420,11 +381,6 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
       userData.year = year?.trim();
       if (req.file) {
         userData.idCardPath = req.file.filename;
-      }
-      // Flag for admin review if AI scanning was unavailable
-      if (needsAdminReview === 'true' || needsAdminReview === true) {
-        userData.needsAdminReview = true;
-        userData.reviewStatus = 'pending';
       }
     } else {
       userData.domain = domain?.trim();
@@ -452,8 +408,8 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
         year: user.year,
         domain: user.domain,
         organization: user.organization,
-        needsAdminReview: user.needsAdminReview || false,
-        reviewStatus: user.reviewStatus || 'not_required',
+        heardFrom: user.heardFrom,
+        isWaitlisted: user.isWaitlisted,
         registeredEvents: user.registeredEvents,
       },
     });
@@ -525,8 +481,8 @@ router.post('/verify-otp', async (req, res) => {
         year: user.year,
         domain: user.domain,
         organization: user.organization,
-        needsAdminReview: user.needsAdminReview || false,
-        reviewStatus: user.reviewStatus || 'not_required',
+        heardFrom: user.heardFrom,
+        isWaitlisted: user.isWaitlisted,
         registeredEvents: user.registeredEvents,
       },
     });
@@ -556,15 +512,71 @@ router.get('/me', authMiddleware, async (req, res) => {
         year: user.year,
         domain: user.domain,
         organization: user.organization,
-        needsAdminReview: user.needsAdminReview || false,
-        reviewStatus: user.reviewStatus || 'not_required',
+        heardFrom: user.heardFrom,
+        isWaitlisted: user.isWaitlisted,
         registeredEvents: user.registeredEvents,
+        isFeedbackSubmitted: user.isFeedbackSubmitted,
+        feedback: user.feedback,
         createdAt: user.createdAt,
       },
     });
   } catch (err) {
     console.error('Get me error:', err);
     res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ─── SUBMIT FEEDBACK ───────────────────────────────────────────
+router.post('/feedback', authMiddleware, async (req, res) => {
+  try {
+    const { feedback } = req.body;
+    if (!feedback || !Array.isArray(feedback) || feedback.length === 0) {
+      return res.status(400).json({ error: 'Valid feedback array is required.' });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    // Validate that there is a confirmed event before accepting feedback
+    const hasConfirmedPayment = user.registeredEvents.some(e => e.paymentStatus === 'confirmed');
+    if (!hasConfirmedPayment) {
+      return res.status(403).json({ error: 'You must have a confirmed registration to submit feedback.' });
+    }
+
+    user.feedback = feedback;
+    user.isFeedbackSubmitted = true;
+    await user.save();
+
+    return res.json({ message: 'Feedback submitted successfully.' });
+  } catch (err) {
+    console.error('Feedback error:', err);
+    res.status(500).json({ error: 'Server error while submitting feedback.' });
+  }
+});
+
+// ─── PUBLIC CERTIFICATE VERIFICATION ───────────────────────────
+router.get('/certificate/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('fullName registeredEvents isFeedbackSubmitted');
+    if (!user) return res.status(404).json({ error: 'Certificate not found.' });
+
+    const confirmedEvent = user.registeredEvents.find(e => e.paymentStatus === 'confirmed');
+    if (!confirmedEvent) {
+      return res.status(403).json({ error: 'No confirmed registration found for this user.' });
+    }
+
+    if (!user.isFeedbackSubmitted) {
+      return res.status(403).json({ error: 'Certificate not available yet.' });
+    }
+
+    return res.json({
+      fullName: user.fullName,
+      eventName: confirmedEvent.eventName,
+      issueDate: confirmedEvent.registeredAt // Or some other date
+    });
+  } catch (err) {
+    console.error('Certificate fetch error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

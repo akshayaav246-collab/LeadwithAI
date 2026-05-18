@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const Razorpay = require('razorpay');
 const User = require('../models/User');
 const { sendPaymentConfirmationEmail } = require('../utils/email');
+const { registerForWebinar } = require('../utils/zoom');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
@@ -13,7 +14,7 @@ const razorpay = new Razorpay({
 });
 
 const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
-const AMOUNT_STUDENT_PAISE = 50000;  // ₹500 for students
+const AMOUNT_STUDENT_PAISE = 49900;  // ₹499 for students
 const AMOUNT_WORKING_PAISE = 99900;  // ₹999 for working professionals/others
 
 // ─────────────────────────────────────────────
@@ -30,16 +31,6 @@ router.post('/create-order', authMiddleware, async (req, res) => {
     );
     if (alreadyPaid) {
       return res.status(409).json({ error: 'You have already paid for this event.' });
-    }
-
-    // Block payment until admin approves the profile review
-    // Also catches legacy records where reviewStatus defaulted to 'not_required' but needsAdminReview is true
-    const paymentBlocked = user.needsAdminReview && user.reviewStatus !== 'approved';
-    if (paymentBlocked) {
-      return res.status(403).json({
-        error: 'Your registration is currently under review. Payment will be enabled once our team approves your profile.',
-        reviewPending: true,
-      });
     }
 
     // Determine amount based on user type
@@ -114,11 +105,26 @@ router.post('/verify', authMiddleware, async (req, res) => {
     if (eventEntry) {
       eventEntry.razorpayPaymentId = razorpay_payment_id;
       eventEntry.paymentStatus = 'confirmed';
+      
+      // Register for Zoom Webinar
+      try {
+        const [firstName, ...lastNameParts] = user.fullName.split(' ');
+        const joinUrl = await registerForWebinar(
+          user.email,
+          firstName,
+          lastNameParts.join(' ')
+        );
+        eventEntry.zoomJoinUrl = joinUrl;
+      } catch (zoomErr) {
+        console.error('Failed to register user to Zoom during payment verify:', zoomErr);
+        // We do not fail the payment verification if Zoom fails, we just log it
+      }
+
       await user.save();
     }
 
     // Send payment confirmation email (non-blocking)
-    sendPaymentConfirmationEmail(user, EVENT_NAME, razorpay_payment_id).catch((err) =>
+    sendPaymentConfirmationEmail(user, EVENT_NAME, razorpay_payment_id, eventEntry?.zoomJoinUrl).catch((err) =>
       console.error('Payment email error:', err)
     ); 
 

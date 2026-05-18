@@ -27,7 +27,7 @@ export function Home() {
     <main>
       <section className="hero-section">
         <div className="hero-content">
-          <div className="hero-tag">GLOBAL KNOWLEDGE TECHNOLOGIES · MAY 16TH & 17TH · 2-DAY PROFESSIONAL AI PROGRAM</div>
+          <div className="hero-tag">GLOBAL KNOWLEDGE TECHNOLOGIES · MAY 30TH & 31ST · 2-DAY PROFESSIONAL AI PROGRAM</div>
           <h1 className="hero-title">Lead with AI: Adopt, Implement and Transform</h1>
           <p className="hero-sub">
             Stop experimenting with AI, start executing with it. In two intensive days, you'll move from passive curiosity to building real workflows, products, and creative assets that you can immediately put to use in your career, projects, or organisation.
@@ -69,7 +69,7 @@ export function Home() {
               <div className="schedule-meta-top">
                 <div className="schedule-number">01</div>
                 <div className="schedule-level level-beginner">BEGINNER</div>
-                <div className="schedule-day">DAY ONE · SATURDAY, MAY 16TH</div>
+                <div className="schedule-day">DAY ONE · SATURDAY, MAY 30TH</div>
                 <div className="schedule-time">10:00 AM – 1:00 PM</div>
               </div>
               <h3 className="schedule-module">Getting Started with Generative AI</h3>
@@ -83,7 +83,7 @@ export function Home() {
               <div className="schedule-meta-top">
                 <div className="schedule-number">02</div>
                 <div className="schedule-level level-intermediate">INTERMEDIATE</div>
-                <div className="schedule-day">DAY ONE · SATURDAY, MAY 16TH</div>
+                <div className="schedule-day">DAY ONE · SATURDAY, MAY 30TH</div>
                 <div className="schedule-time">2:00 PM – 5:00 PM</div>
               </div>
               <h3 className="schedule-module">Building Personalised AI Agents</h3>
@@ -97,7 +97,7 @@ export function Home() {
               <div className="schedule-meta-top">
                 <div className="schedule-number">03</div>
                 <div className="schedule-level level-intermediate">INTERMEDIATE</div>
-                <div className="schedule-day">DAY TWO · SUNDAY, MAY 17TH</div>
+                <div className="schedule-day">DAY TWO · SUNDAY, MAY 31ST</div>
                 <div className="schedule-time">10:00 AM – 1:00 PM</div>
               </div>
               <h3 className="schedule-module">Building Products Using AI</h3>
@@ -111,7 +111,7 @@ export function Home() {
               <div className="schedule-meta-top">
                 <div className="schedule-number">04</div>
                 <div className="schedule-level level-advanced">ADVANCED</div>
-                <div className="schedule-day">DAY TWO · SUNDAY, MAY 17TH</div>
+                <div className="schedule-day">DAY TWO · SUNDAY, MAY 31ST</div>
                 <div className="schedule-time">2:00 PM – 5:00 PM</div>
               </div>
               <h3 className="schedule-module">Visual Storytelling and Content Creation</h3>

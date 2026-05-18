@@ -15,8 +15,8 @@ const PORT = process.env.PORT || 4002;
 // Event details
 const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
 const MEETING_LINK = process.env.ZOOM_LINK || 'https://zoom.us/j/00000000000';
-const EVENT_DATE_DAY1 = new Date('2026-05-16T04:30:00Z'); // May 16 10:00 AM IST
-const EVENT_DATE_DAY2 = new Date('2026-05-16T12:30:00Z'); // May 16 6:00 PM IST (end of Day 1)
+const EVENT_DATE_DAY1 = new Date('2026-05-30T04:30:00Z'); // May 30 10:00 AM IST
+const EVENT_DATE_DAY2 = new Date('2026-05-30T12:30:00Z'); // May 30 6:00 PM IST (end of Day 1)
 // --- Middleware ------------------------------
 // Request Logging
 app.use((req, res, next) => {
@@ -65,6 +65,18 @@ app.use('/api/auth/register', registerLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/admin', adminRoutes);
+
+// Public settings route
+app.get('/api/public/settings', async (req, res) => {
+  try {
+    const Settings = require('./src/models/Settings');
+    const settings = await Settings.findOne();
+    res.json(settings || { feedbackEnabled: false });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -79,7 +91,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 // --- Reminder Email Cron Jobs ---------------
-// DAY 1 REMINDER: Runs at 9:00 AM IST (03:30 UTC) on May 15th
+// DAY 1 REMINDER: Runs at 9:00 AM IST (03:30 UTC) on May 29th
 // Sends "starts TOMORROW" reminder to all paid participants
 function scheduleReminderEmails() {
   cron.schedule('30 3 * * *', async () => {
@@ -113,9 +125,9 @@ function scheduleReminderEmails() {
       console.error('[Cron Day1] Job error:', err.message);
     }
   }, { timezone: 'Asia/Kolkata' });
-  console.log('✓ Day 1 reminder cron scheduled (9:00 AM IST on May 15th)');
+  console.log('✓ Day 1 reminder cron scheduled (9:00 AM IST on May 29th)');
 
-  // DAY 2 REMINDER: Runs at 6:30 PM IST (13:00 UTC) on May 16th
+  // DAY 2 REMINDER: Runs at 6:30 PM IST (13:00 UTC) on May 30th
   // Sends "get ready for Day 2" email after Day 1 ends
   cron.schedule('0 13 * * *', async () => {
     try {
@@ -125,7 +137,7 @@ function scheduleReminderEmails() {
         now.getUTCMonth() === EVENT_DATE_DAY1.getUTCMonth() &&
         now.getUTCDate() === EVENT_DATE_DAY1.getUTCDate();
       if (!isDay1) {
-        console.log(`[Cron Day2] Not May 16th. Skipping.`);
+        console.log(`[Cron Day2] Not May 30th. Skipping.`);
         return;
       }
       console.log('[Cron Day2] Sending Day 2 reminder emails...');
@@ -146,7 +158,7 @@ function scheduleReminderEmails() {
       console.error('[Cron Day2] Job error:', err.message);
     }
   }, { timezone: 'Asia/Kolkata' });
-  console.log('✓ Day 2 reminder cron scheduled (6:30 PM IST on May 16th)');
+  console.log('✓ Day 2 reminder cron scheduled (6:30 PM IST on May 30th)');
 }
 // --- MongoDB + Start Server ------------------
 mongoose

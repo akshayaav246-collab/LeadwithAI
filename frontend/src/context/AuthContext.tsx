@@ -6,6 +6,7 @@ export interface RegisteredEvent {
   razorpayPaymentId?: string;
   paymentStatus: 'pending' | 'confirmed' | 'failed';
   registeredAt: string;
+  zoomJoinUrl?: string;
 }
 
 export interface AuthUser {
@@ -19,8 +20,6 @@ export interface AuthUser {
   year?: string;
   domain?: string;
   organization?: string;
-  needsAdminReview?: boolean;
-  reviewStatus?: 'not_required' | 'pending' | 'approved';
   registeredEvents: RegisteredEvent[];
 }
 

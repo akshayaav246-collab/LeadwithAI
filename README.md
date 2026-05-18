@@ -1,7 +1,7 @@
 # Lead with AI — Full Stack Application
 
 > **"Lead with AI: Adopt, Implement and Transform"**  
-> A 2-day professional AI program hosted by **Global Knowledge Technologies**, offering hands-on learning in Generative AI for students and working professionals.
+> A 2-day professional AI program hosted by **Global Knowledge Technologies** on **May 30th and 31st**, offering hands-on learning in Generative AI for students and working professionals.
 
 ---
 
@@ -31,11 +31,12 @@
 - Animated public marketing site with program details, speaker bios, and curriculum
 - **College email domain restriction** for students (`.ac.in`, `.edu.in`, `.edu` only)
 - OTP-based passwordless auth with **separate emails** for verification vs. login
-- **AI-powered student ID card scanning** (Google Gemini 2.5 Flash) to auto-fill college details, with a manual fallback when AI is unavailable
-- **Admin-gated registration**: when AI verification is skipped, the profile is flagged `needsAdminReview=true` and payment is blocked until admin approves
+- **Forensic AI-powered student ID card scanning** (Google Gemini 2.5 Flash) to auto-fill college details, specifically designed to reject digital mockups, screenshots, and AI-generated fakes.
+- **Persistent Marketing Attribution**: Captures `?ref=CODE` tracking parameters globally using session/local storage across page navigations.
+- **Mandatory Session Feedback & Certificate Generation**: Users must submit text feedback for four distinct training sessions to unlock the client-side dynamic certificate generation system.
 - Integrated **Razorpay payment gateway** (₹500 for students / ₹999 for professionals)
-- Secure admin panel with approval workflow, user search/filter, and bulk email
-- Automated transactional emails: verification OTP, login OTP, registration confirmation, payment receipt with `.ics` calendar, Day 1 & Day 2 reminder emails, and profile approval notification
+- Secure admin panel with user search/filter, comprehensive CSV exports, dynamic certificate preview, and bulk email
+- Automated transactional emails: verification OTP, login OTP, registration confirmation, payment receipt with `.ics` calendar, and Day 1 & Day 2 reminder emails
 - **OTP rate limiting** via `express-rate-limit` to prevent brute-force and SMTP abuse
 
 ---
@@ -53,6 +54,7 @@
 | Animation | Framer Motion |
 | Icons | Lucide React + React Icons |
 | Fonts | Playfair Display, EB Garamond, DM Sans (Google Fonts) |
+| Utilities | HTML2Canvas, jsPDF (Certificate Generation) |
 
 ### Backend
 
@@ -64,11 +66,10 @@
 | Authentication | JWT (jsonwebtoken) + bcryptjs OTP hashing |
 | Rate Limiting | express-rate-limit |
 | Payments | Razorpay SDK |
-| File Uploads | Multer (JPEG / PNG only, max 10 MB) |
+| File Uploads | Multer (JPEG / PNG only, max 3 MB) |
 | AI OCR | Google Gemini 2.5 Flash (`@google/genai`) |
 | Email | Nodemailer (SMTP — Microsoft Outlook) |
 | Cron Jobs | node-cron (reminder emails) |
-| Excel Parsing | ExcelJS (college list from `.xlsx`) |
 
 ---
 
@@ -82,12 +83,12 @@ Next-Lead/
 │   │   │   ├── auth.js                # JWT auth middleware (user)
 │   │   │   └── adminAuth.js           # JWT auth middleware (admin)
 │   │   ├── models/
-│   │   │   ├── User.js                # Mongoose User schema + OTP methods
+│   │   │   ├── User.js                # Mongoose User schema + OTP + Feedback methods
 │   │   │   └── Admin.js               # Admin credentials model
 │   │   ├── routes/
 │   │   │   ├── auth.js                # Registration, OTP, login, ID parse
-│   │   │   ├── payment.js             # Razorpay order + verify (payment-gated)
-│   │   │   └── admin.js               # Stats, users, bulk email, review approval
+│   │   │   ├── payment.js             # Razorpay order + verify
+│   │   │   └── admin.js               # Stats, users, bulk email
 │   │   └── utils/
 │   │       └── email.js               # All Nodemailer email templates
 │   ├── uploads/                       # Uploaded ID card images (gitignored)
@@ -99,18 +100,18 @@ Next-Lead/
 │   ├── public/
 │   │   ├── Logo.png                   # Main site logo
 │   │   ├── LogoAdmin.png              # Admin sidebar logo
-│   │   ├── colleges.xlsx              # College name dataset for validation
+│   │   ├── CertificateTemplate.png    # Certificate background template
 │   │   └── ...                        # Speaker images, brochure, favicon
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── NavBar.tsx
 │   │   │   ├── Footer.tsx
 │   │   │   ├── SixThings.tsx
-│   │   │   ├── Autocomplete.tsx       # College autocomplete with live API search
+│   │   │   ├── Autocomplete.tsx       # College autocomplete
 │   │   │   └── ScrollToTop.tsx
 │   │   ├── context/
-│   │   │   └── AuthContext.tsx        # Global auth state (JWT + user + reviewStatus)
-│   │   ├── lib/
+│   │   │   └── AuthContext.tsx        # Global auth state (JWT + user)
+│   │   │   ├── lib/
 │   │   │   ├── api.ts                 # Fetch wrapper with env-aware base URL
 │   │   │   └── assets.ts              # publicAsset() helper for /public files
 │   │   ├── pages/
@@ -118,12 +119,12 @@ Next-Lead/
 │   │   │   ├── Program.tsx
 │   │   │   ├── Speakers.tsx
 │   │   │   ├── Register.tsx           # Multi-step: OTP → Form → AI scan → Payment
-│   │   │   ├── Profile.tsx            # Attendee profile + payment gate + review notice
+│   │   │   ├── Profile.tsx            # Attendee profile + Feedback + Certificate
 │   │   │   └── admin/
 │   │   │       ├── AdminLogin.tsx
 │   │   │       ├── AdminLayout.tsx    # Sidebar with LogoAdmin.png
 │   │   │       ├── AdminOverview.tsx
-│   │   │       ├── AdminUsers.tsx     # Review approval workflow
+│   │   │       ├── AdminUsers.tsx     # Registrant table + CSV export
 │   │   │       └── AdminEmail.tsx
 │   │   ├── index.css                  # Full design system
 │   │   ├── admin.css
@@ -144,26 +145,27 @@ Next-Lead/
 graph TB
     subgraph Browser["Browser"]
         SPA["React 19 SPA"]
-        AC["AuthContext\n(JWT + user + reviewStatus)"]
+        AC["AuthContext\n(JWT + user)"]
+        Cert["Dynamic Certificate Generator"]
     end
 
     subgraph Backend["Express Backend"]
         RL["Rate Limiters\n(express-rate-limit)"]
         subgraph Routes["API Routes"]
-            AUTH["/api/auth\nOTP · Register · Login · parse-id"]
-            PAY["/api/payment\ncreate-order · verify\n(blocked if reviewStatus != approved)"]
-            ADMIN_R["/api/admin\nStats · Users · Review Approval · Bulk Email"]
+            AUTH["/api/auth\nOTP · Register · Login · parse-id · feedback"]
+            PAY["/api/payment\ncreate-order · verify"]
+            ADMIN_R["/api/admin\nStats · Users · Bulk Email"]
         end
         CRON["node-cron\nDay1 + Day2 reminder emails"]
         RL --> Routes
     end
 
     subgraph DB["MongoDB Atlas"]
-        USERS["users collection\n(needsAdminReview + reviewStatus)"]
+        USERS["users collection"]
     end
 
     subgraph External["External Services"]
-        GEMINI["Google Gemini 2.5 Flash\n(ID Card OCR)"]
+        GEMINI["Google Gemini 2.5 Flash\n(Forensic ID Verification)"]
         RZP["Razorpay\n(Payment Gateway)"]
         SMTP["Nodemailer / Outlook SMTP"]
     end
@@ -208,53 +210,19 @@ sequenceDiagram
     FE->>BE: POST /verify-register-otp
     BE->>BE: Validate OTP & expiry → add to verifiedEmails Set
 
-    User->>FE: Fill form + optionally upload ID card
+    User->>FE: Fill form + upload ID card
     FE->>BE: POST /parse-id (AI scan)
-    alt Gemini available
+    alt Gemini validates Forensic checks
         BE->>BE: Extract college, course, year → auto-fill form
-    else AI unavailable
-        BE-->>FE: Error → user fills manually + needsAdminReview=true
+    else Invalid / Mockup / Fake
+        BE-->>FE: Error → "The ID is not valid" (Generic rejection)
     end
 
-    FE->>BE: POST /register (multipart)
-    BE->>DB: Create User (needsAdminReview, reviewStatus: pending if flagged)
+    FE->>BE: POST /register (multipart + referral code)
+    BE->>DB: Create User 
     BE->>Mail: sendRegistrationEmail() (async)
     BE-->>FE: 201 { token, user }
-
-    alt needsAdminReview = true
-        FE-->>User: "Registered — Pending Review" (no Pay button)
-    else Normal registration
-        FE-->>User: "Registered! Complete Payment" + Pay button
-    end
-```
-
----
-
-### Admin Review & Payment Unlock Flow
-
-```mermaid
-sequenceDiagram
-    actor Admin
-    actor Student
-    participant FE_A as AdminUsers.tsx
-    participant BE as /api/admin
-    participant DB as MongoDB
-    participant Mail as Nodemailer
-    participant PAY as /api/payment
-
-    Note over Student: Profile is locked (reviewStatus: pending)
-    Student->>PAY: POST /create-order
-    PAY-->>Student: 403 "Under review — payment blocked"
-
-    Admin->>FE_A: Opens user detail (sees Profile Review section)
-    FE_A->>BE: PATCH /users/:id/review-status { action: "approve" }
-    BE->>DB: reviewStatus = "approved"
-    BE->>Mail: sendProfileApprovedEmail() (plain text, async)
-    Mail-->>Student: "Your profile has been approved — login and pay"
-
-    Student->>PAY: POST /create-order (after re-login)
-    PAY->>DB: Check reviewStatus === "approved" ✓
-    PAY-->>Student: 200 { orderId, keyId }
+    FE-->>User: "Registered! Complete Payment" + Pay button
 ```
 
 ---
@@ -272,7 +240,6 @@ sequenceDiagram
 
     User->>FE: Click "Pay ₹500 / ₹999"
     FE->>BE: POST /create-order (JWT)
-    BE->>BE: Check reviewStatus ≠ pending
     BE->>RZP: Create order
     RZP-->>BE: { orderId, amount }
     BE-->>FE: { orderId, keyId, prefill }
@@ -300,22 +267,21 @@ sequenceDiagram
 | `/program` | `Program.tsx` | Full 2-day curriculum breakdown |
 | `/speakers` | `Speakers.tsx` | Speaker bio cards |
 | `/register` | `Register.tsx` | Multi-step: email OTP → form + AI ID scan → payment |
-| `/profile` | `Profile.tsx` | Attendee profile, payment gate, review notice |
+| `/profile` | `Profile.tsx` | Attendee profile, Payment gate, Feedback, Certificate Generator |
 
 ### Register.tsx — Key Features
 
 - **College email domain guard** (students): enforces `.ac.in`, `.edu.in`, `.edu` both client-side and server-side
-- **Separate OTP emails**: Verification OTP ("Your OTP for Email Verification") vs Login OTP ("Your Login OTP, [Name]")
-- **AI ID scan**: uploads JPEG/PNG to `/api/auth/parse-id`; Gemini extracts college, course, year and auto-fills form. Validates college against `colleges.xlsx`.
-- **Manual fallback**: if AI is unavailable, student fills form manually and registration is flagged for admin review
-- **Post-registration screen**: shows "Pending Review" (no Pay button) or "Complete Payment" depending on `needsAdminReview`
-- **Tiered pricing**: students pay ₹500, working professionals pay ₹999
+- **Separate OTP emails**: Verification OTP vs Login OTP
+- **Forensic AI ID scan**: Uploads JPEG/PNG to `/api/auth/parse-id` (Max 3MB); Gemini extracts data and rejects digital fakes.
+- **Persistent Marketing Attribution**: Automatically captures `?ref=CODE` and assigns it to the user.
+- **Tiered pricing**: Students pay ₹500, working professionals pay ₹999.
 
 ### Profile.tsx — Key Features
 
-- Shows registered event, payment status, Zoom link (post-payment)
-- **Payment gate**: if `needsAdminReview && reviewStatus !== 'approved'` → shows "Under Review" notice instead of Pay button
-- Updates dynamically after admin approves
+- Shows registered event, payment status, Zoom link (post-payment).
+- **Session Feedback System**: Users must provide text feedback for 4 distinct training sessions after the event.
+- **Dynamic Certificate Generator**: Once feedback is submitted, users unlock the ability to generate and download their completion certificate with custom formatting and typography directly in the browser.
 
 ### Admin Panel (Protected)
 
@@ -323,16 +289,12 @@ sequenceDiagram
 |---|---|---|
 | `/admin/login` | `AdminLogin.tsx` | Admin email + password login |
 | `/admin/dashboard` | `AdminOverview.tsx` | Stats: total, paid, revenue, recent sign-ups |
-| `/admin/users` | `AdminUsers.tsx` | Full registrant table + review approval |
+| `/admin/users` | `AdminUsers.tsx` | Full registrant table + advanced CSV export |
 | `/admin/email` | `AdminEmail.tsx` | Bulk email composer |
 
-**AdminUsers.tsx — Review Workflow:**
-
-| User State | Admin Sees |
-|---|---|
-| `isPaid = true` | "Approved & Paid — registration complete" |
-| `reviewStatus = approved` (not yet paid) | "Approved — payment enabled, awaiting payment" |
-| `reviewStatus = pending` / `not_required` | **"Approve & Enable Payment" button** |
+**Admin Dashboard Key Features:**
+- **Advanced CSV Export**: Exports comprehensive user data including marketing referral codes, ID paths, payment IDs, and form submissions.
+- **Dynamic Certificate Preview**: Internal tooling to test and preview the final certificate layout and coordinates.
 
 ---
 
@@ -345,19 +307,20 @@ sequenceDiagram
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `POST` | `/send-register-otp` | None | Check email uniqueness + domain → send verification OTP (rate limited: 5/15min) |
-| `POST` | `/verify-register-otp` | None | Verify OTP; marks email eligible for registration (rate limited: 10/15min) |
-| `POST` | `/parse-id` | None | Upload ID card (JPEG/PNG, max 10 MB); Gemini extracts college/course/year |
-| `POST` | `/register` | None | Create account (requires verified email); sets `needsAdminReview` if flagged (rate limited: 3/hr) |
-| `POST` | `/send-otp` | None | Send login OTP to existing user (rate limited: 5/15min) |
-| `POST` | `/verify-otp` | None | bcrypt OTP verify → JWT (rate limited: 10/15min) |
-| `GET` | `/me` | ✅ JWT | Full user profile (excludes `otpHash`, `otpExpiry`) |
+| `POST` | `/send-register-otp` | None | Check email uniqueness + domain → send verification OTP |
+| `POST` | `/verify-register-otp` | None | Verify OTP; marks email eligible for registration |
+| `POST` | `/parse-id` | None | Upload ID card (JPEG/PNG, max 3 MB); Gemini forensic validation & extraction |
+| `POST` | `/register` | None | Create account (requires verified email); saves `referralCode` |
+| `POST` | `/send-otp` | None | Send login OTP to existing user |
+| `POST` | `/verify-otp` | None | bcrypt OTP verify → JWT |
+| `GET` | `/me` | ✅ JWT | Full user profile |
+| `POST` | `/submit-feedback` | ✅ JWT | Submit session feedback (updates `feedback` and `isFeedbackSubmitted`) |
 
 ### Payment — `/api/payment`
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `POST` | `/create-order` | ✅ JWT | Creates Razorpay order; **blocked (403) if `needsAdminReview && reviewStatus !== approved`** |
+| `POST` | `/create-order` | ✅ JWT | Creates Razorpay order |
 | `POST` | `/verify` | ✅ JWT | HMAC-SHA256 verify → marks payment confirmed; sends receipt email |
 
 ### Admin — `/api/admin`
@@ -366,18 +329,10 @@ sequenceDiagram
 |---|---|---|---|
 | `POST` | `/login` | None | Admin login → admin JWT (24h) |
 | `GET` | `/stats` | ✅ Admin | Total users, paid count, 5 recent sign-ups |
-| `GET` | `/users` | ✅ Admin | All registrants with `reviewStatus`, `isPaid`, `idCardPath` |
+| `GET` | `/users` | ✅ Admin | All registrants including `referralCode`, `feedback`, `isPaid` |
 | `GET` | `/users/:id` | ✅ Admin | Single user detail |
 | `DELETE` | `/users/:id` | ✅ Admin | Delete a user |
-| `PATCH` | `/users/:id/review-status` | ✅ Admin | `{ action: "approve" \| "reject" }` → updates `reviewStatus`, sends approval email |
 | `POST` | `/send-email` | ✅ Admin | Bulk email to `all` / `paid` / `custom` list |
-
-### Misc
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/health` | `{ status: "ok", timestamp }` |
-| `GET` | `/uploads/:filename` | Serve uploaded ID card images (no auth — see security notes) |
 
 ---
 
@@ -397,8 +352,6 @@ sequenceDiagram
   course:           String,
   year:             String,           // e.g. "3rd Year"
   idCardPath:       String,           // filename in /uploads
-  needsAdminReview: Boolean,          // true when AI scan was skipped
-  reviewStatus:     "not_required" | "pending" | "approved",
 
   // Working professional-only
   domain:       String,
@@ -407,6 +360,18 @@ sequenceDiagram
   // OTP login (cleared after use)
   otpHash:    String,   // bcrypt hash
   otpExpiry:  Date,     // 10-min TTL
+
+  // Registration metadata
+  heardFrom:    String,
+  isWaitlisted: Boolean,
+  referralCode: String,
+
+  // Session Feedback System
+  feedback: [{
+    session: String,
+    text:    String
+  }],
+  isFeedbackSubmitted: Boolean,
 
   // Events
   registeredEvents: [{
@@ -417,8 +382,8 @@ sequenceDiagram
     registeredAt:      Date,
   }],
 
-  createdAt: Date,  // auto
-  updatedAt: Date,  // auto
+  createdAt: Date,
+  updatedAt: Date,
 }
 ```
 
@@ -445,19 +410,6 @@ sequenceDiagram
 | `verify-otp`, `verify-register-otp` | 10 attempts | 15 min |
 | `register` | 3 attempts | 1 hour |
 
-### JWT
-
-| Property | Value |
-|---|---|
-| Algorithm | HS256 |
-| User expiry | 30 days |
-| Admin expiry | 24 hours |
-| Transport | `Authorization: Bearer <token>` |
-
-### Payment Gate
-
-Payment creation is server-side blocked when `needsAdminReview === true && reviewStatus !== 'approved'`. This cannot be bypassed client-side.
-
 ---
 
 ## Email System
@@ -470,28 +422,9 @@ All emails sent via Nodemailer (SMTP) asynchronously (non-blocking).
 | `sendOtpEmail()` | Login OTP | HTML | "Your Login OTP, [FirstName]" |
 | `sendRegistrationEmail()` | Account created | Plain text | Welcome + payment reminder |
 | `sendPaymentConfirmationEmail()` | Payment verified | HTML | Receipt + `.ics` Google Calendar attachment |
-| `sendProfileApprovedEmail()` | Admin approves review | Plain text | Tells student to login and pay |
 | `sendCustomBulkEmail()` | Admin bulk send | HTML | All / Paid / Custom |
 | `sendReminderEmail()` | Cron — Day before event | HTML | Zoom link to paid users |
 | `sendDay2ReminderEmail()` | Cron — End of Day 1 | HTML | Day 2 reminder to paid users |
-
-### Cron Jobs
-
-```
-Day 1 Reminder: 9:00 AM IST (03:30 UTC) — fires day before event
-Day 2 Reminder: 6:30 PM IST (13:00 UTC) — fires on Day 1 evening
-Timezone: Asia/Kolkata
-```
-
----
-
-## Admin Panel
-
-- **Overview** — Total registrations, paid count, revenue, recent activity
-- **Users Table** — Search, filter by type/payment/review status. Expand any row to see full details, ID card image, and the review action
-- **Profile Review** — Approve button visible only when `needsAdminReview=true` and not yet paid. Clicking Approve sets `reviewStatus='approved'` and triggers the approval email
-- **Bulk Email** — Rich HTML compose to All / Paid / Custom list
-- **Sidebar** — Uses `LogoAdmin.png` from `frontend/public/`
 
 ---
 
@@ -586,14 +519,6 @@ Bespoke luxury-editorial CSS in `frontend/src/index.css`:
 | `--color-amber-deep` | `#966638` | Error/validation messages |
 
 **Typography:** `Playfair Display` (headings) · `EB Garamond` (body) · `DM Sans` (UI)
-
-**Error/Status classes:**
-- `.field-error` — inline field validation (amber-deep, no red)
-- `.field-hint` — soft domain warning (umber)
-- `.field-success` — OTP sent confirmation (sienna-dark)
-- `.register-error` — global error banner (parchment bg + sienna left border)
-
-**Animations:** Intersection Observer scroll-reveal, Framer Motion page transitions, hover lift effects
 
 ---
 

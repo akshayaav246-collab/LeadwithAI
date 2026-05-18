@@ -35,7 +35,7 @@ async function sendRegistrationEmail(user) {
   const text =
     `Welcome, ${user.fullName.split(' ')[0]}!\n` +
     `You've successfully registered for the Lead with AI: Adopt, Implement and Transform workshop. ` +
-    `Please complete the payment of ₹500 to confirm your seat. Check your registration portal for the payment link.\n\n` +
+    `Please complete the payment of ₹${user.userType === 'student' ? '499' : '999'} to confirm your seat. Check your registration portal for the payment link.\n\n` +
     `Warm regards,\nTeam Global Knowledge Technologies`;
 
   await transporter.sendMail({
@@ -141,7 +141,8 @@ async function sendOtpEmail(email, otp, name) {
 /**
  * Send payment confirmation email
  */
-async function sendPaymentConfirmationEmail(user, eventName, paymentId) {
+async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoinUrl) {
+  const joinLink = zoomJoinUrl || process.env.ZOOM_LINK || 'https://zoom.us/j/00000000000';
   const html = `
     <!DOCTYPE html>
     <html>
@@ -174,9 +175,9 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId) {
           <p>Your seat for <strong>${eventName}</strong> is officially confirmed. We look forward to seeing you!</p>
           <div class="ticket-box">
             <div class="ticket-row"><span class="ticket-label">Event</span><span class="ticket-value">${eventName}</span></div>
-            <div class="ticket-row"><span class="ticket-label">Amount Paid</span><span class="ticket-value">₹500</span></div>
+            <div class="ticket-row"><span class="ticket-label">Amount Paid</span><span class="ticket-value">₹${user.userType === 'student' ? '499' : '999'}</span></div>
             <div class="ticket-row"><span class="ticket-label">Payment ID</span><span class="ticket-value" style="font-family: monospace; font-size: 0.85rem;">${paymentId}</span></div>
-            <div class="ticket-row" style="border-bottom: none;"><span class="ticket-label">Session Link</span><span class="ticket-value"><a href="${process.env.ZOOM_LINK || 'https://zoom.us/j/00000000000'}" style="color: #C4956A; word-break: break-all;">${process.env.ZOOM_LINK || 'https://zoom.us/j/00000000000'}</a></span></div>
+            <div class="ticket-row" style="border-bottom: none;"><span class="ticket-label">Session Link</span><span class="ticket-value"><a href="${joinLink}" style="color: #C4956A; word-break: break-all;">${joinLink}</a></span></div>
           </div>
 
           <p style="color: #6B4F3A; font-size: 0.95rem;">For any queries, reach us at <a href="mailto:events@gktech.ai" style="color: #C4956A;">events@gktech.ai</a></p>
@@ -399,7 +400,7 @@ async function sendProfileApprovedEmail(user) {
   const text =
     `Dear ${user.fullName},\n\n` +
     `Our team has reviewed your registration details for the Lead with AI: Adopt, Implement and Transform workshop and your profile has been approved.\n\n` +
-    `You can now log in to your account and complete the payment of ₹500 to confirm your seat.\n\n` +
+    `You can now log in to your account and complete the payment of ₹${user.userType === 'student' ? '499' : '999'} to confirm your seat.\n\n` +
     `Login here: ${process.env.SITE_URL || 'https://project.globalknowledgetech.com/leadwithAI'}\n\n` +
     `If you have any questions, feel free to reach us at ${process.env.FROM_EMAIL || 'events@gktech.ai'}.\n\n` +
     `Warm regards,\nTeam Global Knowledge Technologies`;

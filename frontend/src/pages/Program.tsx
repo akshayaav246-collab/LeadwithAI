@@ -193,7 +193,7 @@ export function Program() {
             color: 'var(--color-white)'
           }}>
             <div className="program-hero-sub" style={{ margin: 0, color: 'inherit', fontWeight: 500 }}>
-              <strong style={{ fontWeight: 700 }}>Graduation Ceremony</strong> · Day Two, 17th May 2026
+              <strong style={{ fontWeight: 700 }}>Graduation Ceremony</strong> · Day Two, 31st May 2026
             </div>
             <div style={{
               border: '1px solid rgba(255,255,255,0.5)',

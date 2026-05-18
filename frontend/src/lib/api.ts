@@ -71,6 +71,13 @@ export function getMe(token: string) {
   return request<{ user: any }>('/api/auth/me', {}, token);
 }
 
+export function submitFeedback(token: string, feedback: { session: string; text: string }[]) {
+  return request<{ message: string }>('/api/auth/feedback', {
+    method: 'POST',
+    body: JSON.stringify({ feedback }),
+  }, token);
+}
+
 // ─── Payment API ─────────────────────────────
 
 export function createOrder(token: string) {
@@ -100,6 +107,10 @@ export function verifyPayment(
   );
 }
 
+export function verifyCertificate(userId: string) {
+  return request<{ fullName: string; eventName: string; issueDate: string }>(`/api/auth/certificate/${userId}`);
+}
+
 // ─── Data API ────────────────────────────────
 
 export function getColleges(query: string) {
@@ -111,6 +122,10 @@ export function addCollege(college: string) {
     '/api/data/colleges',
     { method: 'POST', body: JSON.stringify({ college }) }
   );
+}
+
+export function getPublicSettings() {
+  return request<{ feedbackEnabled: boolean }>('/api/public/settings');
 }
 
 // ─── Admin API ───────────────────────────────
@@ -137,13 +152,18 @@ export function sendAdminEmail(token: string, payload: any) {
   }, token);
 }
 
-export function setUserReviewStatus(token: string, userId: string, action: 'approve' | 'reject') {
-  return request<{ message: string; reviewStatus: string }>(
-    `/api/admin/users/${userId}/review-status`,
-    { method: 'PATCH', body: JSON.stringify({ action }) },
-    token
-  );
+export function getAdminSettings(token: string) {
+  return request<{ feedbackEnabled: boolean }>('/api/admin/settings', {}, token);
 }
+
+export function updateAdminSettings(token: string, feedbackEnabled: boolean) {
+  return request<{ feedbackEnabled: boolean }>('/api/admin/settings/feedback', {
+    method: 'PATCH',
+    body: JSON.stringify({ feedbackEnabled }),
+  }, token);
+}
+
+
 
 // ─── ID Parse API ────────────────────────────
 

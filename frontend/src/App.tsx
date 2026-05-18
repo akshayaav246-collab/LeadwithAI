@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { NavBar } from "@/components/NavBar";
 import { Footer } from "@/components/Footer";
@@ -7,6 +8,7 @@ import { Program } from "@/pages/Program";
 import { Speakers } from "@/pages/Speakers";
 import { Register } from "@/pages/Register";
 import { Profile } from "@/pages/Profile";
+import { VerifyCertificate } from "@/pages/VerifyCertificate";
 import { AuthProvider } from "@/context/AuthContext";
 
 // Admin Imports
@@ -25,6 +27,7 @@ function Router() {
         <Route path="/speakers" component={Speakers} />
         <Route path="/register" component={Register} />
         <Route path="/profile" component={Profile} />
+        <Route path="/verify/:id" component={VerifyCertificate} />
         
         {/* Admin Routes */}
         <Route path="/admin/login" component={AdminLogin} />
@@ -41,6 +44,15 @@ function Router() {
 function MainLayout() {
   const [location] = useLocation();
   const isAdminRoute = location.startsWith('/admin');
+
+  // Global Referral Tracker
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const refCode = urlParams.get('ref');
+    if (refCode) {
+      localStorage.setItem('referralCode', refCode);
+    }
+  }, [location]);
 
   return (
     <>
