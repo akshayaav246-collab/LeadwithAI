@@ -13,13 +13,15 @@ export interface AuthUser {
   id: string;
   fullName: string;
   email: string;
-  phone: string;
-  userType: 'student' | 'working';
+  phone?: string;
+  userType?: 'student' | 'working';
   collegeName?: string;
   course?: string;
   year?: string;
   domain?: string;
   organization?: string;
+  heardFrom?: string;
+  isProfileComplete?: boolean;
   registeredEvents: RegisteredEvent[];
 }
 

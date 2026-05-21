@@ -464,6 +464,7 @@ router.post('/verify-otp', validate(verifyOtpSchema), async (req, res) => {
         heardFrom: user.heardFrom,
         isWaitlisted: user.isWaitlisted,
         registeredEvents: user.registeredEvents,
+        isProfileComplete: user.isProfileComplete !== false,
       },
     });
   } catch (err) {
@@ -497,12 +498,141 @@ router.get('/me', authMiddleware, async (req, res) => {
         registeredEvents: user.registeredEvents,
         isFeedbackSubmitted: user.isFeedbackSubmitted,
         feedback: user.feedback,
+        isProfileComplete: user.isProfileComplete !== false,
         createdAt: user.createdAt,
       },
     });
   } catch (err) {
     console.error('Get me error:', err);
     res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// PATCH /api/auth/complete-profile (protected)
+// ─────────────────────────────────────────────
+router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) {
+      if (req.file) {
+        await fs.unlink(req.file.path).catch(() => {});
+      }
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const {
+      phone,
+      userType,
+      collegeName,
+      course,
+      year,
+      domain,
+      organization,
+      heardFrom,
+      heardFromOther,
+    } = req.body;
+
+    // Validate required fields
+    if (!phone || !userType || !heardFrom) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'Missing required fields (phone, userType, heardFrom).' });
+    }
+
+    const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
+    if (!phoneRegex.test(phone.trim())) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number.' });
+    }
+
+    // Enforce lock on userType if it was set by admin
+    if (user.userType && user.userType !== userType) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: `Account type is pre-set to ${user.userType} and cannot be modified.` });
+    }
+
+    // Conditional details validation
+    if (userType === 'student') {
+      if (!collegeName?.trim() || !course?.trim() || !year?.trim()) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Missing student details (college, course, year).' });
+      }
+
+      const isInstitutionalEmail = /\.(ac|edu)\.in$/i.test(user.email);
+      if (!isInstitutionalEmail && !req.file) {
+        return res.status(400).json({ error: 'College ID card PDF is required.' });
+      }
+    } else if (userType === 'working') {
+      if (!domain?.trim()) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Domain is required for working professionals.' });
+      }
+    } else {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'Invalid user type.' });
+    }
+
+    // Resolve heardFrom
+    let finalHeardFrom = heardFrom.trim();
+    if (finalHeardFrom === 'Others') {
+      if (!heardFromOther?.trim()) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Please specify how you heard about us.' });
+      }
+      finalHeardFrom = heardFromOther.trim();
+    }
+
+    // Update user properties
+    user.phone = phone.trim();
+    user.userType = userType;
+    user.heardFrom = finalHeardFrom;
+    user.isProfileComplete = true;
+
+    if (userType === 'student') {
+      user.collegeName = collegeName.trim();
+      user.course = course.trim();
+      user.year = year.trim();
+      if (req.file) {
+        user.idCardPath = req.file.filename;
+      }
+      user.domain = undefined;
+      user.organization = undefined;
+    } else {
+      user.domain = domain.trim();
+      user.organization = organization?.trim() || undefined;
+      user.collegeName = undefined;
+      user.course = undefined;
+      user.year = undefined;
+      user.idCardPath = undefined;
+    }
+
+    await user.save();
+
+    return res.json({
+      message: 'Profile completed successfully.',
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        userType: user.userType,
+        collegeName: user.collegeName,
+        course: user.course,
+        year: user.year,
+        domain: user.domain,
+        organization: user.organization,
+        heardFrom: user.heardFrom,
+        isWaitlisted: user.isWaitlisted,
+        registeredEvents: user.registeredEvents,
+        isProfileComplete: user.isProfileComplete,
+      }
+    });
+  } catch (err) {
+    console.error('PATCH /complete-profile error:', err);
+    if (req.file) {
+      await fs.unlink(req.file.path).catch(() => {});
+    }
+    res.status(500).json({ error: 'Failed to complete profile.' });
   }
 });
 

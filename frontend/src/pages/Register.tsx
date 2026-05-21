@@ -52,8 +52,15 @@ type UserType = 'student' | 'working';
 type OtpStep = 'email' | 'otp';
 
 export function Register() {
-  const { login } = useAuth();
+  const { login, token, user } = useAuth();
   const [, navigate] = useLocation();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (token && user) {
+      navigate('/profile');
+    }
+  }, [token, user, navigate]);
 
   // Read referral code from URL or persistent storage
   const urlParams = new URLSearchParams(window.location.search);

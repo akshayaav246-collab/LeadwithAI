@@ -81,6 +81,10 @@ module.exports = async (req, res, next) => {
         } else if (req.method === 'PATCH' && path === '/settings/feedback') {
           action = 'TOGGLE_FEEDBACK';
           target = 'System Settings';
+        } else if (req.method === 'POST' && path === '/users') {
+          action = 'CREATE_REGISTRANT';
+          target = req.body.email;
+          details = { fullName: req.body.fullName, userType: req.body.userType };
         } else if (req.method === 'POST' && path === '/') {
           action = 'CREATE_ADMIN';
           target = req.body.email;

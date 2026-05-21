@@ -56,6 +56,14 @@ export function submitFeedback(token: string, feedback: { session: string; text:
   return request<{ message: string }>('/api/auth/feedback', { method: 'POST', body: JSON.stringify({ feedback }) }, token);
 }
 
+export function completeProfile(token: string, formData: FormData) {
+  return request<{ message: string; user: any }>('/api/auth/complete-profile', { method: 'PATCH', body: formData }, token);
+}
+
+export function createAdminUser(token: string, payload: { fullName: string; email: string; userType?: string; referralCode?: string }) {
+  return request<{ message: string; user: any }>('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) }, token);
+}
+
 // ─── Payment API ─────────────────────────────
 
 export function createOrder(token: string) {

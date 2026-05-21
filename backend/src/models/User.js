@@ -28,8 +28,8 @@ const userSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    phone: { type: String, required: true, trim: true },
-    userType: { type: String, enum: ['student', 'working'], required: true },
+    phone: { type: String, trim: true },
+    userType: { type: String, enum: ['student', 'working'] },
 
     // Student-specific fields
     collegeName: { type: String, trim: true },
@@ -46,7 +46,8 @@ const userSchema = new mongoose.Schema(
     otpExpiry: { type: Date },
 
     // Registration metadata
-    heardFrom: { type: String, required: true },
+    heardFrom: { type: String },
+    isProfileComplete: { type: Boolean, default: true },
     isWaitlisted: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     referralCode: { type: String, default: null },

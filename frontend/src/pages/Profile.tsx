@@ -1,12 +1,512 @@
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense, useRef, type FormEvent } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth, type RegisteredEvent } from '@/context/AuthContext';
 import * as api from '@/lib/api';
 import { toast } from 'sonner';
+import { Autocomplete } from '@/components/Autocomplete';
+
+const DOMAIN_OPTIONS = [
+  "Information Technology (IT)",
+  "Manufacturing",
+  "Automobile / Automotive",
+  "Healthcare",
+  "Finance & Banking",
+  "Education",
+  "Retail & E-commerce",
+];
 
 const DownloadCertificateButton = lazy(() =>
   import('@/components/DownloadCertificateButton').then(m => ({ default: m.DownloadCertificateButton }))
 );
+
+interface ProfileCompletionFormProps {
+  user: any;
+  token: string;
+  updateUser: (user: any) => void;
+  logout: () => void;
+}
+
+function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompletionFormProps) {
+  const [phone, setPhone] = useState('');
+  const [selectedUserType, setSelectedUserType] = useState<'student' | 'working'>(
+    user.userType || 'student'
+  );
+  const [collegeName, setCollegeName] = useState('');
+  const [course, setCourse] = useState('');
+  const [year, setYear] = useState('');
+  const [idFile, setIdFile] = useState<File | null>(null);
+  const [isScanningId, setIsScanningId] = useState(false);
+  const [idVerdict, setIdVerdict] = useState<'APPROVED' | 'REJECTED' | 'REVIEW' | null>(null);
+  const [idRejectionReason, setIdRejectionReason] = useState('');
+
+  const [domain, setDomain] = useState('');
+  const [organization, setOrganization] = useState('');
+
+  const [heardFrom, setHeardFrom] = useState('');
+  const [heardFromOther, setHeardFromOther] = useState('');
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const clearError = (field: string) => setErrors(prev => ({ ...prev, [field]: '' }));
+
+  const isInstitutionalEmail =
+    selectedUserType === 'student' && /\.(ac|edu)\.in$/i.test(user.email);
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const newErrors: Record<string, string> = {};
+
+    const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
+    if (!phoneRegex.test(phone.trim())) {
+      newErrors.phone = 'Please enter a valid 10-digit mobile number.';
+    }
+
+    if (!selectedUserType) {
+      newErrors.userType = 'Please select your account type.';
+    }
+
+    if (selectedUserType === 'student') {
+      if (!isInstitutionalEmail && !idFile) {
+        newErrors.idCard = 'Please upload your College ID Card PDF.';
+      } else if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
+        newErrors.idCard = idRejectionReason || 'The ID card could not be verified.';
+      }
+      if (!collegeName.trim()) newErrors.collegeName = 'Please enter your college name.';
+      if (!course.trim()) newErrors.course = 'Please enter your course.';
+      if (!year) newErrors.year = 'Please select your year.';
+    } else if (selectedUserType === 'working') {
+      if (!domain.trim()) newErrors.domain = 'Please select your domain.';
+    }
+
+    if (!heardFrom) {
+      newErrors.heardFrom = 'Please let us know how you heard about us.';
+    } else if (heardFrom === 'Others' && !heardFromOther.trim()) {
+      newErrors.heardFromOther = 'Please specify how you heard about us.';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append('phone', phone.trim());
+      formData.append('userType', selectedUserType);
+
+      if (selectedUserType === 'student') {
+        formData.append('collegeName', collegeName.trim());
+        formData.append('course', course.trim());
+        formData.append('year', year);
+        if (idFile) {
+          formData.append('idCard', idFile);
+        }
+      } else {
+        formData.append('domain', domain.trim());
+        if (organization.trim()) {
+          formData.append('organization', organization.trim());
+        }
+      }
+
+      formData.append('heardFrom', heardFrom === 'Others' ? heardFromOther.trim() : heardFrom);
+
+      const res = await api.completeProfile(token, formData);
+
+      if (selectedUserType === 'student' && collegeName) {
+        api.addCollege(collegeName).catch(() => {});
+      }
+
+      toast.success(res.message || 'Profile completed successfully.');
+      updateUser(res.user);
+    } catch (err: any) {
+      setErrors({ global: err.message || 'Failed to complete profile.' });
+      toast.error(err.message || 'Failed to complete profile.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="profile-card" style={{ gridColumn: '1 / -1', maxWidth: '680px', margin: '0 auto', width: '100%' }}>
+      <div className="profile-card-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <h2>Complete Your Profile</h2>
+      </div>
+      <div className="modal-body feedback-form-container" style={{ padding: '2rem 1.75rem' }}>
+        <p style={{ marginBottom: '1.5rem', color: 'var(--color-stone)', fontSize: '0.95rem' }}>
+          Please complete your profile details to unlock your dashboard and proceed with your workshop payment.
+        </p>
+
+        <form className="register-form" onSubmit={handleSubmit} noValidate>
+          {/* Read Only Email */}
+          <div className="register-field">
+            <label>Email Address</label>
+            <input
+              type="email"
+              value={user.email}
+              disabled
+              style={{ background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' }}
+            />
+          </div>
+
+          {/* Phone Number */}
+          <div className="register-field">
+            <label htmlFor="comp-phone">Phone Number *</label>
+            <input
+              id="comp-phone"
+              type="text"
+              value={phone}
+              onChange={(e) => { setPhone(e.target.value); clearError('phone'); }}
+              placeholder="e.g. 9876543210"
+              required
+            />
+            {errors.phone && <div className="field-error">{errors.phone}</div>}
+          </div>
+
+          {/* Account Type Selector / Lock */}
+          {user.userType ? (
+            <div className="register-field">
+              <label>Account Type</label>
+              <div style={{
+                padding: '0.85rem 1rem',
+                background: 'rgba(196,149,106,0.06)',
+                border: '1px solid rgba(196,149,106,0.2)',
+                borderRadius: '6px',
+                color: 'var(--color-espresso)',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                {user.userType === 'student' ? (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-sienna)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M21.42 10.922a2 2 0 0 0-.019-3.838L12.83 4.34a2 2 0 0 0-1.66 0L2.6 7.08a2 2 0 0 0 0 3.832l8.57 3.698a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
+                    Student
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-sienna)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                    Working Professional
+                  </>
+                )}
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-stone)', marginTop: '0.35rem' }}>
+                This account type was pre-assigned by the administrator.
+              </p>
+            </div>
+          ) : (
+            <div className="register-field">
+              <label>I am a *</label>
+              <div className="reg-toggle">
+                <button
+                  type="button"
+                  className={`reg-toggle-btn ${selectedUserType === 'student' ? 'active' : ''}`}
+                  onClick={() => setSelectedUserType('student')}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M21.42 10.922a2 2 0 0 0-.019-3.838L12.83 4.34a2 2 0 0 0-1.66 0L2.6 7.08a2 2 0 0 0 0 3.832l8.57 3.698a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
+                  Student
+                </button>
+                <button
+                  type="button"
+                  className={`reg-toggle-btn ${selectedUserType === 'working' ? 'active' : ''}`}
+                  onClick={() => setSelectedUserType('working')}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                  Working Professional/Others
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Conditional Fields */}
+          {selectedUserType === 'student' && (
+            <div className="reg-conditional-fields" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1.25rem' }}>
+              <div className="register-field">
+                <label>College ID Card *</label>
+                {isInstitutionalEmail ? (
+                  <div className="id-institutional-badge">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <span>Institutional email domain detected (<em>{user.email.split('@')[1]}</em>). Physical ID upload is optional.</span>
+                  </div>
+                ) : (
+                  <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
+                    Please upload your physical College ID card to qualify for student pricing (₹499).
+                  </p>
+                )}
+                <div
+                  className={`register-upload ${idFile ? 'has-file' : ''}`}
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60px' }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    id="comp-idcard"
+                    type="file"
+                    accept=".pdf"
+                    style={{ display: 'none' }}
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0] || null;
+                      setIdFile(f);
+                      clearError('idCard');
+                      setIdVerdict(null);
+                      setIdRejectionReason('');
+
+                      if (f && !isInstitutionalEmail) {
+                        setIsScanningId(true);
+                        try {
+                          const parsed = await api.parseIdCard(f, user.email || undefined);
+                          setIdVerdict(parsed.verdict);
+                          if (parsed.verdict === 'APPROVED') {
+                            setIdRejectionReason('');
+                            if (parsed.college) setCollegeName(parsed.college);
+                            if (parsed.course) setCourse(parsed.course);
+                            if (parsed.year_of_study) {
+                              const yearMap: Record<string, string> = {
+                                '1': '1st Year',
+                                '2': '2nd Year',
+                                '3': '3rd Year',
+                                '4': '4th Year',
+                                '5': '5th Year',
+                              };
+                              const mapped = yearMap[parsed.year_of_study] || parsed.year_of_study;
+                              if (['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', 'Postgraduate'].includes(mapped)) {
+                                setYear(mapped);
+                              }
+                            }
+                          } else if (parsed.verdict === 'REJECTED') {
+                            setIdRejectionReason(parsed.rejection_reason || 'The ID card is not found to be valid.');
+                          }
+                        } catch (err) {
+                          console.error('ID Parse Error:', err);
+                          setIdVerdict('REVIEW');
+                        } finally {
+                          setIsScanningId(false);
+                        }
+                      }
+                    }}
+                  />
+                  {idFile ? (
+                    <span className="upload-filename">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      {idFile.name}
+                    </span>
+                  ) : (
+                    <span className="upload-placeholder">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                      PDF only (max. 5MB)
+                    </span>
+                  )}
+                </div>
+
+                {isScanningId && (
+                  <div className="id-verdict-line" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '0.5rem', color: 'var(--color-stone)', fontSize: '0.85rem' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin-slow 2s linear infinite', color: '#C4956A' }}>
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                    </svg>
+                    Scanning ID Card with AI...
+                  </div>
+                )}
+
+                {!isInstitutionalEmail && idFile && !isScanningId && (
+                  <>
+                    {idVerdict === 'APPROVED' && (
+                      <div className="id-verdict-line" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#166534', background: 'rgba(34,197,94,0.07)', padding: '0.5rem', borderRadius: '4px', border: '1px solid rgba(34,197,94,0.2)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>The ID is found to be valid. Details autofilled.</span>
+                      </div>
+                    )}
+                    {idVerdict === 'REJECTED' && (
+                      <div className="id-rejected-block" style={{ marginTop: '0.5rem' }}>
+                        <div className="id-verdict-line" style={{ color: '#ef4444', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          <span>ID Verification Failed.</span>
+                        </div>
+                        <div className="id-rejected-hint" style={{ fontSize: '0.85rem', color: '#ef4444', marginTop: '0.2rem' }}>
+                          {idRejectionReason || 'The ID card could not be verified.'}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                {errors.idCard && <div className="field-error">{errors.idCard}</div>}
+              </div>
+
+              <div className="register-grid-2">
+                <div className="register-field">
+                  <label htmlFor="comp-college">College Name *</label>
+                  <Autocomplete
+                    id="comp-college"
+                    value={collegeName}
+                    onChange={(val) => { setCollegeName(val); clearError('collegeName'); }}
+                    placeholder="e.g. PSG College of Technology"
+                    fetchOptions={async (query) => (await api.getColleges(query)).colleges}
+                    required
+                  />
+                  {errors.collegeName && <div className="field-error">{errors.collegeName}</div>}
+                </div>
+                <div className="register-field">
+                  <label htmlFor="comp-course">Course *</label>
+                  <input
+                    id="comp-course"
+                    type="text"
+                    value={course}
+                    onChange={(e) => { setCourse(e.target.value); clearError('course'); }}
+                    placeholder="e.g. B.Tech CSE"
+                    required
+                  />
+                  {errors.course && <div className="field-error">{errors.course}</div>}
+                </div>
+              </div>
+
+              <div className="register-field">
+                <label htmlFor="comp-year">Year of Study *</label>
+                <select
+                  id="comp-year"
+                  value={year}
+                  onChange={(e) => { setYear(e.target.value); clearError('year'); }}
+                  className="register-select"
+                  required
+                >
+                  <option value="">Select year</option>
+                  <option value="1st Year">1st Year</option>
+                  <option value="2nd Year">2nd Year</option>
+                  <option value="3rd Year">3rd Year</option>
+                  <option value="4th Year">4th Year</option>
+                  <option value="5th Year">5th Year</option>
+                  <option value="Postgraduate">Postgraduate</option>
+                </select>
+                {errors.year && <div className="field-error">{errors.year}</div>}
+              </div>
+            </div>
+          )}
+
+          {selectedUserType === 'working' && (
+            <div className="reg-conditional-fields" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1.25rem' }}>
+              <div className="register-grid-2">
+                <div className="register-field">
+                  <label htmlFor="comp-domain">Domain *</label>
+                  <select
+                    id="comp-domain"
+                    value={domain}
+                    onChange={(e) => { setDomain(e.target.value); clearError('domain'); }}
+                    className="register-select"
+                    required
+                  >
+                    <option value="">Select your industry</option>
+                    {DOMAIN_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                  {errors.domain && <div className="field-error">{errors.domain}</div>}
+                </div>
+                <div className="register-field">
+                  <label htmlFor="comp-org">Organization / Company</label>
+                  <input
+                    id="comp-org"
+                    type="text"
+                    value={organization}
+                    onChange={(e) => setOrganization(e.target.value)}
+                    placeholder="e.g. TCS, Infosys, etc."
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* How did you hear about us? */}
+          <div className="register-field" style={{ marginTop: '1.25rem' }}>
+            <label htmlFor="comp-heardFrom">How did you hear about us? *</label>
+            <select
+              id="comp-heardFrom"
+              value={heardFrom}
+              onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+              className="register-select"
+              required
+            >
+              <option value="">Select an option</option>
+              <option value="Social Media">Social Media</option>
+              <option value="Newspaper">Newspaper</option>
+              <option value="Others">Others</option>
+            </select>
+            {errors.heardFrom && <div className="field-error">{errors.heardFrom}</div>}
+          </div>
+
+          {heardFrom === 'Others' && (
+            <div className="register-field" style={{ marginTop: '1rem' }}>
+              <label htmlFor="comp-heardFromOther">Please specify *</label>
+              <input
+                id="comp-heardFromOther"
+                type="text"
+                value={heardFromOther}
+                onChange={(e) => { setHeardFromOther(e.target.value); clearError('heardFromOther'); }}
+                placeholder="e.g. Friend, Professor, etc."
+                required
+              />
+              {errors.heardFromOther && <div className="field-error">{errors.heardFromOther}</div>}
+            </div>
+          )}
+
+          {errors.global && <div className="register-error" role="alert" style={{ marginTop: '1rem' }}>{errors.global}</div>}
+
+          {/* Submit and Logout Buttons */}
+          <div style={{ marginTop: '2rem' }}>
+            <button
+              type="submit"
+              className="btn-primary register-submit"
+              disabled={isSaving || isScanningId}
+              style={{ width: '100%' }}
+            >
+              {isSaving ? (
+                <span className="btn-loading">
+                  <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                </span>
+              ) : (
+                'Save & Complete Profile'
+              )}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={logout}
+              style={{
+                width: '100%',
+                marginTop: '0.85rem',
+                background: 'transparent',
+                border: '1.5px solid var(--color-sand)',
+                color: 'var(--color-umber)',
+                padding: '0.65rem',
+                borderRadius: '6px',
+                fontFamily: 'var(--font-heading)',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'background 0.2s, border-color 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(107, 79, 58, 0.05)';
+                e.currentTarget.style.borderColor = 'var(--color-sienna)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'var(--color-sand)';
+              }}
+            >
+              Log Out / Switch Account
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export function Profile() {
   const { user, token, logout, updateUser } = useAuth();
@@ -47,6 +547,8 @@ export function Profile() {
       .finally(() => setLoading(false));
   }, [token]);
 
+
+
   if (loading) {
     return (
       <main>
@@ -61,6 +563,37 @@ export function Profile() {
   }
 
   if (!user) return null;
+
+  if (user.isProfileComplete === false) {
+    return (
+      <main>
+        <section className="profile-section">
+          {/* ── Hero strip ── */}
+          <div className="profile-hero">
+            <div className="container">
+              <div className="profile-hero-inner">
+                <div className="profile-avatar">
+                  {user.fullName.charAt(0).toUpperCase()}
+                </div>
+                <div className="profile-hero-text">
+                  <h1 className="profile-name">Welcome, {user.fullName}!</h1>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="container" style={{ paddingTop: '2.5rem', paddingBottom: '4rem', display: 'flex', justifyContent: 'center' }}>
+            <ProfileCompletionForm
+              user={user}
+              token={token!}
+              updateUser={updateUser}
+              logout={logout}
+            />
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   const confirmedEvents = user.registeredEvents?.filter((e) => e.paymentStatus === 'confirmed') ?? [];
   const pendingEvents = user.registeredEvents?.filter((e) => e.paymentStatus !== 'confirmed') ?? [];
@@ -252,7 +785,6 @@ export function Profile() {
               </div>
             ) : (
               <div className="ticket-list">
-                {payError && <div className="register-error" style={{ marginBottom: '1rem' }}>{payError}</div>}
                 {uniqueEvents.map((evt: RegisteredEvent, i: number) => (
                   <div key={i} className={`ticket-card ${evt.paymentStatus}`}>
                     <div className="ticket-card-left">
@@ -442,6 +974,50 @@ export function Profile() {
                 style={{ width: '100%', padding: '0.7rem', marginTop: '0.5rem', opacity: feedbackData.some(f => !f.text.trim()) ? 0.6 : 1 }}
               >
                 {isSubmittingFeedback ? 'Submitting...' : 'Submit Feedback & Unlock Certificate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {payError && (
+        <div className="modal-overlay" onClick={() => setPayError('')}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', borderRadius: '12px' }}>
+            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <h2 style={{ fontSize: '1.25rem', color: 'var(--color-espresso)' }}>Payment Update</h2>
+              <button className="modal-close" onClick={() => setPayError('')}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            <div className="modal-body" style={{ textAlign: 'center', padding: '1.5rem 2rem 2rem 2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}>
+                <div style={{
+                  background: '#fee2e2',
+                  border: '1.5px solid #fca5a5',
+                  borderRadius: '50%',
+                  width: '56px',
+                  height: '56px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ef4444'
+                }}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </div>
+              </div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-espresso)', marginBottom: '0.5rem' }}>Payment Cancelled / Failed</h3>
+              <p style={{ fontSize: '0.93rem', color: 'var(--color-stone)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                {payError}
+              </p>
+              <button
+                className="btn-primary"
+                onClick={() => setPayError('')}
+                style={{ width: '100%', padding: '0.7rem' }}
+              >
+                Dismiss
               </button>
             </div>
           </div>

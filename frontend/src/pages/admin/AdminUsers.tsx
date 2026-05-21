@@ -7,7 +7,8 @@ import {
   toggleUserStatus,
   toggleUserWaitlist,
   manualConfirmPayment,
-  getAdminSettings
+  getAdminSettings,
+  createAdminUser
 } from '../../lib/api';
 import { CertificateGenerator } from '../../components/admin/CertificateGenerator';
 import { toast } from 'sonner';
@@ -94,7 +95,8 @@ export function AdminUsers() {
     year: '',
     domain: '',
     organization: '',
-    heardFrom: ''
+    heardFrom: '',
+    referralCode: ''
   });
 
   // Manual Payment Confirmation State
@@ -103,6 +105,15 @@ export function AdminUsers() {
 
   // Status Confirm State
   const [statusConfirmUser, setStatusConfirmUser] = useState<any>(null);
+
+  // Add Registrant Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    fullName: '',
+    email: '',
+    userType: '', // '', 'student', or 'working'
+    referralCode: ''
+  });
 
   const adminToken = localStorage.getItem('adminToken') || '';
 
@@ -239,6 +250,11 @@ export function AdminUsers() {
   };
 
   const handleOpenEditModal = (user: any) => {
+    const matchingReferral = referralsList.find(
+      (r: any) => r.label === user.referralCode || r.code === user.referralCode
+    );
+    const resolvedCode = matchingReferral ? matchingReferral.code : '';
+
     setEditingUser(user);
     setEditForm({
       fullName: user.fullName || '',
@@ -248,7 +264,8 @@ export function AdminUsers() {
       year: user.year === '-' ? '' : user.year,
       domain: user.domain === '-' ? '' : user.domain,
       organization: user.organization === '-' ? '' : user.organization,
-      heardFrom: user.heardFrom === '-' ? '' : user.heardFrom
+      heardFrom: user.heardFrom === '-' ? '' : user.heardFrom,
+      referralCode: resolvedCode
     });
   };
 
@@ -279,15 +296,47 @@ export function AdminUsers() {
     }
   };
 
+  const handleAddRegistrantSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addForm.fullName.trim() || !addForm.email.trim()) {
+      toast.error('Please enter name and email.');
+      return;
+    }
+    try {
+      const payload: any = {
+        fullName: addForm.fullName.trim(),
+        email: addForm.email.trim().toLowerCase()
+      };
+      if (addForm.userType) {
+        payload.userType = addForm.userType;
+      }
+      if (addForm.referralCode) {
+        payload.referralCode = addForm.referralCode;
+      }
+      await createAdminUser(adminToken, payload);
+      toast.success('Registrant created successfully!');
+      setIsAddModalOpen(false);
+      setAddForm({ fullName: '', email: '', userType: '', referralCode: '' });
+      fetchUsers();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create registrant.');
+    }
+  };
+
   const toggleRow = (id: string) => setExpandedId(prev => (prev === id ? null : id));
 
   return (
     <div className="admin-page">
       <div className="admin-page-header">
         <h2 className="admin-page-title">User Management</h2>
-        <button className="btn-primary" onClick={handleExportCSV}>
-          Export CSV
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <button className="btn-primary" onClick={() => setIsAddModalOpen(true)} style={{ backgroundColor: '#16a34a', borderColor: '#16a34a' }}>
+            Add Registrant
+          </button>
+          <button className="btn-primary" onClick={handleExportCSV}>
+            Export CSV
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -673,6 +722,22 @@ export function AdminUsers() {
                 />
               </div>
 
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Referral Code</label>
+                <select
+                  value={editForm.referralCode}
+                  onChange={e => setEditForm({ ...editForm, referralCode: e.target.value })}
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                >
+                  <option value="">None</option>
+                  {referralsList.map((r: any) => (
+                    <option key={r.code} value={r.code}>
+                      {r.label}{r.isActive === false ? ' (Inactive)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', gridColumn: 'span 2', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
@@ -761,6 +826,81 @@ export function AdminUsers() {
           user={certificateUser}
           onClose={() => setCertificateUser(null)}
         />
+      )}
+
+      {/* ── Add Registrant Modal ── */}
+      {isAddModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2D9CC', padding: '2rem', width: '90%', maxWidth: '450px' }}>
+            <h3 style={{ marginBottom: '0.5rem', color: '#3B2F2F' }}>Add New Registrant</h3>
+            <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginBottom: '1.2rem' }}>
+              Create an account with minimal details. The registrant can complete their profile on first login.
+            </p>
+            <form onSubmit={handleAddRegistrantSubmit}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Full Name *</label>
+                <input
+                  type="text"
+                  value={addForm.fullName}
+                  onChange={e => setAddForm({ ...addForm, fullName: e.target.value })}
+                  placeholder="e.g. Rahul Sharma"
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Email Address *</label>
+                <input
+                  type="email"
+                  value={addForm.email}
+                  onChange={e => setAddForm({ ...addForm, email: e.target.value })}
+                  placeholder="e.g. rahul@gmail.com"
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Account Type</label>
+                <select
+                  value={addForm.userType}
+                  onChange={e => setAddForm({ ...addForm, userType: e.target.value })}
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                >
+                  <option value="">Let Registrant Decide</option>
+                  <option value="student">Student</option>
+                  <option value="working">Working Professional / Others</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Referral Code</label>
+                <select
+                  value={addForm.referralCode}
+                  onChange={e => setAddForm({ ...addForm, referralCode: e.target.value })}
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                >
+                  <option value="">None</option>
+                  {referralsList.filter((r: any) => r.isActive !== false).map((r: any) => (
+                    <option key={r.code} value={r.code}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => { setIsAddModalOpen(false); setAddForm({ fullName: '', email: '', userType: '', referralCode: '' }); }}
+                  style={{ padding: '0.5rem 1rem', border: '1px solid #E2D9CC', borderRadius: 6, background: 'transparent', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1.5rem', backgroundColor: '#16a34a', borderColor: '#16a34a' }}>
+                  Create Registrant
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

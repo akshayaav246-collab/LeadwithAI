@@ -27,6 +27,11 @@ router.post('/create-order', authMiddleware, async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
 
+    // Block payment if profile is incomplete
+    if (user.isProfileComplete === false) {
+      return res.status(400).json({ error: 'Please complete your profile before proceeding to payment.' });
+    }
+
     // Check if already paid for this event
     const alreadyPaid = user.registeredEvents.find(
       (e) => e.eventName === EVENT_NAME && e.paymentStatus === 'confirmed'
@@ -102,6 +107,11 @@ router.post('/verify', authMiddleware, validate(verifyPaymentSchema), async (req
     // Update user's event status
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    // Block verification if profile is incomplete
+    if (user.isProfileComplete === false) {
+      return res.status(400).json({ error: 'Please complete your profile before verifying payment.' });
+    }
 
     const eventEntry = user.registeredEvents.find(
       (e) => e.razorpayOrderId === razorpay_order_id

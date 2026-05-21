@@ -316,6 +316,7 @@ router.get('/users', adminAuth, async (req, res) => {
         paymentId: confirmed ? (confirmed.razorpayPaymentId || '-') : '-',
         zoomStatus: confirmed ? (confirmed.zoomRegistrationStatus || 'pending') : '-',
         emailStatus: confirmed ? (confirmed.emailConfirmationStatus || 'pending') : '-',
+        isProfileComplete: u.isProfileComplete !== false,
         createdAt: u.createdAt,
       };
     });
@@ -336,6 +337,80 @@ router.get('/users', adminAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
+
+// ─────────────────────────────────────────────
+// POST /api/admin/users
+// Admin manually registers a user
+// ─────────────────────────────────────────────
+
+const createRegistrantSchema = Joi.object({
+  fullName: Joi.string().required(),
+  email: Joi.string().email().required(),
+  userType: Joi.string().valid('student', 'working').optional(),
+  referralCode: Joi.string().allow('', null).optional()
+});
+
+router.post('/users', adminAuth, validate(createRegistrantSchema), async (req, res) => {
+  try {
+    const { fullName, email, userType, referralCode } = req.body;
+
+    // Check duplicate (case-insensitive email)
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existing) {
+      return res.status(409).json({ error: 'A user with this email address already exists.' });
+    }
+
+    // Resolve referral code
+    let mappedReferral = null;
+    if (referralCode) {
+      const settings = await Settings.getSingleton();
+      const activeReferrals = settings.referralCodes.filter(r => r.isActive);
+      const match = activeReferrals.find(r => r.code === referralCode.toLowerCase().trim());
+      mappedReferral = match ? match.label : referralCode.trim();
+    }
+
+    const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
+    const userData = {
+      fullName: fullName.trim(),
+      email: email.toLowerCase().trim(),
+      isProfileComplete: false,
+      heardFrom: 'Admin Assisted Registration',
+      referralCode: mappedReferral,
+      registeredEvents: [{
+        eventName: EVENT_NAME,
+        paymentStatus: 'pending'
+      }]
+    };
+
+    if (userType) {
+      userData.userType = userType;
+    }
+
+    const user = await User.create(userData);
+
+    res.locals.auditTarget = user.email;
+    res.locals.auditDetails = {
+      fullName: user.fullName,
+      userType: userType || 'unspecified'
+    };
+
+    return res.status(201).json({
+      message: 'Registrant created successfully.',
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        userType: user.userType,
+        isProfileComplete: user.isProfileComplete,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (err) {
+    console.error('POST /api/admin/users error:', err);
+    res.status(500).json({ error: 'Failed to create registrant.' });
+  }
+});
+
 
 // ─────────────────────────────────────────────
 // GET /api/admin/users/:id
@@ -370,6 +445,7 @@ router.get('/users/:id', adminAuth, async (req, res) => {
       paymentId:        confirmed ? (confirmed.razorpayPaymentId || '-') : '-',
       zoomStatus:       confirmed ? (confirmed.zoomRegistrationStatus || 'pending') : '-',
       emailStatus:      confirmed ? (confirmed.emailConfirmationStatus || 'pending') : '-',
+      isProfileComplete: user.isProfileComplete !== false,
       registeredEvents: user.registeredEvents,
       createdAt:        user.createdAt,
     });
@@ -392,6 +468,7 @@ const editUserSchema = Joi.object({
   domain:       Joi.string().allow('', null).optional(),
   organization: Joi.string().allow('', null).optional(),
   heardFrom:    Joi.string().optional(),
+  referralCode: Joi.string().allow('', null).optional(),
 });
 
 router.patch('/users/:id', adminAuth, validate(editUserSchema), async (req, res) => {
@@ -400,6 +477,17 @@ router.patch('/users/:id', adminAuth, validate(editUserSchema), async (req, res)
     const updates = {};
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
+    }
+
+    if (req.body.referralCode !== undefined) {
+      let mappedReferral = null;
+      if (req.body.referralCode && req.body.referralCode.trim() !== '') {
+        const settings = await Settings.getSingleton();
+        const activeReferrals = settings.referralCodes.filter(r => r.isActive);
+        const match = activeReferrals.find(r => r.code === req.body.referralCode.toLowerCase().trim());
+        mappedReferral = match ? match.label : req.body.referralCode.trim();
+      }
+      updates.referralCode = mappedReferral;
     }
 
     const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true }).select('-otpHash -otpExpiry');
@@ -411,6 +499,7 @@ router.patch('/users/:id', adminAuth, validate(editUserSchema), async (req, res)
     res.status(500).json({ error: 'Failed to update user' });
   }
 });
+
 
 // ─────────────────────────────────────────────
 // PATCH /api/admin/users/:id/status
