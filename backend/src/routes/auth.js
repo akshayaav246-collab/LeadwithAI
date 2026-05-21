@@ -7,9 +7,12 @@ const crypto = require('crypto');
 const { GoogleGenAI } = require('@google/genai');
 const fs = require('fs').promises;
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 
 const { sendRegistrationEmail, sendOtpEmail, sendVerificationOtpEmail } = require('../utils/email');
 const authMiddleware = require('../middleware/auth');
+const Joi = require('joi');
+const validate = require('../middleware/validate');
 
 const router = express.Router();
 
@@ -22,7 +25,12 @@ const verifiedEmails = new Set();
 // ─────────────────────────────────────────────
 // POST /api/auth/send-register-otp
 // ─────────────────────────────────────────────
-router.post('/send-register-otp', async (req, res) => {
+const sendRegisterOtpSchema = Joi.object({
+  email: Joi.string().email().required(),
+  userType: Joi.string().valid('student', 'working').optional()
+});
+
+router.post('/send-register-otp', validate(sendRegisterOtpSchema), async (req, res) => {
   try {
     const { email, userType } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required.' });
@@ -51,7 +59,12 @@ router.post('/send-register-otp', async (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/auth/verify-register-otp
 // ─────────────────────────────────────────────
-router.post('/verify-register-otp', (req, res) => {
+const verifyRegisterOtpSchema = Joi.object({
+  email: Joi.string().email().required(),
+  otp: Joi.string().length(6).required()
+});
+
+router.post('/verify-register-otp', validate(verifyRegisterOtpSchema), (req, res) => {
   const { email, otp } = req.body;
   if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required.' });
 
@@ -77,15 +90,15 @@ const storage = multer.diskStorage({
     cb(null, `id-${unique}${path.extname(file.originalname)}`);
   },
 });
-const ALLOWED_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+const ALLOWED_MIME = ['application/pdf'];
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
-    const extAllowed = /\.(jpeg|jpg|png|pdf)$/i.test(path.extname(file.originalname));
+    const extAllowed = /\.(pdf)$/i.test(path.extname(file.originalname));
     const mimeAllowed = ALLOWED_MIME.includes(file.mimetype);
     if (extAllowed && mimeAllowed) cb(null, true);
-    else cb(new Error('Only JPEG, PNG, PDF files are allowed'));
+    else cb(new Error('Only PDF files containing both sides of the ID card are allowed (max 5MB)'));
   },
 });
 
@@ -145,99 +158,41 @@ router.post('/parse-id', upload.single('idCard'), async (req, res) => {
     const currentYear = new Date().getFullYear();
 
     // ── STEP 1: Gemini — extract + forensic checks ──────────────────────
-    const prompt = `You are a forensic document examiner. Your job is to analyze whether this image shows a genuine, physically-held Indian college or school ID card. It may contain a scan of both sides of the card. Be skeptical by default.
+    const prompt = `You are an AI assistant designed to extract information and analyze images of ID cards. Your ONLY job is to extract the following information from the image and return a JSON object. Do not make final approval or rejection decisions.
 
-═══════════════════════════════════════
-STEP 1 — PHYSICAL REALITY CHECK
-═══════════════════════════════════════
-A real physical card, photographed in the real world, will show at least 2-3 of these:
+1.  Is it an educational institution ID card? (is_educational_id)
+    *   True if it's a student/staff ID for a college, university, institute, or school.
+    *   False for driver's licenses, Aadhaar, PAN, gym memberships, corporate badges, or random photos.
+2.  Does it appear physically real? (is_physically_real)
+    *   True if there are physical signs: glare, shadow, background surface, lamination sheen, lanyard hole, slight wear, perspective distortion, imperfect printing.
+    *   False if it looks like a digital screenshot, a perfectly flat graphic, a Canva mockup, has phone UI elements, no background context, or looks completely AI generated.
+3.  Is it a legitimate institution? (is_legitimate_institution)
+    *   Extract the institution name. If the name sounds like a real, plausible educational institution, set this to true. If it sounds fake or nonsensical, set to false.
+4.  Extract Institution Name (institution_name)
+    *   The exact name of the college or university printed on the card. Null if not found.
+5.  Extract Expiry Date (expiry_date)
+    *   Any explicit expiry date like "Valid until Dec 2024". Null if not found.
+6.  Extract Batch Validity (batch_validity)
+    *   Any academic year range like "2020-2024" or "Batch: 2021". Null if not found.
+7.  Confidence Score (confidence_score)
+    *   "high" if the card is extremely clear, obviously physical, and all text is readable.
+    *   "medium" if it's somewhat blurry, or lacks strong physical context but still looks plausible.
+    *   "low" if you are unsure, it's very blurry, or looks highly suspicious.
 
-ACCEPT signals (physical card evidence):
-- Uneven or slightly curved edges (real PVC cards bend/warp slightly)
-- Lamination sheen, glare, or lens flare catching light unevenly
-- Micro-shadows at card edges where it rests on a surface
-- Lanyard punch hole at the top
-- Slight perspective distortion (card not perfectly flat to camera)
-- Background surface visible (table, hand, fabric, wall)
-- Photo ID portrait with slightly compressed/printed look (not crisp digital)
-- Wear, minor scratches, fingerprint smudges, or handling marks
-- QR/barcode that appears physically printed (slightly pixelated, not vector-crisp)
-
-REJECT signals (digital/fake card evidence):
-- Perfectly flat, perfectly rectangular, zero-shadow card on a pure white/transparent background
-- Card edges are razor-sharp with no environmental context whatsoever
-- All text is perfectly kerned, pixel-perfect — looks like a live Canva document, not a printed card
-- The portrait photo looks undeniably AI-generated: unnaturally smooth skin texture, 
-  perfectly symmetrical face, studio-clean lighting that contradicts the card's environment,
-  eyes that look glassy or too sharp
-- Smart chip graphic has no physical depth or light reflection — looks pasted
-- QR code or barcode looks vector-drawn (too perfect, no print grain)
-- Card appears to float with a drop-shadow (this is a digital mockup)
-- Phone UI elements visible: status bar, battery icon, time display, nav buttons
-
-═══════════════════════════════════════
-STEP 2 — SCREENSHOT / SCREEN DETECTION
-═══════════════════════════════════════
-Immediately return is_id_card: false if:
-- You can see a phone/browser/app interface around the card
-- There is a moiré pattern (wavy interference lines from photographing a screen)
-- The image has the flat, backlit look of a screen rather than a physical object
-- Pixel density looks uniform and digital rather than having print grain
-
-═══════════════════════════════════════
-STEP 3 — DOCUMENT TYPE CHECK
-═══════════════════════════════════════
-Reject if it is NOT a college/university/school/institution ID card:
-- Handwritten notes, printed paper documents, receipts → reject
-- Aadhaar, PAN, driving license, voter ID → reject (not institutional)
-- Random selfie or photo of a person with no card → reject
-- Business cards, corporate employee badges, gym/club memberships → reject strictly
-
-Accept:
-- College / university / polytechnic / institute / school student ID
-- Staff/faculty ID from an educational institution
-
-═══════════════════════════════════════
-STEP 4 — EXPIRY CHECK
-═══════════════════════════════════════
-Current year: ${currentYear}
-
-- If card shows explicit expiry date (e.g., "Valid Until: Dec 2023") and it is past → REJECT
-- If card shows academic batch/year range (e.g., "2019-2023") and end year < ${currentYear} → REJECT
-- If card shows "Valid Upto: [Month] [Year]" and that date is past → REJECT
-- If no date is present on a student card → ACCEPT with confidence: "low"
-- Staff/faculty cards with no expiry → ACCEPT
-
-═══════════════════════════════════════
-STEP 5 — INSTITUTION VALIDITY
-═══════════════════════════════════════
-- Extract the institution name exactly as printed
-- Determine if this is a real, recognized Indian college, university, or institute
-- Consider: IITs, NITs, state universities, autonomous colleges, deemed universities, 
-  polytechnics, affiliated colleges under UGC/AICTE
-- If the institution name appears fabricated, misspelled, or unverifiable → set is_valid_college: false
-
-═══════════════════════════════════════
-IMPORTANT BEHAVIORAL INSTRUCTIONS
-═══════════════════════════════════════
-- Be SKEPTICAL. When in doubt, reject.
-- A card that looks "too perfect" — no glare, no shadow, no wear — is MORE suspicious, not less.
-- Do NOT be fooled by presence of logos, QR codes, or chips. These are trivial to add digitally.
-- Do NOT use text content alone to judge authenticity. Focus on PHYSICAL FORENSIC signals.
-- The reason field must specifically name which physical signals were present or absent.
-
-Return ONLY raw JSON, no markdown, no explanation outside the JSON:
+Return ONLY raw JSON, no markdown, no explanation outside the JSON. The JSON schema must strictly match:
 {
-  "is_id_card": true or false,
-  "is_valid_college": true or false,
-  "college": "string or null",
-  "confidence": "high | medium | low",
-  "physical_signals_detected": ["list", "of", "specific", "physical", "traits", "observed"],
-  "red_flags": ["list", "of", "any", "suspicious", "elements", "or", "empty", "array"],
-  "reason": "2-3 sentence forensic summary of why accepted or rejected."
+  "is_educational_id": boolean,
+  "is_physically_real": boolean,
+  "is_legitimate_institution": boolean,
+  "institution_name": "string or null",
+  "expiry_date": "string or null",
+  "batch_validity": "string or null",
+  "confidence_score": "high | medium | low"
 }`;
 
     let geminiResult = null;
+
+    const REJECTION_MESSAGE = 'The uploaded ID could not be verified as a valid educational institution ID. Please upload a clear image of an original physical ID card.';
 
     try {
       const response = await ai.models.generateContent({
@@ -256,43 +211,44 @@ Return ONLY raw JSON, no markdown, no explanation outside the JSON:
         is_valid_college: false,
         college: null,
         verdict: 'REVIEW',
-        rejection_reason: 'The id is not found to be valid',
+        rejection_reason: REJECTION_MESSAGE,
         source: 'gemini',
       });
     }
 
-    // ── STEP 2: Early reject if not a valid ID card ──────────────
-    if (!geminiResult.is_id_card) {
-      return res.json({
-        is_id_card: false,
-        is_valid_college: false,
-        college: null,
-        verdict: 'REJECTED',
-        rejection_reason: 'The id is not found to be valid',
-        source: 'gemini',
-      });
+    // ── STEP 2: Backend Logic Validation ───────────────────────────────────
+    let isExpired = false;
+
+    // Check expiry
+    if (geminiResult.expiry_date) {
+      // Very basic heuristic check for expiry date
+      const matchYear = geminiResult.expiry_date.match(/\b(20\d{2})\b/);
+      if (matchYear && parseInt(matchYear[1]) < currentYear) {
+        isExpired = true;
+      }
+    }
+    
+    if (geminiResult.batch_validity) {
+      const matchRange = geminiResult.batch_validity.match(/\b(20\d{2})\s*[-–]\s*(20\d{2})\b/);
+      if (matchRange && parseInt(matchRange[2]) < currentYear) {
+        isExpired = true;
+      }
     }
 
-    // ── STEP 3: Validate college via LLM (sole source of truth) ──
-    const isValidCollege = geminiResult.is_valid_college === true;
+    const isValid = 
+      geminiResult.is_educational_id === true &&
+      geminiResult.is_physically_real === true &&
+      geminiResult.is_legitimate_institution === true &&
+      geminiResult.confidence_score !== 'low' &&
+      !isExpired;
 
-    // ── STEP 4: Build verdict ────────────────────────────────────
-    const checks = {
-      is_id_card:       true, // already passed step 2
-      is_valid_college: isValidCollege,
-    };
-
-    let verdict = 'APPROVED';
-    let rejection_reason = null;
-
-    if (!checks.is_valid_college) {
-      verdict = 'REJECTED';
-      rejection_reason = 'The id is not found to be valid';
-    }
+    let verdict = isValid ? 'APPROVED' : 'REJECTED';
+    let rejection_reason = isValid ? null : REJECTION_MESSAGE;
 
     return res.json({
-      ...checks,
-      college: geminiResult.college || null,
+      is_id_card: geminiResult.is_educational_id,
+      is_valid_college: geminiResult.is_legitimate_institution,
+      college: geminiResult.institution_name || null,
       verdict,
       rejection_reason,
       source: 'gemini',
@@ -309,7 +265,21 @@ Return ONLY raw JSON, no markdown, no explanation outside the JSON:
 // ─────────────────────────────────────────────
 // POST /api/auth/register
 // ─────────────────────────────────────────────
-router.post('/register', upload.single('idCard'), async (req, res) => {
+const registerSchema = Joi.object({
+  fullName: Joi.string().required(),
+  email: Joi.string().email().required(),
+  phone: Joi.string().required(),
+  userType: Joi.string().valid('student', 'working').required(),
+  collegeName: Joi.string().allow('', null),
+  course: Joi.string().allow('', null),
+  year: Joi.string().allow('', null),
+  domain: Joi.string().allow('', null),
+  organization: Joi.string().allow('', null),
+  heardFrom: Joi.string().required(),
+  referralCode: Joi.string().allow('', null)
+});
+
+router.post('/register', upload.single('idCard'), validate(registerSchema), async (req, res) => {
   try {
     const {
       fullName,
@@ -343,21 +313,17 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
       return res.status(409).json({ error: 'User already exists.' });
     }
 
-    // Waitlist Logic: If 1000 or more users already exist, new users go to waitlist
+    // Waitlist Logic: Use the dynamic registrationCap from Settings
+    const settings = await Settings.getSingleton();
     const userCount = await User.countDocuments();
-    const isWaitlisted = userCount >= 1000;
+    const isWaitlisted = userCount >= (settings.registrationCap || 1000);
 
-    const REFERRAL_MAP = {
-      gkt01: 'gkt01 - Chetana N',
-      gkt02: 'gkt02 - Dinesh T',
-      gkt03: 'gkt03 - Indupriyadarshini V',
-      gkt04: 'gkt04 - Balaji B',
-      gkt05: 'gkt05 - Unassigned',
-    };
-
+    // Referral code resolution from DB (fall back to raw code if not found)
     let mappedReferral = null;
     if (referralCode) {
-      mappedReferral = REFERRAL_MAP[referralCode.toLowerCase()] || referralCode;
+      const activeReferrals = settings.referralCodes.filter(r => r.isActive);
+      const match = activeReferrals.find(r => r.code === referralCode.toLowerCase());
+      mappedReferral = match ? match.label : referralCode;
     }
 
     // Build user object
@@ -422,7 +388,11 @@ router.post('/register', upload.single('idCard'), async (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/auth/send-otp
 // ─────────────────────────────────────────────
-router.post('/send-otp', async (req, res) => {
+const sendOtpSchema = Joi.object({
+  email: Joi.string().email().required()
+});
+
+router.post('/send-otp', validate(sendOtpSchema), async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required.' });
@@ -448,13 +418,23 @@ router.post('/send-otp', async (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/auth/verify-otp
 // ─────────────────────────────────────────────
-router.post('/verify-otp', async (req, res) => {
+const verifyOtpSchema = Joi.object({
+  email: Joi.string().email().required(),
+  otp: Joi.string().length(6).required()
+});
+
+router.post('/verify-otp', validate(verifyOtpSchema), async (req, res) => {
   try {
     const { email, otp } = req.body;
     if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required.' });
 
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    // Block login for deactivated accounts
+    if (user.isActive === false) {
+      return res.status(403).json({ error: 'Your account has been deactivated. Please contact support.' });
+    }
 
     const valid = await user.verifyOtp(otp);
     if (!valid) {
@@ -527,7 +507,16 @@ router.get('/me', authMiddleware, async (req, res) => {
 });
 
 // ─── SUBMIT FEEDBACK ───────────────────────────────────────────
-router.post('/feedback', authMiddleware, async (req, res) => {
+const feedbackSchema = Joi.object({
+  feedback: Joi.array().items(
+    Joi.object({
+      session: Joi.string().required(),
+      text: Joi.string().required()
+    })
+  ).min(1).required()
+});
+
+router.post('/feedback', authMiddleware, validate(feedbackSchema), async (req, res) => {
   try {
     const { feedback } = req.body;
     if (!feedback || !Array.isArray(feedback) || feedback.length === 0) {

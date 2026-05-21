@@ -359,7 +359,7 @@ async function sendDay2ReminderEmail(user, eventName, meetingLink) {
           <p>by Global Knowledge Technologies</p>
         </div>
         <div class="body">
-          <h2>Get Ready for Day 2! 🚀</h2>
+          <h2>Get Ready for Day 2!</h2>
           <p>We hope you had a great experience during <strong>Day 1</strong> of the Lead with AI Workshop. Get ready for <strong>Day 2</strong>, where we'll continue exploring more exciting concepts, hands-on learning, and engaging discussions.</p>
 
           <div class="highlight-box">
@@ -387,7 +387,7 @@ async function sendDay2ReminderEmail(user, eventName, meetingLink) {
   await transporter.sendMail({
     from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
     to: user.email,
-    subject: `Get Ready for Day 2 — Lead with AI Workshop Tomorrow! 🎯`,
+    subject: `Get Ready for Day 2 — Lead with AI Workshop Tomorrow!`,
     html,
   });
 }

@@ -574,10 +574,10 @@ Background: `--color-white`. Layout: photo left, bio right.
 - Module: Module 3 — Building Products Using AI
 
 **Bio**:
-Dr. Radhika is a distinguished computer science academic and research leader with qualifications spanning MCA, ME, M.Phil., and a Ph.D. Her research interests include neural networks, image processing, data analysis, and machine learning — areas where she has guided numerous student projects and earned multiple academic recognitions. As VP Technical at GKT, she bridges research-grade thinking with practical product education, helping participants understand how AI-assisted tools actually behave under the hood.
+Radhika is a distinguished computer science academic and research leader with qualifications spanning MCA, ME, M.Phil., and a Ph.D. Her research interests include neural networks, image processing, data analysis, and machine learning — areas where she has guided numerous student projects and earned multiple academic recognitions. As VP Technical at GKT, she bridges research-grade thinking with practical product education, helping participants understand how AI-assisted tools actually behave under the hood.
 
 **What she brings**:
-Dr. Radhika leads the vibe coding and product prototyping module — translating complex technical concepts into approachable, actionable steps that participants with no engineering background can follow and apply immediately. Her teaching style is precise, patient, and deeply structured, making the most technically demanding content genuinely accessible.
+Radhika leads the vibe coding and product prototyping module — translating complex technical concepts into approachable, actionable steps that participants with no engineering background can follow and apply immediately. Her teaching style is precise, patient, and deeply structured, making the most technically demanding content genuinely accessible.
 
 **Expertise**: Neural Networks · Image Processing · Data Analysis · AI-Assisted Product Development
 

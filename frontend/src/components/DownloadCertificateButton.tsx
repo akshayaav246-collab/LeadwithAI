@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { publicAsset } from '../lib/assets';
+import { toast } from 'sonner';
 
 interface DownloadCertificateButtonProps {
   fullName: string;
@@ -118,7 +119,7 @@ export function DownloadCertificateButton({ fullName, userId }: DownloadCertific
       link.click();
     } catch (error) {
       console.error("Failed to generate certificate:", error);
-      alert("Failed to generate the certificate. Please try again later.");
+      toast.error("Failed to generate the certificate. Please try again later.");
     } finally {
       setIsGenerating(false);
     }

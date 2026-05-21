@@ -4,7 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const authRoutes = require('./src/routes/auth');
 const paymentRoutes = require('./src/routes/payment');
 const adminRoutes = require('./src/routes/admin');
@@ -27,36 +27,73 @@ app.use(cors({
   origin: "*",
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 // Serve uploaded files (student ID cards)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // --- Rate Limiters --------------------------
-// Limits OTP send requests: max 5 per IP per 15 minutes
+// Limits OTP send requests: max 5 per email per 15 minutes
 const otpSendLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many OTP requests from this IP. Please try again after 15 minutes.' },
+  keyGenerator: (req) => {
+    return req.body && req.body.email ? req.body.email.toLowerCase().trim() : ipKeyGenerator(req);
+  },
+  message: { error: 'Too many OTP requests for this email. Please try again after 15 minutes.' },
 });
-// Limits OTP verification attempts: max 10 per IP per 15 minutes
+// Limits OTP verification attempts: max 10 per email per 15 minutes
 const otpVerifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many verification attempts. Please try again after 15 minutes.' },
+  keyGenerator: (req) => {
+    return req.body && req.body.email ? req.body.email.toLowerCase().trim() : ipKeyGenerator(req);
+  },
+  message: { error: 'Too many verification attempts for this email. Please try again after 15 minutes.' },
 });
-// Limits registrations: max 3 per IP per hour
+// Limits registrations: max 5 per email per hour
 const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 3,
+  windowMs: 15 * 60 * 1000,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many registration attempts from this IP. Please try again after an hour.' },
+  keyGenerator: (req) => {
+    return req.body && req.body.email ? req.body.email.toLowerCase().trim() : ipKeyGenerator(req);
+  },
+  message: { error: 'Too many registration attempts for this email. Please try again after an hour.' },
 });
 // --- Routes ---------------------------------
+
+// Maintenance Middleware (Intercepts all except /api/admin, /api/health, and /api/public/settings)
+app.use(async (req, res, next) => {
+  if (
+    req.path.startsWith('/api/admin') || 
+    req.path.startsWith('/api/health') || 
+    req.path.startsWith('/api/public/settings') ||
+    req.path.startsWith('/uploads')
+  ) {
+    return next();
+  }
+  
+  try {
+    const Settings = require('./src/models/Settings');
+    const settings = await Settings.findOne();
+    if (settings && settings.isMaintenanceMode) {
+      return res.status(503).json({ error: 'Service is currently under maintenance. Please try again later.', isMaintenanceMode: true });
+    }
+  } catch (err) {
+    console.error('Maintenance check error:', err);
+  }
+  next();
+});
+
 app.use('/api/auth/send-otp', otpSendLimiter);
 app.use('/api/auth/send-register-otp', otpSendLimiter);
 app.use('/api/auth/verify-otp', otpVerifyLimiter);
@@ -161,16 +198,51 @@ function scheduleReminderEmails() {
   console.log('✓ Day 2 reminder cron scheduled (6:30 PM IST on May 30th)');
 }
 // --- MongoDB + Start Server ------------------
-mongoose
-  .connect(process.env.MONGO_URI, { dbName: process.env.MONGO_DB_NAME })
-  .then(() => {
-    console.log('Connected to MongoDB');
-    app.listen(PORT, () => {
-      console.log(`Backend running on http://localhost:${PORT}`);
-    });
-    scheduleReminderEmails();
-  })
-  .catch((err) => {
-    console.error('MongoDB connection failed:', err.message);
-    process.exit(1);
-  });
+mongoose.connection.on('disconnected', () => {
+  console.warn('MongoDB disconnected. Mongoose will attempt to auto-reconnect...');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB runtime error:', err.message);
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('MongoDB successfully reconnected!');
+});
+
+const connectDB = async (retries = 5, delayMs = 5000) => {
+  while (retries > 0) {
+    try {
+      await mongoose.connect(process.env.MONGO_URI, { dbName: process.env.MONGO_DB_NAME });
+      console.log('Connected to MongoDB');
+      
+      // Drop obsolete collegedomains collection if it exists
+      try {
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections({ name: 'collegedomains' }).toArray();
+        if (collections.length > 0) {
+          await db.dropCollection('collegedomains');
+          console.log('✓ Dropped obsolete collegedomains collection');
+        }
+      } catch (dropErr) {
+        console.warn('Failed to drop obsolete collegedomains collection:', dropErr.message);
+      }
+
+      app.listen(PORT, () => {
+        console.log(`Backend running on http://localhost:${PORT}`);
+      });
+      scheduleReminderEmails();
+      return; // Exit loop on success
+    } catch (err) {
+      console.error(`MongoDB connection failed. Retries left: ${retries - 1}`, err.message);
+      retries -= 1;
+      if (retries === 0) {
+        console.error('All retries exhausted. Exiting process.');
+        process.exit(1);
+      }
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+};
+
+connectDB();

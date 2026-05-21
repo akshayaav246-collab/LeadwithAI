@@ -57,6 +57,14 @@ body {
 }
 
 /* Scroll Animation Classes */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
 .scroll-fade-up {
   opacity: 0;
   transform: translateY(30px);
@@ -2131,7 +2139,7 @@ footer span {
 /* Soft informational hint (e.g. domain restriction warning) */
 .field-hint {
   color: var(--color-umber);
-  font-size: 0.83rem;
+  font-size: 1 rem;
   margin-top: 0.4rem;
   display: flex;
   align-items: center;

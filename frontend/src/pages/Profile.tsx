@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth, type RegisteredEvent } from '@/context/AuthContext';
 import * as api from '@/lib/api';
-import { DownloadCertificateButton } from '@/components/DownloadCertificateButton';
+import { toast } from 'sonner';
+
+const DownloadCertificateButton = lazy(() =>
+  import('@/components/DownloadCertificateButton').then(m => ({ default: m.DownloadCertificateButton }))
+);
 
 export function Profile() {
   const { user, token, logout, updateUser } = useAuth();
@@ -127,7 +131,7 @@ export function Profile() {
 
   async function handleFeedbackSubmit() {
     if (feedbackData.some(f => !f.text.trim())) {
-      alert('Please provide text feedback for all 4 sessions.');
+      toast.error('Please provide text feedback for all 4 sessions.');
       return;
     }
     setIsSubmittingFeedback(true);
@@ -137,7 +141,7 @@ export function Profile() {
       updateUser(freshUser);
       setIsFeedbackModalOpen(false);
     } catch (err: any) {
-      alert(err.message || 'Failed to submit feedback.');
+      toast.error(err.message || 'Failed to submit feedback.');
     } finally {
       setIsSubmittingFeedback(false);
     }
@@ -267,13 +271,15 @@ export function Profile() {
                     <div className="ticket-card-right">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <span
-                          className={`ticket-badge badge-${evt.paymentStatus}`}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          className={`ticket-badge badge-${(user as any).isWaitlisted ? 'waitlisted' : evt.paymentStatus}`}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: (user as any).isWaitlisted ? 'rgba(107, 114, 128, 0.1)' : undefined, color: (user as any).isWaitlisted ? '#4b5563' : undefined, border: (user as any).isWaitlisted ? '1px solid rgba(107, 114, 128, 0.2)' : undefined }}
                         >
                           {evt.paymentStatus === 'confirmed' ? (
                             <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>Payment Completed</>
                           ) : evt.paymentStatus === 'failed' ? (
                             <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Payment Failed</>
+                          ) : (user as any).isWaitlisted ? (
+                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Waitlisted</>
                           ) : (
                             <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Payment Pending</>
                           )}
@@ -304,8 +310,13 @@ export function Profile() {
                           </a>
                         )}
                       </div>
-                      {evt.paymentStatus === 'pending' && (
+                      {evt.paymentStatus === 'pending' && !(user as any).isWaitlisted && (
                         <button className="btn-primary" onClick={handlePayNow} style={{ marginTop: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'inline-block' }}>Complete Payment →</button>
+                      )}
+                      {(user as any).isWaitlisted && evt.paymentStatus !== 'confirmed' && (
+                        <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--color-stone)', background: '#f9fafb', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                          You have been successfully registered! Updates for the upcoming session will be sent soon by email.
+                        </p>
                       )}
                     </div>
                   </div>
@@ -325,12 +336,21 @@ export function Profile() {
               </div>
               
               {(user as any).isFeedbackSubmitted ? (
-                <div style={{ padding: '1.25rem 1.5rem' }}>
-                  <DownloadCertificateButton fullName={user.fullName} userId={user.id || (user as any)._id} />
-                  <h3 style={{ margin: '1rem 0 0.25rem 0', color: 'var(--color-umber)', fontSize: '1rem' }}>Feedback Completed</h3>
-                  <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--color-stone)' }}>
+                <div style={{ padding: '1.25rem 1.5rem 1.75rem 1.5rem' }}>
+                  <h3 style={{ margin: '0 0 0.25rem 0', color: 'var(--color-umber)', fontSize: '1rem' }}>Feedback Completed</h3>
+                  <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.88rem', color: 'var(--color-stone)' }}>
                     Thank you for your valuable feedback!
                   </p>
+                  <Suspense fallback={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 0', color: 'var(--color-stone)', fontSize: '0.88rem' }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin-slow 2s linear infinite', color: '#C4956A' }}>
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                      </svg>
+                      Preparing Certificate Button...
+                    </div>
+                  }>
+                    <DownloadCertificateButton fullName={user.fullName} userId={user.id || (user as any)._id} />
+                  </Suspense>
                 </div>
               ) : (
                 !feedbackEnabled ? (

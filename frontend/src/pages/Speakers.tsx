@@ -31,11 +31,11 @@ const SPEAKERS: Speaker[] = [
   },
   {
     initials: "RS",
-    name: "Dr. Radhika S",
+    name: "Radhika S",
     role: "VP Technical",
     module: "Module 2: Building Personalised AI Agents",
     moduleLabel: "MODULE 2 · BUILDING PERSONALISED AI AGENTS",
-    bio: "Dr. Radhika is a distinguished computer science academic and research leader holding MCA, ME, M.Phil., and a Ph.D. As VP Technical at GKT, she bridges research-grade thinking with practical product education for participants from any background.",
+    bio: "Radhika is a distinguished computer science academic and research leader holding MCA, ME, M.Phil., and a Ph.D. As VP Technical at GKT, she bridges research-grade thinking with practical product education for participants from any background.",
     imageUrl: publicAsset("radhika mam.jpg"),
     linkedin: "https://www.linkedin.com/in/dr-s-radhika-pandiyan-8b263116/",
     highlights: [
@@ -46,7 +46,7 @@ const SPEAKERS: Speaker[] = [
   },
   {
     initials: "PD",
-    name: "Peter Darius",
+    name: "Peter Mike Darius",
     role: "AI Technology Leader",
     module: "Module 3: Building Products Using AI",
     moduleLabel: "MODULE 3 · BUILDING PRODUCTS USING AI",

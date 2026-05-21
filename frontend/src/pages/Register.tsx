@@ -252,7 +252,7 @@ export function Register() {
         newErrors.idCard = 'Please upload your College ID Card.';
       } else if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
         // LLM validation result only blocks non-institutional users
-        newErrors.idCard = 'The ID card is not found to be valid. Please upload a valid ID.';
+        newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
       } else if (!isInstitutionalEmail && isScanningId) {
         newErrors.idCard = 'Please wait — your ID card is being validated.';
       }
@@ -629,14 +629,14 @@ export function Register() {
                     {userType === 'student' && (
                       <div className="reg-conditional-fields">
                         {/* ── ID Card section (always visible) ── */}
-                        <div className="register-field" style={{ marginBottom: '1.5rem' }}>
+                        <div className="register-field">
 
 
                           <label htmlFor="reg-idcard">
-                            College ID Card *
+                            College Id card *
                             {isScanningId && (
                               <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
                                 Validating...
                               </span>
                             )}
@@ -651,7 +651,7 @@ export function Register() {
                               ref={fileInputRef}
                               id="reg-idcard"
                               type="file"
-                              accept=".jpg,.jpeg,.png,.pdf"
+                              accept=".pdf"
                               style={{ display: 'none' }}
                               onChange={async (e: ChangeEvent<HTMLInputElement>) => {
                                 const f = e.target.files?.[0] || null;
@@ -670,7 +670,7 @@ export function Register() {
                                     if (parsed.verdict === 'APPROVED') {
                                       setIdRejectionReason('');
                                     } else if (parsed.verdict === 'REJECTED') {
-                                      setIdRejectionReason('The ID card is not found to be valid.');
+                                      setIdRejectionReason(parsed.rejection_reason || 'The ID card is not found to be valid.');
                                     } else {
                                       setIdRejectionReason('');
                                     }
@@ -692,9 +692,13 @@ export function Register() {
                             ) : (
                               <span className="upload-placeholder">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                Upload ID Card (JPG / PNG / PDF)
+                                PDF only(max. 5MB)
                               </span>
                             )}
+                          </div>
+                          
+                          <div style={{ marginTop: '0.5rem', fontSize: '0.95rem', fontWeight: '500', color: 'var(--color-stone)' }}>
+                            Single PDF containing both sides of the ID card.
                           </div>
 
                           {/* Inline validation feedback for non-institutional */}
@@ -710,7 +714,7 @@ export function Register() {
                                 <div className="id-rejected-block">
                                   <div className="id-verdict-line">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                    <span>The ID is not found to be valid.</span>
+                                    <span>ID Verification Failed.</span>
                                   </div>
                                   <div className="id-rejected-hint">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -758,7 +762,7 @@ export function Register() {
                             {errors.course && <div className="field-error">{errors.course}</div>}
                           </div>
                         </div>
-                        <div className="register-field" style={{ marginTop: '1.5rem' }}>
+                        <div className="register-field">
                           <label htmlFor="reg-year">Year *</label>
                           <select
                             id="reg-year"
@@ -815,8 +819,8 @@ export function Register() {
                     )}
 
                     {/* How did you hear about us? */}
-                    <div className="register-field" style={{ marginTop: '1.5rem' }}>
-                      <label htmlFor="reg-heardFrom">How did you get to know about this? *</label>
+                    <div className="register-field">
+                      <label htmlFor="reg-heardFrom">How did you hear about us? *</label>
                       <select
                         id="reg-heardFrom"
                         value={heardFrom}

@@ -1,13 +1,16 @@
-/* ───────────────────────────────────────────────────────────── */
-/* ADMIN DASHBOARD STYLES — POLISHED EDITION                   */
-/* ───────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-/* ── Layout ─────────────────────────────────────────────────── */
-.admin-layout {
+.admin-layout,
+.admin-layout *,
+.admin-login-container,
+.admin-login-container *:not(h2) {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+.admin-layout, .admin-login-container {
   display: flex;
   min-height: 100vh;
   background-color: #F5F0E8;
-  font-family: var(--font-body);
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
@@ -75,9 +78,21 @@
 }
 
 /* status badges on table */
-.admin-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 20px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em; }
-.admin-badge.success { background: rgba(34,197,94,0.12); color: #16a34a; border: 1px solid rgba(34,197,94,0.25); }
-.admin-badge.warning { background: rgba(245,158,11,0.12); color: #b45309; border: 1px solid rgba(245,158,11,0.25); }
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.admin-badge.success { background: rgba(34,197,94,0.1); color: #16a34a; border: 1px solid rgba(34,197,94,0.2); }
+.admin-badge.warning { background: rgba(245,158,11,0.1); color: #b45309; border: 1px solid rgba(245,158,11,0.2); }
+.admin-badge.danger { background: rgba(239,68,68,0.1); color: #dc2626; border: 1px solid rgba(239,68,68,0.2); }
 
 /* ── Nav ─────────────────────────────────────────────────────── */
 .admin-nav {
@@ -93,7 +108,8 @@
   background: transparent;
   border: none;
   text-align: left;
-  font-size: 0.97rem;
+  font-size: 1.05rem;
+  font-weight: 600;
   color: #5a4a3a;
   font-family: inherit;
   cursor: pointer;
@@ -259,13 +275,13 @@
 }
 
 .admin-table th {
-  padding: 1rem 1.4rem;
+  padding: 1.1rem 1.4rem;
   background: #FAF7F2;
-  color: #8C7B6B;
-  font-weight: 600;
-  font-size: 0.82rem;
+  color: #5a4a3a;
+  font-weight: 700;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   border-bottom: 2px solid #E2D9CC;
 }
 
@@ -351,7 +367,10 @@
   margin-bottom: 0.5rem;
   color: #3B2F2F;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: sans-serif;
 }
 
 .admin-form input[type="text"],
@@ -458,7 +477,8 @@
   margin-top: 0;
   margin-bottom: 2rem;
   text-align: center;
-  font-family: var(--font-heading);
+  font-family: Georgia, serif;
+  font-size: 26px;
 }
 
 .admin-login-card .form-group {
@@ -470,7 +490,10 @@
   margin-bottom: 0.5rem;
   color: #3B2F2F;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: sans-serif;
 }
 
 .admin-login-card input {
@@ -534,4 +557,29 @@
   .admin-main { padding: 1.5rem; }
   .admin-controls { flex-direction: column; }
   .admin-stats-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Custom Typography Helper Classes ── */
+.admin-row-name {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: #2A1F14 !important;
+}
+
+.admin-supporting-info {
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  color: #5a4a3a !important;
+}
+
+/* Override all inputs and buttons text size to 16px with bold weight for high clarity */
+.admin-form input,
+.admin-login-card input,
+.admin-search-input,
+.admin-select,
+.admin-textarea,
+.btn-primary,
+.admin-logout-btn {
+  font-size: 16px !important;
+  font-weight: 600 !important;
 }

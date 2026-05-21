@@ -90,7 +90,7 @@ export function Home() {
               <p className="schedule-desc">
                 Create a writing bot that sounds like you, map your first agentic workflow, and learn how to delegate repeatable tasks to AI.
               </p>
-              <div className="schedule-led">Led by <strong>Dr. Radhika S</strong><br/>VP Technical</div>
+              <div className="schedule-led">Led by <strong>Radhika S</strong><br/>VP Technical</div>
             </article>
 
             <article className="schedule-col">
@@ -104,7 +104,7 @@ export function Home() {
               <p className="schedule-desc">
                 Go from idea to functional prototype using vibe coding and no-code AI platforms, no software engineering background required.
               </p>
-              <div className="schedule-led">Led by <strong>Peter Darius</strong><br/>AI Technology Leader</div>
+              <div className="schedule-led">Led by <strong>Peter Mike Darius</strong><br/>AI Technology Leader</div>
             </article>
 
             <article className="schedule-col">

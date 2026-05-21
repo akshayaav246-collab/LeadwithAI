@@ -10,6 +10,16 @@ const registeredEventSchema = new mongoose.Schema({
     enum: ['pending', 'confirmed', 'failed'],
     default: 'pending',
   },
+  zoomRegistrationStatus: {
+    type: String,
+    enum: ['pending', 'success', 'failed'],
+    default: 'pending',
+  },
+  emailConfirmationStatus: {
+    type: String,
+    enum: ['pending', 'success', 'failed'],
+    default: 'pending',
+  },
   zoomJoinUrl: { type: String },
   registeredAt: { type: Date, default: Date.now },
 });
@@ -38,6 +48,7 @@ const userSchema = new mongoose.Schema(
     // Registration metadata
     heardFrom: { type: String, required: true },
     isWaitlisted: { type: Boolean, default: false },
+    isActive: { type: Boolean, default: true },
     referralCode: { type: String, default: null },
 
     // Feedback for the 4 sessions

@@ -5,6 +5,8 @@ const User = require('../models/User');
 const { sendPaymentConfirmationEmail } = require('../utils/email');
 const { registerForWebinar } = require('../utils/zoom');
 const authMiddleware = require('../middleware/auth');
+const Joi = require('joi');
+const validate = require('../middleware/validate');
 
 const router = express.Router();
 
@@ -77,13 +79,15 @@ router.post('/create-order', authMiddleware, async (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/payment/verify  (protected)
 // ─────────────────────────────────────────────
-router.post('/verify', authMiddleware, async (req, res) => {
+const verifyPaymentSchema = Joi.object({
+  razorpay_order_id: Joi.string().required(),
+  razorpay_payment_id: Joi.string().required(),
+  razorpay_signature: Joi.string().required()
+});
+
+router.post('/verify', authMiddleware, validate(verifyPaymentSchema), async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ error: 'Missing payment details.' });
-    }
 
     // Verify signature
     const expectedSignature = crypto
@@ -115,8 +119,10 @@ router.post('/verify', authMiddleware, async (req, res) => {
           lastNameParts.join(' ')
         );
         eventEntry.zoomJoinUrl = joinUrl;
+        eventEntry.zoomRegistrationStatus = 'success';
       } catch (zoomErr) {
         console.error('Failed to register user to Zoom during payment verify:', zoomErr);
+        eventEntry.zoomRegistrationStatus = 'failed';
         // We do not fail the payment verification if Zoom fails, we just log it
       }
 
@@ -124,9 +130,20 @@ router.post('/verify', authMiddleware, async (req, res) => {
     }
 
     // Send payment confirmation email (non-blocking)
-    sendPaymentConfirmationEmail(user, EVENT_NAME, razorpay_payment_id, eventEntry?.zoomJoinUrl).catch((err) =>
-      console.error('Payment email error:', err)
-    ); 
+    sendPaymentConfirmationEmail(user, EVENT_NAME, razorpay_payment_id, eventEntry?.zoomJoinUrl)
+      .then(async () => {
+        if (eventEntry) {
+          eventEntry.emailConfirmationStatus = 'success';
+          await user.save();
+        }
+      })
+      .catch(async (err) => {
+        console.error('Payment email error:', err);
+        if (eventEntry) {
+          eventEntry.emailConfirmationStatus = 'failed';
+          await user.save();
+        }
+      }); 
 
     return res.json({
       message: 'Payment verified and confirmed!',
@@ -135,6 +152,95 @@ router.post('/verify', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Verify payment error:', err);
     res.status(500).json({ error: 'Server error during verification.' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/payment/webhook (Razorpay Webhook)
+// ─────────────────────────────────────────────
+router.post('/webhook', async (req, res) => {
+  try {
+    const signature = req.headers['x-razorpay-signature'];
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
+
+    if (!signature || !req.rawBody) {
+      return res.status(400).send('Bad Request: Missing signature or body');
+    }
+
+    // Verify signature
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(req.rawBody)
+      .digest('hex');
+
+    if (expectedSignature !== signature) {
+      return res.status(400).send('Invalid signature');
+    }
+
+    const payload = req.body;
+    
+    // We only care about payment.captured or order.paid
+    if (payload.event === 'payment.captured' || payload.event === 'order.paid') {
+      const paymentEntity = payload.event === 'payment.captured' ? payload.payload.payment.entity : null;
+      const orderEntity = payload.event === 'order.paid' ? payload.payload.order.entity : null;
+      
+      const orderId = paymentEntity?.order_id || orderEntity?.id;
+      const paymentId = paymentEntity?.id || null;
+      
+      if (!orderId) {
+        return res.status(200).send('OK: Missing orderId in payload');
+      }
+
+      // Find user with this pending order
+      const user = await User.findOne({
+        'registeredEvents.razorpayOrderId': orderId
+      });
+
+      if (!user) {
+        return res.status(200).send('OK: User not found for this order');
+      }
+
+      const eventEntry = user.registeredEvents.find(e => e.razorpayOrderId === orderId);
+      
+      // If already confirmed (e.g. by client verification), just return 200
+      if (eventEntry.paymentStatus === 'confirmed') {
+        return res.status(200).send('OK: Already confirmed');
+      }
+
+      // Confirm payment
+      eventEntry.paymentStatus = 'confirmed';
+      if (paymentId) eventEntry.razorpayPaymentId = paymentId;
+
+      // Register for Zoom
+      try {
+        const [firstName, ...lastNameParts] = user.fullName.split(' ');
+        const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '));
+        eventEntry.zoomJoinUrl = joinUrl;
+        eventEntry.zoomRegistrationStatus = 'success';
+      } catch (zoomErr) {
+        console.error('Webhook Zoom Registration failed:', zoomErr);
+        eventEntry.zoomRegistrationStatus = 'failed';
+      }
+
+      await user.save();
+
+      // Send Email
+      sendPaymentConfirmationEmail(user, EVENT_NAME, paymentId || eventEntry.razorpayPaymentId, eventEntry.zoomJoinUrl)
+        .then(async () => {
+          eventEntry.emailConfirmationStatus = 'success';
+          await user.save();
+        })
+        .catch(async (err) => {
+          console.error('Webhook Email Registration failed:', err);
+          eventEntry.emailConfirmationStatus = 'failed';
+          await user.save();
+        });
+    }
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('Webhook processing error:', err);
+    res.status(500).send('Internal Server Error');
   }
 });
 

@@ -65,6 +65,9 @@ export function AdminEmail() {
             >
               <option value="all">All Registered Users</option>
               <option value="paid">Paid Users Only</option>
+              <option value="unpaid">Unpaid Users (Registered, Not Paid)</option>
+              <option value="waitlisted">Waitlisted Users</option>
+              <option value="first1000">First 1000 Registered Users</option>
               <option value="custom">Custom Email List</option>
             </select>
           </div>
