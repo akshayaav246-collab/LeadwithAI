@@ -81,7 +81,10 @@ export function AdminSettings() {
 
   const handleUpdateCap = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCap || newCap < 1) return toast.error('Invalid cap number');
+    if (!newCap || newCap < 1) {
+      toast.error('Invalid cap number');
+      return;
+    }
     try {
       const res = await updateRegistrationCap(token, Number(newCap));
       setRegistrationCap(res.registrationCap);
@@ -93,7 +96,10 @@ export function AdminSettings() {
 
   const handleAddReferral = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!refCode.trim() || !refLabel.trim()) return toast.error('Please enter both code and label.');
+    if (!refCode.trim() || !refLabel.trim()) {
+      toast.error('Please enter both code and label.');
+      return;
+    }
     try {
       const res = await addReferralCode(token, refCode.trim(), refLabel.trim());
       setReferrals(res.referralCodes);
@@ -137,7 +143,10 @@ export function AdminSettings() {
   };
 
   const handleSaveLabel = async (code: string) => {
-    if (!editingLabel.trim()) return toast.error('Label cannot be empty.');
+    if (!editingLabel.trim()) {
+      toast.error('Label cannot be empty.');
+      return;
+    }
     try {
       const res = await updateReferralLabel(token, code, editingLabel.trim());
       setReferrals(res.referralCodes);

@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import { useAuth, type RegisteredEvent } from '@/context/AuthContext';
 import * as api from '@/lib/api';
 import { toast } from 'sonner';
-import { Autocomplete } from '@/components/Autocomplete';
+
 
 const DOMAIN_OPTIONS = [
   "Information Technology (IT)",
@@ -46,14 +46,11 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
   const [heardFromOther, setHeardFromOther] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const clearError = (field: string) => setErrors(prev => ({ ...prev, [field]: '' }));
-
   const isInstitutionalEmail =
-    selectedUserType === 'student' && /\.(ac|edu)\.in$/i.test(user.email);
+    selectedUserType === 'student' && /\.(ac|edu)\.in$/i.test(user.email.trim());
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -69,10 +66,12 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
     }
 
     if (selectedUserType === 'student') {
-      if (!isInstitutionalEmail && !idFile) {
-        newErrors.idCard = 'Please upload your College ID Card PDF.';
+      if (!idFile && !user.idCardPath) {
+        newErrors.idCard = 'Please upload your College ID Card.';
       } else if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
-        newErrors.idCard = idRejectionReason || 'The ID card could not be verified.';
+        newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
+      } else if (!isInstitutionalEmail && isScanningId) {
+        newErrors.idCard = 'Please wait — your ID card is being validated.';
       }
       if (!collegeName.trim()) newErrors.collegeName = 'Please enter your college name.';
       if (!course.trim()) newErrors.course = 'Please enter your course.';
@@ -88,7 +87,8 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      const firstError = Object.values(newErrors)[0];
+      toast.error(firstError);
       return;
     }
 
@@ -122,8 +122,8 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
 
       toast.success(res.message || 'Profile completed successfully.');
       updateUser(res.user);
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     } catch (err: any) {
-      setErrors({ global: err.message || 'Failed to complete profile.' });
       toast.error(err.message || 'Failed to complete profile.');
     } finally {
       setIsSaving(false);
@@ -162,11 +162,10 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
               id="comp-phone"
               type="text"
               value={phone}
-              onChange={(e) => { setPhone(e.target.value); clearError('phone'); }}
+              onChange={(e) => setPhone(e.target.value)}
               placeholder="e.g. 9876543210"
               required
             />
-            {errors.phone && <div className="field-error">{errors.phone}</div>}
           </div>
 
           {/* Account Type Selector / Lock */}
@@ -196,9 +195,6 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                   </>
                 )}
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--color-stone)', marginTop: '0.35rem' }}>
-                This account type was pre-assigned by the administrator.
-              </p>
             </div>
           ) : (
             <div className="register-field">
@@ -230,21 +226,24 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
           {selectedUserType === 'student' && (
             <div className="reg-conditional-fields" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1.25rem' }}>
               <div className="register-field">
-                <label>College ID Card *</label>
-                {isInstitutionalEmail ? (
-                  <div className="id-institutional-badge">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                    <span>Institutional email domain detected (<em>{user.email.split('@')[1]}</em>). Physical ID upload is optional.</span>
-                  </div>
-                ) : (
+                <label htmlFor="comp-idcard">
+                  college id card *(Both sides)
+                  {isScanningId && (
+                    <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                      <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                      Validating...
+                    </span>
+                  )}
+                </label>
+                {!isInstitutionalEmail && (
                   <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
                     Please upload your physical College ID card to qualify for student pricing (₹499).
                   </p>
                 )}
                 <div
-                  className={`register-upload ${idFile ? 'has-file' : ''}`}
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60px' }}
+                  className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
+                  onClick={() => !isScanningId && fileInputRef.current?.click()}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60px', cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
                 >
                   <input
                     ref={fileInputRef}
@@ -255,7 +254,6 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                     onChange={async (e) => {
                       const f = e.target.files?.[0] || null;
                       setIdFile(f);
-                      clearError('idCard');
                       setIdVerdict(null);
                       setIdRejectionReason('');
 
@@ -266,27 +264,15 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                           setIdVerdict(parsed.verdict);
                           if (parsed.verdict === 'APPROVED') {
                             setIdRejectionReason('');
-                            if (parsed.college) setCollegeName(parsed.college);
-                            if (parsed.course) setCourse(parsed.course);
-                            if (parsed.year_of_study) {
-                              const yearMap: Record<string, string> = {
-                                '1': '1st Year',
-                                '2': '2nd Year',
-                                '3': '3rd Year',
-                                '4': '4th Year',
-                                '5': '5th Year',
-                              };
-                              const mapped = yearMap[parsed.year_of_study] || parsed.year_of_study;
-                              if (['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', 'Postgraduate'].includes(mapped)) {
-                                setYear(mapped);
-                              }
-                            }
                           } else if (parsed.verdict === 'REJECTED') {
                             setIdRejectionReason(parsed.rejection_reason || 'The ID card is not found to be valid.');
+                          } else {
+                            setIdRejectionReason('');
                           }
                         } catch (err) {
                           console.error('ID Parse Error:', err);
                           setIdVerdict('REVIEW');
+                          setIdRejectionReason('');
                         } finally {
                           setIsScanningId(false);
                         }
@@ -306,21 +292,13 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                   )}
                 </div>
 
-                {isScanningId && (
-                  <div className="id-verdict-line" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '0.5rem', color: 'var(--color-stone)', fontSize: '0.85rem' }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin-slow 2s linear infinite', color: '#C4956A' }}>
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                    </svg>
-                    Scanning ID Card with AI...
-                  </div>
-                )}
-
+                {/* Inline validation feedback for non-institutional */}
                 {!isInstitutionalEmail && idFile && !isScanningId && (
                   <>
                     {idVerdict === 'APPROVED' && (
                       <div className="id-verdict-line" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#166534', background: 'rgba(34,197,94,0.07)', padding: '0.5rem', borderRadius: '4px', border: '1px solid rgba(34,197,94,0.2)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        <span>The ID is found to be valid. Details autofilled.</span>
+                        <span>The ID is found to be valid.</span>
                       </div>
                     )}
                     {idVerdict === 'REJECTED' && (
@@ -329,28 +307,28 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                           <span>ID Verification Failed.</span>
                         </div>
-                        <div className="id-rejected-hint" style={{ fontSize: '0.85rem', color: '#ef4444', marginTop: '0.2rem' }}>
-                          {idRejectionReason || 'The ID card could not be verified.'}
+                        <div className="id-rejected-hint" style={{ fontSize: '0.85rem', color: '#ef4444', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          <span>{idRejectionReason || 'The ID card could not be verified.'}</span>
                         </div>
                       </div>
                     )}
                   </>
                 )}
-                {errors.idCard && <div className="field-error">{errors.idCard}</div>}
+
               </div>
 
               <div className="register-grid-2">
                 <div className="register-field">
                   <label htmlFor="comp-college">College Name *</label>
-                  <Autocomplete
+                  <input
                     id="comp-college"
+                    type="text"
                     value={collegeName}
-                    onChange={(val) => { setCollegeName(val); clearError('collegeName'); }}
+                    onChange={(e) => setCollegeName(e.target.value)}
                     placeholder="e.g. PSG College of Technology"
-                    fetchOptions={async (query) => (await api.getColleges(query)).colleges}
                     required
                   />
-                  {errors.collegeName && <div className="field-error">{errors.collegeName}</div>}
                 </div>
                 <div className="register-field">
                   <label htmlFor="comp-course">Course *</label>
@@ -358,11 +336,10 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                     id="comp-course"
                     type="text"
                     value={course}
-                    onChange={(e) => { setCourse(e.target.value); clearError('course'); }}
+                    onChange={(e) => setCourse(e.target.value)}
                     placeholder="e.g. B.Tech CSE"
                     required
                   />
-                  {errors.course && <div className="field-error">{errors.course}</div>}
                 </div>
               </div>
 
@@ -371,7 +348,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                 <select
                   id="comp-year"
                   value={year}
-                  onChange={(e) => { setYear(e.target.value); clearError('year'); }}
+                  onChange={(e) => setYear(e.target.value)}
                   className="register-select"
                   required
                 >
@@ -383,7 +360,6 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                   <option value="5th Year">5th Year</option>
                   <option value="Postgraduate">Postgraduate</option>
                 </select>
-                {errors.year && <div className="field-error">{errors.year}</div>}
               </div>
             </div>
           )}
@@ -396,7 +372,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                   <select
                     id="comp-domain"
                     value={domain}
-                    onChange={(e) => { setDomain(e.target.value); clearError('domain'); }}
+                    onChange={(e) => setDomain(e.target.value)}
                     className="register-select"
                     required
                   >
@@ -405,7 +381,6 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
-                  {errors.domain && <div className="field-error">{errors.domain}</div>}
                 </div>
                 <div className="register-field">
                   <label htmlFor="comp-org">Organization / Company</label>
@@ -427,7 +402,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
             <select
               id="comp-heardFrom"
               value={heardFrom}
-              onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+              onChange={(e) => setHeardFrom(e.target.value)}
               className="register-select"
               required
             >
@@ -436,7 +411,6 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
               <option value="Newspaper">Newspaper</option>
               <option value="Others">Others</option>
             </select>
-            {errors.heardFrom && <div className="field-error">{errors.heardFrom}</div>}
           </div>
 
           {heardFrom === 'Others' && (
@@ -446,15 +420,12 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                 id="comp-heardFromOther"
                 type="text"
                 value={heardFromOther}
-                onChange={(e) => { setHeardFromOther(e.target.value); clearError('heardFromOther'); }}
+                onChange={(e) => setHeardFromOther(e.target.value)}
                 placeholder="e.g. Friend, Professor, etc."
                 required
               />
-              {errors.heardFromOther && <div className="field-error">{errors.heardFromOther}</div>}
             </div>
           )}
-
-          {errors.global && <div className="register-error" role="alert" style={{ marginTop: '1rem' }}>{errors.global}</div>}
 
           {/* Submit and Logout Buttons */}
           <div style={{ marginTop: '2rem' }}>

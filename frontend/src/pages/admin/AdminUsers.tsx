@@ -62,6 +62,42 @@ function formatReferral(ref: string | null | undefined): string {
   return ref;
 }
 
+function getMissingFields(user: any) {
+  const missing: string[] = [];
+  
+  if (!user.phone || user.phone === '-' || user.phone.trim() === '') {
+    missing.push('Phone Number');
+  }
+  
+  if (!user.userType || user.userType === '-' || user.userType.trim() === '') {
+    missing.push('Account Type');
+  } else if (user.userType === 'student') {
+    if (!user.collegeName || user.collegeName === '-' || user.collegeName.trim() === '') {
+      missing.push('College Name');
+    }
+    if (!user.course || user.course === '-' || user.course.trim() === '') {
+      missing.push('Course');
+    }
+    if (!user.year || user.year === '-' || user.year.trim() === '') {
+      missing.push('Year of Study');
+    }
+    const isInstitutionalEmail = /\.(ac|edu)\.in$/i.test(user.email || '');
+    if (!isInstitutionalEmail && !user.idCardPath) {
+      missing.push('College ID Card');
+    }
+  } else if (user.userType === 'working') {
+    if (!user.domain || user.domain === '-' || user.domain.trim() === '') {
+      missing.push('Domain / Industry');
+    }
+  }
+  
+  if (!user.heardFrom || user.heardFrom === '-' || user.heardFrom.trim() === '') {
+    missing.push('How did you hear about us?');
+  }
+  
+  return missing;
+}
+
 export function AdminUsers() {
   const [users, setUsers] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -79,6 +115,7 @@ export function AdminUsers() {
   const [filterType, setFilterType] = useState('all');
   const [filterWaitlist, setFilterWaitlist] = useState('all');
   const [filterReferral, setFilterReferral] = useState('all');
+  const [filterProfile, setFilterProfile] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   
   const [referralsList, setReferralsList] = useState<any[]>([]);
@@ -136,7 +173,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterPaid, filterType, filterWaitlist, filterReferral, sortOrder]);
+  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterProfile, sortOrder]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -149,6 +186,7 @@ export function AdminUsers() {
         filterType,
         filterWaitlist,
         filterReferral,
+        filterProfile,
         sortOrder
       });
       setUsers(data.data || []);
@@ -164,7 +202,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
-  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, sortOrder, adminToken]);
+  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterProfile, sortOrder, adminToken]);
 
   const handleExportCSV = async () => {
     try {
@@ -174,6 +212,7 @@ export function AdminUsers() {
         filterType,
         filterWaitlist,
         filterReferral,
+        filterProfile,
         exportCsv: 'true',
         sortOrder
       });
@@ -188,7 +227,7 @@ export function AdminUsers() {
         'College', 'Course', 'Year',
         'Domain', 'Organization',
         'Waitlisted', 'Active', 'Heard From', 'Referral Code',
-        'Payment Status', 'Payment ID', 'Registered On'
+        'Payment Status', 'Payment ID', 'Profile Status', 'Registered On'
       ];
       const rows = exportUsers.map((u: any) => [
         `"${u.fullName}"`, `"${u.email}"`, `"${u.phone}"`, `"${u.userType}"`,
@@ -197,9 +236,10 @@ export function AdminUsers() {
         u.isWaitlisted ? 'Yes' : 'No', u.isActive ? 'Active' : 'Inactive', `"${u.heardFrom || '-'}"`, `"${u.referralCode || '-'}"`,
         u.isPaid ? 'Paid' : 'Unpaid',
         `"${u.paymentId || '-'}"`,
+        u.isProfileComplete ? 'Complete' : 'Partially Filled',
         `"${new Date(u.createdAt).toLocaleString()}"`,
       ]);
-      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const csv = [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -374,6 +414,11 @@ export function AdminUsers() {
           <option value="student">Students</option>
           <option value="working">Professionals</option>
         </select>
+        <select value={filterProfile} onChange={e => setFilterProfile(e.target.value)} className="admin-select">
+          <option value="all">All Profile Status</option>
+          <option value="complete">Complete Only</option>
+          <option value="incomplete">Partially Filled Only</option>
+        </select>
         <select value={filterWaitlist} onChange={e => setFilterWaitlist(e.target.value)} className="admin-select">
           <option value="all">All Cohorts</option>
           <option value="regular">First 1000</option>
@@ -453,6 +498,35 @@ export function AdminUsers() {
                       <td colSpan={10} style={{ background: '#FAF7F2', padding: '1.2rem 2rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: user.userType === 'student' && user.idCardPath ? '1fr 1fr 180px' : '1fr 1fr', gap: '1.5rem' }}>
                           
+                          {/* Profile completion check */}
+                          {!user.isProfileComplete && (
+                            <div style={{
+                              gridColumn: '1 / -1',
+                              background: '#fffbeb',
+                              border: '1.5px solid #fef3c7',
+                              borderRadius: '8px',
+                              padding: '1rem',
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '0.75rem',
+                              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                            }}>
+                              <div style={{ color: '#d97706', display: 'flex', alignItems: 'center', height: '20px' }}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                  <line x1="12" y1="9" x2="12" y2="13"/>
+                                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                </svg>
+                              </div>
+                              <div>
+                                <h4 style={{ margin: '0 0 0.25rem 0', color: '#92400e', fontSize: '0.92rem', fontWeight: 700 }}>Incomplete Profile Details</h4>
+                                <p style={{ margin: 0, fontSize: '0.85rem', color: '#b45309', lineHeight: '1.4' }}>
+                                  The registrant has not completed their profile yet. Missing fields: <strong style={{ color: '#92400e' }}>{getMissingFields(user).join(', ') || 'None'}</strong>.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Personal */}
                           <div>
                             <div style={{ fontWeight: 700, color: '#3B2F2F', marginBottom: '0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>

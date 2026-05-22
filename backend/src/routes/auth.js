@@ -104,7 +104,7 @@ const upload = multer({
 
 // Helper: generate JWT
 function signToken(userId) {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '30d' });
+  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 }
 
 // Helper: generate 6-digit OTP
@@ -464,7 +464,7 @@ router.post('/verify-otp', validate(verifyOtpSchema), async (req, res) => {
         heardFrom: user.heardFrom,
         isWaitlisted: user.isWaitlisted,
         registeredEvents: user.registeredEvents,
-        isProfileComplete: user.isProfileComplete !== false,
+        isProfileComplete: user.isProfileComplete,
       },
     });
   } catch (err) {
@@ -498,7 +498,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         registeredEvents: user.registeredEvents,
         isFeedbackSubmitted: user.isFeedbackSubmitted,
         feedback: user.feedback,
-        isProfileComplete: user.isProfileComplete !== false,
+        isProfileComplete: user.isProfileComplete,
         createdAt: user.createdAt,
       },
     });
@@ -558,8 +558,7 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
         return res.status(400).json({ error: 'Missing student details (college, course, year).' });
       }
 
-      const isInstitutionalEmail = /\.(ac|edu)\.in$/i.test(user.email);
-      if (!isInstitutionalEmail && !req.file) {
+      if (!req.file && !user.idCardPath) {
         return res.status(400).json({ error: 'College ID card PDF is required.' });
       }
     } else if (userType === 'working') {
@@ -586,7 +585,6 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
     user.phone = phone.trim();
     user.userType = userType;
     user.heardFrom = finalHeardFrom;
-    user.isProfileComplete = true;
 
     if (userType === 'student') {
       user.collegeName = collegeName.trim();

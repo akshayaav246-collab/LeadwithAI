@@ -47,7 +47,6 @@ const userSchema = new mongoose.Schema(
 
     // Registration metadata
     heardFrom: { type: String },
-    isProfileComplete: { type: Boolean, default: true },
     isWaitlisted: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     referralCode: { type: String, default: null },
@@ -62,7 +61,11 @@ const userSchema = new mongoose.Schema(
     // Events booked
     registeredEvents: [registeredEventSchema],
   },
-  { timestamps: true }
+  { 
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
 
 // Hash OTP before storing
@@ -77,5 +80,9 @@ userSchema.methods.verifyOtp = async function (otpPlain) {
   if (new Date() > this.otpExpiry) return false;
   return bcrypt.compare(otpPlain, this.otpHash);
 };
+
+userSchema.virtual('isProfileComplete').get(function () {
+  return !!(this.phone && this.phone.trim());
+});
 
 module.exports = mongoose.model('User', userSchema, process.env.COLLECTION_NAME || 'users');

@@ -30,8 +30,8 @@ export function Autocomplete({ id, value, onChange, placeholder, options, fetchO
 
   // Handle async fetching
   useEffect(() => {
+    let isMounted = true;
     if (fetchOptions && isOpen) {
-      let isMounted = true;
       setLoading(true);
       fetchOptions(value).then(res => {
         if (isMounted) {
@@ -41,8 +41,8 @@ export function Autocomplete({ id, value, onChange, placeholder, options, fetchO
       }).catch(() => {
         if (isMounted) setLoading(false);
       });
-      return () => { isMounted = false; };
     }
+    return () => { isMounted = false; };
   }, [value, isOpen, fetchOptions]);
 
   // Click outside to close

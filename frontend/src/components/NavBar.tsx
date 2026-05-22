@@ -33,9 +33,7 @@ export function NavBar() {
     <nav className={scrolled ? "nav-scrolled" : ""}>
       <div className="nav-container">
         <Link href="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-          <div className="nav-logo-group">
-            <img src={publicAsset("Logo.png")} alt="Global Knowledge Technologies" className="nav-logo-img" style={{ height: '72px', width: 'auto' }} />
-          </div>
+          <img src={publicAsset("Logo.png")} alt="Global Knowledge Technologies" className="nav-logo-img" style={{ height: '72px', width: 'auto' }} />
         </Link>
         
         <div className="nav-links">

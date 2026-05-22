@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { useAuth } from '@/context/AuthContext';
 import * as api from '@/lib/api';
 import { Autocomplete } from '@/components/Autocomplete';
+import { toast } from 'sonner';
 
 const COURSE_OPTIONS = [
   "B.E. Computer Science and Engineering",
@@ -182,12 +183,12 @@ export function Register() {
             });
             setPaymentDone(true);
           } catch (err: any) {
-            setErrors({ global: err.message || 'Payment verification failed.' });
+            toast.error(err.message || 'Payment verification failed.');
           }
         },
         modal: {
           ondismiss: () => {
-            setErrors({ global: 'Payment was cancelled. You can try again from your profile.' });
+            toast.error('Payment was cancelled. You can try again from your profile.');
           },
         },
       };
@@ -195,9 +196,28 @@ export function Register() {
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err: any) {
-      setErrors({ global: err.message || 'Failed to initiate payment.' });
+      toast.error(err.message || 'Failed to initiate payment.');
     }
   }
+
+  const checkEmailVerification = () => {
+    if (email.trim() !== '' && !isEmailVerified) {
+      toast.error('Verify the email');
+      return true;
+    }
+    return false;
+  };
+
+  const handleOtherFieldFocus = (e: React.FocusEvent<any>) => {
+    if (checkEmailVerification()) {
+      e.currentTarget.blur();
+    }
+  };
+
+  const handleToggleUserType = (type: UserType) => {
+    if (checkEmailVerification()) return;
+    setUserType(type);
+  };
 
   // ─────────────────────────────────────────────────────────────
   // REGISTER OTP
@@ -205,18 +225,20 @@ export function Register() {
   const handleSendRegOtp = async () => {
     setErrors({});
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return setErrors({ email: 'Please enter a valid email before sending OTP.' });
+      toast.error('Please enter a valid email before sending OTP.');
+      return;
     }
     setVerifyLoading(true);
     try {
       await api.sendRegisterOtp(email, userType);
       setRegOtpSent(true);
+      toast.success('OTP sent please check your mail');
     } catch (err: any) {
       let msg = err.message || 'Failed to send OTP.';
       if (msg.toLowerCase().includes('rejected') || msg.toLowerCase().includes('not found')) {
         msg = 'Email address could not be found or is invalid.';
       }
-      setErrors({ email: msg });
+      toast.error(msg);
     } finally {
       setVerifyLoading(false);
     }
@@ -225,14 +247,16 @@ export function Register() {
   const handleVerifyRegOtp = async () => {
     setErrors({});
     if (!regOtp || regOtp.length !== 6) {
-      return setErrors({ otp: 'Please enter the 6-digit OTP.' });
+      toast.error('Please enter the 6-digit OTP.');
+      return;
     }
     setVerifyLoading(true);
     try {
       await api.verifyRegisterOtp(email, regOtp);
       setIsEmailVerified(true);
+      toast.success('Email verified successfully.');
     } catch (err: any) {
-      setErrors({ otp: err.message || 'Invalid OTP.' });
+      toast.error(err.message || 'Invalid OTP.');
     } finally {
       setVerifyLoading(false);
     }
@@ -245,13 +269,13 @@ export function Register() {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    if (!isEmailVerified) newErrors.email = 'Please verify your email address before registering.';
+    if (!isEmailVerified) newErrors.email = 'Verify the email';
 
     // Validation
     if (!fullName.trim()) newErrors.fullName = 'Please enter your full name.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Please enter a valid email.';
     const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
-    if (!phoneRegex.test(phone.trim())) newErrors.phone = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
+    if (!phoneRegex.test(phone.trim())) newErrors.phone = 'Please enter a valid 10-digit mobile number.';
     
     if (userType === 'student') {
       // ID card is mandatory for all students
@@ -277,7 +301,8 @@ export function Register() {
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      const firstError = Object.values(newErrors)[0];
+      toast.error(firstError);
       return;
     }
     
@@ -318,7 +343,7 @@ export function Register() {
       setRegSuccess(true);
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     } catch (err: any) {
-      setErrors({ global: err.message || 'Registration failed. Please try again.', email: err.message.includes('User already exists') ? err.message : undefined });
+      toast.error(err.message || 'Registration failed. Please try again.');
     } finally {
       setRegLoading(false);
     }
@@ -331,15 +356,17 @@ export function Register() {
     e.preventDefault();
     setErrors({});
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)) {
-      return setErrors({ loginEmail: 'Please enter a valid email address.' });
+      toast.error('Please enter a valid email address.');
+      return;
     }
     setLoginLoading(true);
     try {
       await api.sendOtp(loginEmail.trim().toLowerCase());
       setOtpSent(true);
       setOtpStep('otp');
+      toast.success('OTP sent please check your mail');
     } catch (err: any) {
-      setErrors({ loginEmail: err.message || 'Failed to send OTP.' });
+      toast.error(err.message || 'Failed to send OTP.');
     } finally {
       setLoginLoading(false);
     }
@@ -351,14 +378,17 @@ export function Register() {
   const handleVerifyOtp = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrors({});
-    if (!otp.trim() || otp.length !== 6) return setErrors({ loginOtp: 'Please enter the 6-digit OTP.' });
+    if (!otp.trim() || otp.length !== 6) {
+      toast.error('Please enter the 6-digit OTP.');
+      return;
+    }
     setLoginLoading(true);
     try {
       const { token, user } = await api.verifyOtp(loginEmail, otp);
       login(token, user);
       navigate('/profile');
     } catch (err: any) {
-      setErrors({ loginOtp: err.message || 'OTP verification failed.' });
+      toast.error(err.message || 'OTP verification failed.');
     } finally {
       setLoginLoading(false);
     }
@@ -463,7 +493,6 @@ export function Register() {
                       <>
                         <h3>Registered! Complete Payment</h3>
                         <p>Your account has been created. Please complete the <span style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}>{userType === 'student' ? '₹499' : '₹999'}</span> payment to confirm your seat.</p>
-                        {errors.global && <div className="register-error" role="alert" style={{ marginTop: '1rem' }}>{errors.global}</div>}
                         <button
                           type="button"
                           className="btn-primary"
@@ -488,11 +517,11 @@ export function Register() {
                           type="text"
                           value={fullName}
                           onChange={(e) => { setFullName(e.target.value); clearError('fullName'); }}
+                          onFocus={handleOtherFieldFocus}
                           placeholder="e.g. Anjali Menon"
                           autoComplete="name"
                           required
                         />
-                        {errors.fullName && <div className="field-error">{errors.fullName}</div>}
                       </div>
                       <div className="register-field">
                         <label htmlFor="reg-phone">Phone Number *</label>
@@ -504,15 +533,15 @@ export function Register() {
                           onBlur={(e) => {
                             const val = e.target.value.trim();
                             if (val && !/^(?:\+91[-\s]?)?[6-9]\d{9}$/.test(val)) {
-                              setErrors(prev => ({ ...prev, phone: 'Please enter a valid 10-digit mobile number.' }));
+                              toast.error('Please enter a valid 10-digit mobile number.');
                             }
                           }}
+                          onFocus={handleOtherFieldFocus}
                           placeholder="e.g. 9876543210"
                           autoComplete="tel"
                           maxLength={10}
                           required
                         />
-                        {errors.phone && <div className="field-error">{errors.phone}</div>}
                       </div>
                     </div>
 
@@ -534,7 +563,7 @@ export function Register() {
                             onBlur={(e) => {
                               const val = e.target.value.trim();
                               if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
-                                setErrors(prev => ({ ...prev, email: 'Please enter a valid email.' }));
+                                toast.error('Please enter a valid email.');
                               }
                             }}
                             placeholder="you@example.com"
@@ -560,21 +589,12 @@ export function Register() {
                           </div>
                         )}
                       </div>
-                      {errors.email && <div className="field-error">{errors.email}</div>}
-
+                      
                       {/* Friendly email hint */}
-                      {!errors.email && !isEmailVerified && (
-                        <div className="field-hint email-hint">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                          If you have a college domain email , use it.Otherwise use your personal email.
-                        </div>
-                      )}
-
-                      {regOtpSent && !isEmailVerified && !errors.email && (
-                        <div className="field-success">
-                          OTP sent! Please check your email.
-                        </div>
-                      )}
+                      <div className="field-hint email-hint">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        Students - If you have a college domain email , use it.Otherwise use your personal email.
+                      </div>
                     </div>
 
                     {regOtpSent && !isEmailVerified && (
@@ -592,7 +612,6 @@ export function Register() {
                               placeholder="6-digit OTP"
                               required
                             />
-                            {errors.otp && <div className="field-error">{errors.otp}</div>}
                           </div>
                           <button
                             type="button"
@@ -614,7 +633,7 @@ export function Register() {
                         <button
                           type="button"
                           className={`reg-toggle-btn ${userType === 'student' ? 'active' : ''}`}
-                          onClick={() => setUserType('student')}
+                          onClick={() => handleToggleUserType('student')}
                           style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M21.42 10.922a2 2 0 0 0-.019-3.838L12.83 4.34a2 2 0 0 0-1.66 0L2.6 7.08a2 2 0 0 0 0 3.832l8.57 3.698a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
@@ -623,7 +642,7 @@ export function Register() {
                         <button
                           type="button"
                           className={`reg-toggle-btn ${userType === 'working' ? 'active' : ''}`}
-                          onClick={() => setUserType('working')}
+                          onClick={() => handleToggleUserType('working')}
                           style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -637,10 +656,8 @@ export function Register() {
                       <div className="reg-conditional-fields">
                         {/* ── ID Card section (always visible) ── */}
                         <div className="register-field">
-
-
                           <label htmlFor="reg-idcard">
-                            College Id card *
+                            college id card *(Both sides)
                             {isScanningId && (
                               <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                 <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
@@ -649,9 +666,18 @@ export function Register() {
                             )}
                           </label>
 
+                          {!isInstitutionalEmail && (
+                            <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
+                              Please upload your physical College ID card to qualify for student pricing (₹499).
+                            </p>
+                          )}
+
                           <div
                             className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
-                            onClick={() => !isScanningId && fileInputRef.current?.click()}
+                            onClick={() => {
+                              if (checkEmailVerification()) return;
+                              if (!isScanningId) fileInputRef.current?.click();
+                            }}
                             style={{ cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
                           >
                             <input
@@ -704,9 +730,7 @@ export function Register() {
                             )}
                           </div>
                           
-                          <div style={{ marginTop: '0.5rem', fontSize: '0.95rem', fontWeight: '500', color: 'var(--color-stone)' }}>
-                            Single PDF containing both sides of the ID card.
-                          </div>
+                          {/* Single PDF containing both sides text removed */}
 
                           {/* Inline validation feedback for non-institutional */}
                           {!isInstitutionalEmail && idFile && !isScanningId && (
@@ -739,8 +763,6 @@ export function Register() {
                               )}
                             </>
                           )}
-
-                          {errors.idCard && <div className="field-error">{errors.idCard}</div>}
                         </div>
 
                         <div className="register-grid-2">
@@ -751,10 +773,10 @@ export function Register() {
                               type="text"
                               value={collegeName}
                               onChange={(e) => { setCollegeName(e.target.value); clearError('collegeName'); }}
+                              onFocus={handleOtherFieldFocus}
                               placeholder="e.g. PSG College of Technology"
                               required
                             />
-                            {errors.collegeName && <div className="field-error">{errors.collegeName}</div>}
                           </div>
                           <div className="register-field">
                             <label htmlFor="reg-course">Course *</label>
@@ -763,10 +785,10 @@ export function Register() {
                               type="text"
                               value={course}
                               onChange={(e) => { setCourse(e.target.value); clearError('course'); }}
+                              onFocus={handleOtherFieldFocus}
                               placeholder="e.g. B.Tech CSE"
                               required
                             />
-                            {errors.course && <div className="field-error">{errors.course}</div>}
                           </div>
                         </div>
                         <div className="register-field">
@@ -775,6 +797,7 @@ export function Register() {
                             id="reg-year"
                             value={year}
                             onChange={(e) => { setYear(e.target.value); clearError('year'); }}
+                            onFocus={handleOtherFieldFocus}
                             className="register-select"
                             required
                           >
@@ -786,7 +809,6 @@ export function Register() {
                             <option value="5th Year">5th Year</option>
                             <option value="Postgraduate">Postgraduate</option>
                           </select>
-                          {errors.year && <div className="field-error">{errors.year}</div>}
                         </div>
                       </div>
                     )}
@@ -801,6 +823,7 @@ export function Register() {
                               id="reg-domain"
                               value={domain}
                               onChange={(e) => { setDomain(e.target.value); clearError('domain'); }}
+                              onFocus={handleOtherFieldFocus}
                               className="register-select"
                               required
                             >
@@ -809,7 +832,6 @@ export function Register() {
                                 <option key={opt} value={opt}>{opt}</option>
                               ))}
                             </select>
-                            {errors.domain && <div className="field-error">{errors.domain}</div>}
                           </div>
                           <div className="register-field">
                             <label htmlFor="reg-org">Organization</label>
@@ -818,6 +840,7 @@ export function Register() {
                               type="text"
                               value={organization}
                               onChange={(e) => setOrganization(e.target.value)}
+                              onFocus={handleOtherFieldFocus}
                               placeholder="e.g. Tata Consultancy Services"
                             />
                           </div>
@@ -832,6 +855,7 @@ export function Register() {
                         id="reg-heardFrom"
                         value={heardFrom}
                         onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+                        onFocus={handleOtherFieldFocus}
                         className="register-select"
                         required
                       >
@@ -840,7 +864,6 @@ export function Register() {
                         <option value="Newspaper">Newspaper</option>
                         <option value="Others">Others</option>
                       </select>
-                      {errors.heardFrom && <div className="field-error">{errors.heardFrom}</div>}
                     </div>
 
                     {heardFrom === 'Others' && (
@@ -851,19 +874,17 @@ export function Register() {
                           type="text"
                           value={heardFromOther}
                           onChange={(e) => { setHeardFromOther(e.target.value); clearError('heardFromOther'); }}
+                          onFocus={handleOtherFieldFocus}
                           placeholder="e.g. Friend, Professor, etc."
                           required
                         />
-                        {errors.heardFromOther && <div className="field-error">{errors.heardFromOther}</div>}
                       </div>
                     )}
-
-                    {errors.global && <div className="register-error" role="alert">{errors.global}</div>}
 
                     <button
                       type="submit"
                       className="btn-primary register-submit"
-                      disabled={regLoading || !isEmailVerified}
+                      disabled={regLoading}
                     >
                       {regLoading ? (
                         <span className="btn-loading">
@@ -905,10 +926,7 @@ export function Register() {
                         autoComplete="email"
                         required
                       />
-                      {errors.loginEmail && <div className="field-error">{errors.loginEmail}</div>}
                     </div>
-
-                    {errors.global && <div className="register-error" role="alert">{errors.global}</div>}
 
                     <button type="submit" className="btn-primary register-submit" disabled={loginLoading}>
                       {loginLoading ? (
@@ -946,10 +964,7 @@ export function Register() {
                         required
                         className="otp-input"
                       />
-                      {errors.loginOtp && <div className="field-error">{errors.loginOtp}</div>}
                     </div>
-
-                    {errors.global && <div className="register-error" role="alert">{errors.global}</div>}
 
                     <button type="submit" className="btn-primary register-submit" disabled={loginLoading}>
                       {loginLoading ? (

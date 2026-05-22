@@ -240,7 +240,8 @@ router.get('/users', adminAuth, async (req, res) => {
       filterReferral = 'all',
       filterActive = 'all',
       exportCsv = 'false',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
+      filterProfile = 'all'
     } = req.query;
 
     const query = {};
@@ -274,6 +275,13 @@ router.get('/users', adminAuth, async (req, res) => {
       query['registeredEvents'] = { $elemMatch: { paymentStatus: 'confirmed' } };
     } else if (filterPaid === 'unpaid') {
       query['registeredEvents'] = { $not: { $elemMatch: { paymentStatus: 'confirmed' } } };
+    }
+
+    // Filter Profile Status
+    if (filterProfile === 'complete') {
+      query.phone = { $exists: true, $ne: '' };
+    } else if (filterProfile === 'incomplete') {
+      query.$or = [{ phone: { $exists: false } }, { phone: '' }];
     }
 
     const isExport = exportCsv === 'true';
@@ -316,7 +324,7 @@ router.get('/users', adminAuth, async (req, res) => {
         paymentId: confirmed ? (confirmed.razorpayPaymentId || '-') : '-',
         zoomStatus: confirmed ? (confirmed.zoomRegistrationStatus || 'pending') : '-',
         emailStatus: confirmed ? (confirmed.emailConfirmationStatus || 'pending') : '-',
-        isProfileComplete: u.isProfileComplete !== false,
+        isProfileComplete: u.isProfileComplete,
         createdAt: u.createdAt,
       };
     });
@@ -373,7 +381,6 @@ router.post('/users', adminAuth, validate(createRegistrantSchema), async (req, r
     const userData = {
       fullName: fullName.trim(),
       email: email.toLowerCase().trim(),
-      isProfileComplete: false,
       heardFrom: 'Admin Assisted Registration',
       referralCode: mappedReferral,
       registeredEvents: [{
@@ -445,7 +452,7 @@ router.get('/users/:id', adminAuth, async (req, res) => {
       paymentId:        confirmed ? (confirmed.razorpayPaymentId || '-') : '-',
       zoomStatus:       confirmed ? (confirmed.zoomRegistrationStatus || 'pending') : '-',
       emailStatus:      confirmed ? (confirmed.emailConfirmationStatus || 'pending') : '-',
-      isProfileComplete: user.isProfileComplete !== false,
+      isProfileComplete: user.isProfileComplete,
       registeredEvents: user.registeredEvents,
       createdAt:        user.createdAt,
     });
