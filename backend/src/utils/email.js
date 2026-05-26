@@ -43,8 +43,8 @@ function getHtmlTemplate({ greeting, contentHtml, otpCode }) {
   if (otpCode) {
     middleBlock = `
       <div style="margin: 30px 0; text-align: center;">
-        <div style="background-color: #3D2C26; border-radius: 8px; padding: 24px 0; font-family: Arial, Helvetica, sans-serif; font-size: 38px; font-weight: bold; color: #E6C29E; letter-spacing: 10px; line-height: 1;">
-          ${otpCode.split('').join(' ')}
+        <div style="background-color: #3D2C26; border-radius: 8px; padding: 24px 0; font-family: Arial, Helvetica, sans-serif; font-size: 38px; font-weight: bold; color: #E6C29E; letter-spacing: 12px; padding-left: 12px; line-height: 1; text-align: center;">
+          ${otpCode}
         </div>
         <div style="margin-top: 20px; font-size: 16px; color: #3D2C26; font-family: Arial, Helvetica, sans-serif; text-align: center; font-weight: bold; line-height: 1.6;">
           OTP is valid for 10 minutes.

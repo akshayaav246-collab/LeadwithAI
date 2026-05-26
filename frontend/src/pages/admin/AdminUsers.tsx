@@ -115,7 +115,7 @@ export function AdminUsers() {
   const [filterType, setFilterType] = useState('all');
   const [filterWaitlist, setFilterWaitlist] = useState('all');
   const [filterReferral, setFilterReferral] = useState('all');
-  const [filterProfile, setFilterProfile] = useState('all');
+  const [filterHeardFrom, setFilterHeardFrom] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   
   const [referralsList, setReferralsList] = useState<any[]>([]);
@@ -173,7 +173,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterProfile, sortOrder]);
+  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -186,7 +186,7 @@ export function AdminUsers() {
         filterType,
         filterWaitlist,
         filterReferral,
-        filterProfile,
+        filterHeardFrom,
         sortOrder
       });
       setUsers(data.data || []);
@@ -202,7 +202,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
-  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterProfile, sortOrder, adminToken]);
+  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, adminToken]);
 
   const handleExportCSV = async () => {
     try {
@@ -212,7 +212,7 @@ export function AdminUsers() {
         filterType,
         filterWaitlist,
         filterReferral,
-        filterProfile,
+        filterHeardFrom,
         exportCsv: 'true',
         sortOrder
       });
@@ -414,10 +414,11 @@ export function AdminUsers() {
           <option value="student">Students</option>
           <option value="working">Professionals</option>
         </select>
-        <select value={filterProfile} onChange={e => setFilterProfile(e.target.value)} className="admin-select">
-          <option value="all">All Profile Status</option>
-          <option value="complete">Complete Only</option>
-          <option value="incomplete">Partially Filled Only</option>
+        <select value={filterHeardFrom} onChange={e => setFilterHeardFrom(e.target.value)} className="admin-select">
+          <option value="all">All Sources</option>
+          <option value="social media">Social Media</option>
+          <option value="newspaper">Newspaper</option>
+          <option value="others">Others</option>
         </select>
         <select value={filterWaitlist} onChange={e => setFilterWaitlist(e.target.value)} className="admin-select">
           <option value="all">All Cohorts</option>
@@ -453,7 +454,7 @@ export function AdminUsers() {
                 <th>College / Organization</th>
                 <th style={{ textAlign: 'center' }}>Referral</th>
                 <th style={{ textAlign: 'center' }}>Payment</th>
-                <th style={{ textAlign: 'center' }}>Status</th>
+                <th style={{ textAlign: 'center' }}>Heard From</th>
                 <th style={{ textAlign: 'center' }}>Registered</th>
               </tr>
             </thead>
@@ -485,10 +486,8 @@ export function AdminUsers() {
                         {user.isPaid ? 'Paid' : 'Pending'}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`admin-badge ${user.isActive ? 'success' : 'danger'}`}>
-                        {user.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                    <td className="admin-supporting-info" style={{ textAlign: 'center' }}>
+                      {user.heardFrom || '-'}
                     </td>
                     <td className="admin-supporting-info" style={{ textAlign: 'center' }}>{new Date(user.createdAt).toLocaleDateString()}</td>
                   </tr>
@@ -537,6 +536,7 @@ export function AdminUsers() {
                             <DetailRow label="Phone" value={user.phone} />
                             <DetailRow label="User Type" value={user.userType === 'student' ? 'Student' : 'Working Professional'} />
                             <DetailRow label="Registered On" value={new Date(user.createdAt).toLocaleString()} />
+                            <DetailRow label="Heard From" value={user.heardFrom} />
                             
                             {/* Controls Panel */}
                             <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>

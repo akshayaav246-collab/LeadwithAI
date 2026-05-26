@@ -167,13 +167,16 @@ router.get('/audit-logs', adminAuth, async (req, res) => {
 router.get('/stats', adminAuth, async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
-    const users = await User.find().select('registeredEvents createdAt userType referralCode isWaitlisted');
+    const users = await User.find().select('registeredEvents createdAt userType referralCode isWaitlisted heardFrom');
 
     let paidUsers = 0;
     let totalRevenue = 0;
     let studentCount = 0;
     let professionalCount = 0;
     let waitlistCount = 0;
+    let heardFromSocialMedia = 0;
+    let heardFromNewspaper = 0;
+    let heardFromOthers = 0;
     const referralBreakdown = {};
 
     users.forEach(u => {
@@ -185,6 +188,17 @@ router.get('/stats', adminAuth, async (req, res) => {
 
       if (u.isWaitlisted) {
         waitlistCount++;
+      }
+
+      if (u.heardFrom) {
+        const h = u.heardFrom.trim();
+        if (/social\s*media/i.test(h)) {
+          heardFromSocialMedia++;
+        } else if (/newspaper/i.test(h)) {
+          heardFromNewspaper++;
+        } else if (h !== '-' && h !== '') {
+          heardFromOthers++;
+        }
       }
 
       const confirmed = u.registeredEvents && u.registeredEvents.find(e => e.paymentStatus === 'confirmed');
@@ -216,7 +230,10 @@ router.get('/stats', adminAuth, async (req, res) => {
       studentCount,
       professionalCount,
       waitlistCount,
-      referralBreakdown
+      referralBreakdown,
+      heardFromSocialMedia,
+      heardFromNewspaper,
+      heardFromOthers
     });
   } catch (err) {
     console.error('Admin stats error:', err);
@@ -241,7 +258,8 @@ router.get('/users', adminAuth, async (req, res) => {
       filterActive = 'all',
       exportCsv = 'false',
       sortOrder = 'desc',
-      filterProfile = 'all'
+      filterProfile = 'all',
+      filterHeardFrom = 'all'
     } = req.query;
 
     const query = {};
@@ -282,6 +300,20 @@ router.get('/users', adminAuth, async (req, res) => {
       query.phone = { $exists: true, $ne: '' };
     } else if (filterProfile === 'incomplete') {
       query.$or = [{ phone: { $exists: false } }, { phone: '' }];
+    }
+
+    // Filter Heard From
+    if (filterHeardFrom === 'social media') {
+      query.heardFrom = { $regex: '^social\\s*media$', $options: 'i' };
+    } else if (filterHeardFrom === 'newspaper') {
+      query.heardFrom = { $regex: '^newspaper$', $options: 'i' };
+    } else if (filterHeardFrom === 'others') {
+      query.$and = [
+        { heardFrom: { $exists: true } },
+        { heardFrom: { $ne: '' } },
+        { heardFrom: { $ne: '-' } },
+        { heardFrom: { $nin: [/social\s*media/i, /newspaper/i] } }
+      ];
     }
 
     const isExport = exportCsv === 'true';

@@ -76,17 +76,22 @@ export function AdminOverview() {
   ];
   const PAYMENT_COLORS = ['#C4956A', '#8C7B6B']; // Brand Gold, Muted Brown
 
-  // Chart 3: Cohort Status (Waitlisted vs Regular)
-  const waitlisted = stats.waitlistCount || 0;
-  const regular = total - waitlisted;
-  const regularPct = total > 0 ? Math.round((regular / total) * 100) : 0;
-  const waitlistPct = total > 0 ? Math.round((waitlisted / total) * 100) : 0;
+  // Chart 3: Heard From Source
+  const socialMedia = stats.heardFromSocialMedia || 0;
+  const newspaper = stats.heardFromNewspaper || 0;
+  const others = stats.heardFromOthers || 0;
+  const totalHeard = socialMedia + newspaper + others;
 
-  const cohortData = [
-    { name: 'Regular Cohort', value: regular },
-    { name: 'Waitlisted', value: waitlisted }
+  const socialMediaPct = totalHeard > 0 ? Math.round((socialMedia / totalHeard) * 100) : 0;
+  const newspaperPct = totalHeard > 0 ? Math.round((newspaper / totalHeard) * 100) : 0;
+  const othersPct = totalHeard > 0 ? Math.round((others / totalHeard) * 100) : 0;
+
+  const sourceData = [
+    { name: 'Social Media', value: socialMedia },
+    { name: 'Newspaper', value: newspaper },
+    { name: 'Others', value: others }
   ];
-  const COHORT_COLORS = ['#3B2F2F', '#C4956A']; // Dark Brown, Brand Gold
+  const SOURCE_COLORS = ['#C4956A', '#3B2F2F', '#8C7B6B']; // Brand Gold, Dark Brown, Muted Brown
 
   return (
     <div className="admin-page">
@@ -215,20 +220,20 @@ export function AdminOverview() {
           </div>
         </div>
 
-        {/* Cohort Status Pie Chart (New Chart) */}
+        {/* Heard From Source Pie Chart */}
         <div className="admin-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '8px', border: '1px solid #E2D9CC' }}>
           <h3 style={{ marginBottom: '1.2rem', color: '#2A1F14', fontSize: '1.05rem', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Cohort Waitlist
+            Heard From Source
           </h3>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', width: '100%' }}>
             <div style={{ flex: '1.2', height: 160 }}>
-              {total === 0 ? (
+              {totalHeard === 0 ? (
                 <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#8C7B6B', fontSize: '0.85rem' }}>No data</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={cohortData}
+                      data={sourceData}
                       cx="50%"
                       cy="50%"
                       innerRadius={38}
@@ -236,8 +241,8 @@ export function AdminOverview() {
                       paddingAngle={3}
                       dataKey="value"
                     >
-                      {cohortData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COHORT_COLORS[index % COHORT_COLORS.length]} />
+                      {sourceData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(value) => [`${value} paxs`]} />
@@ -247,15 +252,19 @@ export function AdminOverview() {
             </div>
             <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderLeft: '2px solid #FAF7F2', paddingLeft: '0.75rem', fontSize: '0.82rem', color: '#2A1F14' }}>
               <div>
-                <strong style={{ color: '#8C7B6B' }}>Total:</strong> {total}
+                <strong style={{ color: '#8C7B6B' }}>Total Responded:</strong> {totalHeard}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: COHORT_COLORS[0], display: 'inline-block' }} />
-                <span><strong>Regular:</strong> {regular} ({regularPct}%)</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: SOURCE_COLORS[0], display: 'inline-block' }} />
+                <span><strong>Social Media:</strong> {socialMedia} ({socialMediaPct}%)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: COHORT_COLORS[1], display: 'inline-block' }} />
-                <span><strong>Waitlisted:</strong> {waitlisted} ({waitlistPct}%)</span>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: SOURCE_COLORS[1], display: 'inline-block' }} />
+                <span><strong>Newspaper:</strong> {newspaper} ({newspaperPct}%)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: SOURCE_COLORS[2], display: 'inline-block' }} />
+                <span><strong>Others:</strong> {others} ({othersPct}%)</span>
               </div>
             </div>
           </div>
