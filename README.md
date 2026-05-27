@@ -142,43 +142,43 @@ Next-Lead/
 ## System Architecture
 
 ```mermaid
-graph TB
-    subgraph Browser["Browser"]
-        SPA["React 19 SPA"]
-        AC["AuthContext\n(JWT + user)"]
-        Cert["Dynamic Certificate Generator"]
+graph LR
+    classDef browser fill:#FAF7F2,stroke:#3D2C26,stroke-width:2px;
+    classDef backend fill:#F5EFEB,stroke:#3D2C26,stroke-width:2px;
+    classDef db fill:#FFFFFF,stroke:#6B4F3A,stroke-width:2px;
+    classDef ext fill:#F5F0E8,stroke:#C4956A,stroke-width:2px;
+
+    subgraph UserSpace["Client Tier (Browser)"]
+        SPA["React 19 Frontend SPA"]:::browser
+        AC["AuthContext (JWT Session)"]:::browser
+        Cert["Dynamic Certificate Generator"]:::browser
     end
 
-    subgraph Backend["Express Backend"]
-        RL["Rate Limiters\n(express-rate-limit)"]
-        subgraph Routes["API Routes"]
-            AUTH["/api/auth\nOTP · Register · Login · parse-id · feedback"]
-            PAY["/api/payment\ncreate-order · verify"]
-            ADMIN_R["/api/admin\nStats · Users · Bulk Email"]
-        end
-        CRON["node-cron\nDay1 + Day2 reminder emails"]
-        RL --> Routes
+    subgraph AppSpace["Application Tier (Express Backend)"]
+        RL["Rate Limiters (express-rate-limit)"]:::backend
+        API["Express Routing Layer"]:::backend
+        Cron["node-cron Scheduler"]:::backend
     end
 
-    subgraph DB["MongoDB Atlas"]
-        USERS["users collection"]
+    subgraph DataSpace["Data Tier"]
+        DB["MongoDB Atlas (Users Collection)"]:::db
     end
 
-    subgraph External["External Services"]
-        GEMINI["Google Gemini 2.5 Flash\n(Forensic ID Verification)"]
-        RZP["Razorpay\n(Payment Gateway)"]
-        SMTP["Nodemailer / Outlook SMTP"]
+    subgraph ServiceSpace["External Integrations"]
+        Gemini["Google Gemini 2.5 Flash"]:::ext
+        Razorpay["Razorpay Gateway"]:::ext
+        SMTP["Outlook SMTP (Nodemailer)"]:::ext
     end
 
-    Browser -- "Bearer JWT" --> Backend
-    Routes --> DB
-    AUTH --> GEMINI
-    PAY --> RZP
-    AUTH --> SMTP
-    PAY --> SMTP
-    ADMIN_R --> SMTP
-    CRON --> SMTP
-    CRON --> DB
+    SPA --> RL
+    RL --> API
+    API --> DB
+    Cron --> DB
+    
+    API --> Gemini
+    API --> Razorpay
+    API --> SMTP
+    Cron --> SMTP
 ```
 
 ---
@@ -189,40 +189,45 @@ graph TB
 
 ```mermaid
 sequenceDiagram
+    autonumber
     actor User
-    participant FE as Register.tsx
-    participant BE as /api/auth
-    participant DB as MongoDB
-    participant Mail as Nodemailer
+    participant FE as Client (Register.tsx)
+    participant BE as API Server (/api/auth)
+    participant DB as MongoDB Database
+    participant SMTP as Email Service (SMTP)
 
-    User->>FE: Enter college email (students: .ac.in / .edu.in enforced)
+    Note over User, SMTP: Step 1: Email Domain Enforcements & OTP Verification
+    User->>FE: Input college email (.ac.in/.edu.in)
     FE->>BE: POST /send-register-otp
-    BE->>DB: Check if email exists
-    alt Email already registered
-        BE-->>FE: 409 "User already exists"
-    else New email
-        BE->>BE: Generate OTP (in-memory Map, 10 min TTL)
-        BE->>Mail: sendVerificationOtpEmail()
-        Mail-->>User: "Your OTP for Email Verification"
+    BE->>DB: Check email availability
+    alt Email already in use
+        BE-->>FE: 409 Conflict Error
+    else Email available
+        BE->>SMTP: Dispatch verification email (sendVerificationOtpEmail)
+        SMTP-->>User: Verification OTP code
+        FE-->>User: Display OTP verification screen
     end
 
-    User->>FE: Enter OTP
+    User->>FE: Submit OTP code
     FE->>BE: POST /verify-register-otp
-    BE->>BE: Validate OTP & expiry → add to verifiedEmails Set
+    BE-->>FE: OTP Validated successfully
 
-    User->>FE: Fill form + upload ID card
-    FE->>BE: POST /parse-id (AI scan)
-    alt Gemini validates Forensic checks
-        BE->>BE: Extract college, course, year → auto-fill form
-    else Invalid / Mockup / Fake
-        BE-->>FE: Error → "The ID is not valid" (Generic rejection)
+    Note over User, SMTP: Step 2: Form Completion & Forensic ID Scan
+    User->>FE: Upload Student ID card
+    FE->>BE: POST /parse-id (File payload)
+    BE->>BE: Gemini 2.5 Flash validation (Checks mockup, screenshot, fakes)
+    alt Validation Successful
+        BE-->>FE: Extracted data (College name, course, year)
+    else Validation Failed
+        BE-->>FE: 400 Validation Rejection Error
     end
 
-    FE->>BE: POST /register (multipart + referral code)
-    BE->>DB: Create User 
-    BE->>Mail: sendRegistrationEmail() (async)
-    BE-->>FE: 201 { token, user }
-    FE-->>User: "Registered! Complete Payment" + Pay button
+    Note over User, SMTP: Step 3: Registration & Enrollment
+    User->>FE: Submit final registration form
+    FE->>BE: POST /register (Form fields + referral attribution)
+    BE->>DB: Create new user document (isPaid: false)
+    BE->>SMTP: Dispatch Welcome HTML email (sendRegistrationEmail)
+    BE-->>FE: 201 Success Token & User details
 ```
 
 ---
@@ -231,28 +236,32 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
+    autonumber
     actor User
-    participant FE as Profile.tsx / Register.tsx
-    participant BE as /api/payment
-    participant RZP as Razorpay
-    participant DB as MongoDB
-    participant Mail as Nodemailer
+    participant FE as Client (Profile.tsx)
+    participant BE as API Server (/api/payment)
+    participant RZP as Razorpay Gateway
+    participant DB as MongoDB Database
+    participant SMTP as Email Service (SMTP)
 
-    User->>FE: Click "Pay ₹500 / ₹999"
-    FE->>BE: POST /create-order (JWT)
-    BE->>RZP: Create order
-    RZP-->>BE: { orderId, amount }
-    BE-->>FE: { orderId, keyId, prefill }
+    Note over User, SMTP: Step 1: Order Generation
+    User->>FE: Click "Pay Now"
+    FE->>BE: POST /create-order (JWT token)
+    BE->>RZP: Generate transaction order
+    RZP-->>BE: Order ID & Amount
+    BE-->>FE: Order details, Key ID, prefill metadata
 
-    FE->>RZP: Open Checkout modal
-    User->>RZP: Pay
-    RZP-->>FE: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+    Note over User, SMTP: Step 2: Payment Execution
+    FE->>RZP: Launch Razorpay Checkout Modal
+    User->>RZP: Provide payment details
+    RZP-->>FE: Transaction signature, order ID, payment ID
 
-    FE->>BE: POST /verify (JWT)
-    BE->>BE: HMAC-SHA256 signature validation
-    BE->>DB: paymentStatus = "confirmed"
-    BE->>Mail: sendPaymentConfirmationEmail() + .ics calendar
-    BE-->>FE: 200 "Payment confirmed"
+    Note over User, SMTP: Step 3: Verification & Confirmation
+    FE->>BE: POST /verify (Transaction tokens + JWT)
+    BE->>BE: Validate HMAC-SHA256 signature
+    BE->>DB: Update registration status (isPaid: true)
+    BE->>SMTP: Dispatch Payment Confirmation HTML Email (with .ics calendar event)
+    BE-->>FE: 200 Success Confirmation
 ```
 
 ---
@@ -271,15 +280,19 @@ sequenceDiagram
 
 ### Register.tsx — Key Features
 
-- **College email domain guard** (students): enforces `.ac.in`, `.edu.in`, `.edu` both client-side and server-side
-- **Separate OTP emails**: Verification OTP vs Login OTP
+- **College email domain guard** (students): enforces `.ac.in`, `.edu.in`, `.edu` both client-side and server-side.
+- **Mandatory Student ID Card Upload**: Required for all student registrations to qualify for ₹499 pricing.
+- **Gemini scan bypass for institutional domains**: Bypasses AI forensic validation scans for users with `.ac.in` and `.edu.in` email addresses, while scanning other domains.
+- **Separate OTP emails**: Verification OTP vs Login OTP.
 - **Forensic AI ID scan**: Uploads JPEG/PNG to `/api/auth/parse-id` (Max 3MB); Gemini extracts data and rejects digital fakes.
 - **Persistent Marketing Attribution**: Automatically captures `?ref=CODE` and assigns it to the user.
-- **Tiered pricing**: Students pay ₹500, working professionals pay ₹999.
+- **Tiered pricing**: Students pay ₹499, working professionals pay ₹999.
 
 ### Profile.tsx — Key Features
 
 - Shows registered event, payment status, Zoom link (post-payment).
+- **Scroll Lock on Modal Show**: Automatically prevents body scrolling when modals (feedback/payment) are displayed.
+- **Dynamic Payment Update Modal**: Renders specific "Payment Cancelled" or "Payment Failed" states cleanly in the middle of the screen.
 - **Session Feedback System**: Users must provide text feedback for 4 distinct training sessions after the event.
 - **Dynamic Certificate Generator**: Once feedback is submitted, users unlock the ability to generate and download their completion certificate with custom formatting and typography directly in the browser.
 
@@ -288,11 +301,14 @@ sequenceDiagram
 | Route | Component | Description |
 |---|---|---|
 | `/admin/login` | `AdminLogin.tsx` | Admin email + password login |
-| `/admin/dashboard` | `AdminOverview.tsx` | Stats: total, paid, revenue, recent sign-ups |
-| `/admin/users` | `AdminUsers.tsx` | Full registrant table + advanced CSV export |
+| `/admin/dashboard` | `AdminOverview.tsx` | Stats: total, paid, revenue, source distributions, recent sign-ups |
+| `/admin/users` | `AdminUsers.tsx` | Full registrant table + heardFrom filters + advanced CSV export |
 | `/admin/email` | `AdminEmail.tsx` | Bulk email composer |
 
 **Admin Dashboard Key Features:**
+- **Attribution & Sources Filter**: Includes a "Heard From" source filter (`All Sources`, `Social Media`, `Newspaper`, `Others`) to segregate users based on their marketing/attribution channels.
+- **Dynamic Source Distribution Chart**: Displays a "Heard From Source" pie chart mapping attendee sources with matching brand colors.
+- **Heard From column**: The table displays marketing channels and user-entered custom options directly instead of the generic user activation status (which is still manageable inside the detail expansion drawer).
 - **Advanced CSV Export**: Exports comprehensive user data including marketing referral codes, ID paths, payment IDs, and form submissions.
 - **Dynamic Certificate Preview**: Internal tooling to test and preview the final certificate layout and coordinates.
 
@@ -328,8 +344,8 @@ sequenceDiagram
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `POST` | `/login` | None | Admin login → admin JWT (24h) |
-| `GET` | `/stats` | ✅ Admin | Total users, paid count, 5 recent sign-ups |
-| `GET` | `/users` | ✅ Admin | All registrants including `referralCode`, `feedback`, `isPaid` |
+| `GET` | `/stats` | ✅ Admin | Total users, paid count, referral breakdown, heardFrom stats, 5 recent sign-ups |
+| `GET` | `/users` | ✅ Admin | All registrants including `referralCode`, `feedback`, `isPaid`, `heardFrom` |
 | `GET` | `/users/:id` | ✅ Admin | Single user detail |
 | `DELETE` | `/users/:id` | ✅ Admin | Delete a user |
 | `POST` | `/send-email` | ✅ Admin | Bulk email to `all` / `paid` / `custom` list |
@@ -418,13 +434,13 @@ All emails sent via Nodemailer (SMTP) asynchronously (non-blocking).
 
 | Function | Trigger | Type | Notes |
 |---|---|---|---|
-| `sendVerificationOtpEmail()` | Registration email OTP | HTML | "Your OTP for Email Verification" — no name |
-| `sendOtpEmail()` | Login OTP | HTML | "Your Login OTP, [FirstName]" |
-| `sendRegistrationEmail()` | Account created | Plain text | Welcome + payment reminder |
-| `sendPaymentConfirmationEmail()` | Payment verified | HTML | Receipt + `.ics` Google Calendar attachment |
-| `sendCustomBulkEmail()` | Admin bulk send | HTML | All / Paid / Custom |
-| `sendReminderEmail()` | Cron — Day before event | HTML | Zoom link to paid users |
-| `sendDay2ReminderEmail()` | Cron — End of Day 1 | HTML | Day 2 reminder to paid users |
+| `sendVerificationOtpEmail()` | Registration email OTP | HTML | "Your OTP for Email Verification" (Beige bg, brown border, logo, dynamic date header) |
+| `sendOtpEmail()` | Login OTP | HTML | "Your Login OTP, [FirstName]" (Beige bg, brown border, logo, dynamic date header) |
+| `sendRegistrationEmail()` | Account created | HTML | Welcome HTML with beige bg, brown border, logo, date header + payment reminder & clickable portal link |
+| `sendPaymentConfirmationEmail()` | Payment verified | HTML | Receipt + `.ics` Google Calendar attachment (Beige bg, brown border, logo, dynamic date header) |
+| `sendCustomBulkEmail()` | Admin bulk send | HTML | All / Paid / Custom (Beige bg, brown border, logo, dynamic date header) |
+| `sendReminderEmail()` | Cron — Day before event | HTML | Zoom link to paid users (Beige bg, brown border, logo, dynamic date header) |
+| `sendDay2ReminderEmail()` | Cron — End of Day 1 | HTML | Day 2 reminder to paid users (Beige bg, brown border, logo, dynamic date header) |
 
 ---
 
