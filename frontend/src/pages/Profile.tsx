@@ -518,6 +518,17 @@ export function Profile() {
       .finally(() => setLoading(false));
   }, [token]);
 
+  useEffect(() => {
+    if (isFeedbackModalOpen || payError) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isFeedbackModalOpen, payError]);
+
 
 
   if (loading) {
@@ -954,7 +965,7 @@ export function Profile() {
       {payError && (
         <div className="modal-overlay" onClick={() => setPayError('')}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', borderRadius: '12px' }}>
-            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+            <div className="modal-header" style={{ borderBottom: 'none' }}>
               <h2 style={{ fontSize: '1.25rem', color: 'var(--color-espresso)' }}>Payment Update</h2>
               <button className="modal-close" onClick={() => setPayError('')}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -979,10 +990,9 @@ export function Profile() {
                   </svg>
                 </div>
               </div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-espresso)', marginBottom: '0.5rem' }}>Payment Cancelled / Failed</h3>
-              <p style={{ fontSize: '0.93rem', color: 'var(--color-stone)', marginBottom: '1.5rem', lineHeight: '1.5' }}>
-                {payError}
-              </p>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-espresso)', marginBottom: '1.5rem' }}>
+                {payError.toLowerCase().includes('cancel') ? 'Payment Cancelled' : 'Payment Failed'}
+              </h3>
               <button
                 className="btn-primary"
                 onClick={() => setPayError('')}

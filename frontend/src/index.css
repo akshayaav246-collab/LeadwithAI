@@ -2821,11 +2821,11 @@ footer {
   height: 100vh;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding-top: 3vh;
   z-index: 9999;
   backdrop-filter: blur(4px);
+  padding: 1rem;
 }
 .modal-content {
   background: var(--color-white);
@@ -2833,10 +2833,11 @@ footer {
   width: 94%;
   max-width: 780px;
   max-height: 96vh;
-  overflow-y: auto;
   box-shadow: 0 10px 40px rgba(0,0,0,0.2);
   display: flex;
   flex-direction: column;
+  padding: 0 !important;
+  overflow: hidden;
 }
 .modal-header {
   padding: 1rem 1.5rem;
@@ -2868,6 +2869,7 @@ footer {
 }
 .modal-body {
   padding: 1rem 1.5rem 1.25rem;
+  overflow-y: auto;
 }
 
 /* ── Profile Cards ── */

@@ -145,6 +145,7 @@ async function sendRegistrationEmail(user) {
   const contentHtml = `
     <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop.</p>
     <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
+    <p><a href="https://www.globalknowledgetech.com/leadwithAI/register" style="color: #C4956A; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/register</a></p>
   `;
 
   const html = getHtmlTemplate({ greeting, contentHtml });
