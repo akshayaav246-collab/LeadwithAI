@@ -542,7 +542,7 @@ FROM_NAME=Lead with AI
 
 GEMINI_API_KEY=<gemini_api_key>
 
-SITE_URL=https://project.globalknowledgetech.com/leadwithAI
+SITE_URL=https://www.globalknowledgetech.com/leadwithAI
 ZOOM_LINK=https://zoom.us/j/00000000000
 
 ZOOM_ACCOUNT_ID=<zoom_account_id>
