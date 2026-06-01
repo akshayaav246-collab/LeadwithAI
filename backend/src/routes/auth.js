@@ -206,6 +206,17 @@ Return ONLY raw JSON, no markdown, no explanation outside the JSON. The JSON sch
       geminiResult = JSON.parse(rawText);
     } catch (geminiErr) {
       console.warn('Gemini ID scan failed:', geminiErr.message);
+      const isTraffic = /429|exhausted|quota|limit|traffic|503|504|unavailable/i.test(geminiErr.message || '');
+      if (isTraffic) {
+        return res.json({
+          is_id_card: false,
+          is_valid_college: false,
+          college: null,
+          verdict: 'TRAFFIC_ERROR',
+          rejection_reason: 'Gemini server is experiencing high traffic. Please try again.',
+          source: 'gemini',
+        });
+      }
       return res.json({
         is_id_card: false,
         is_valid_college: false,
@@ -276,7 +287,13 @@ const registerSchema = Joi.object({
   domain: Joi.string().allow('', null),
   organization: Joi.string().allow('', null),
   heardFrom: Joi.string().required(),
-  referralCode: Joi.string().allow('', null)
+  referralCode: Joi.string().allow('', null),
+  selectedCohort: Joi.string().valid(
+    'June 6 & 7, 2026',
+    'June 13 & 14, 2026',
+    'June 20 & 21, 2026',
+    'June 27 & 28, 2026'
+  ).required()
 });
 
 router.post('/register', upload.single('idCard'), validate(registerSchema), async (req, res) => {
@@ -293,10 +310,11 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       organization,
       heardFrom,
       referralCode,
+      selectedCohort,
     } = req.body;
 
     // Validate required fields
-    if (!fullName || !email || !phone || !userType || !heardFrom) {
+    if (!fullName || !email || !phone || !userType || !heardFrom || !selectedCohort) {
       return res.status(400).json({ error: 'Missing required fields.' });
     }
     if (!['student', 'working'].includes(userType)) {
@@ -334,6 +352,7 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       userType,
       heardFrom: heardFrom.trim(),
       referralCode: mappedReferral,
+      selectedCohort,
       isWaitlisted,
       registeredEvents: [{
         eventName: 'Lead with AI: Adopt, Implement and Transform',
@@ -375,6 +394,7 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
         domain: user.domain,
         organization: user.organization,
         heardFrom: user.heardFrom,
+        selectedCohort: user.selectedCohort,
         isWaitlisted: user.isWaitlisted,
         registeredEvents: user.registeredEvents,
       },
@@ -462,6 +482,8 @@ router.post('/verify-otp', validate(verifyOtpSchema), async (req, res) => {
         domain: user.domain,
         organization: user.organization,
         heardFrom: user.heardFrom,
+        selectedCohort: user.selectedCohort,
+        isAdminCreated: user.isAdminCreated,
         isWaitlisted: user.isWaitlisted,
         registeredEvents: user.registeredEvents,
         isProfileComplete: user.isProfileComplete,
@@ -494,6 +516,8 @@ router.get('/me', authMiddleware, async (req, res) => {
         domain: user.domain,
         organization: user.organization,
         heardFrom: user.heardFrom,
+        selectedCohort: user.selectedCohort,
+        isAdminCreated: user.isAdminCreated,
         isWaitlisted: user.isWaitlisted,
         registeredEvents: user.registeredEvents,
         isFeedbackSubmitted: user.isFeedbackSubmitted,
@@ -531,12 +555,24 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
       organization,
       heardFrom,
       heardFromOther,
+      selectedCohort,
     } = req.body;
 
     // Validate required fields
-    if (!phone || !userType || !heardFrom) {
+    if (!phone || !userType || !heardFrom || !selectedCohort) {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
-      return res.status(400).json({ error: 'Missing required fields (phone, userType, heardFrom).' });
+      return res.status(400).json({ error: 'Missing required fields (phone, userType, heardFrom, selectedCohort).' });
+    }
+
+    const validCohorts = [
+      'June 6 & 7, 2026',
+      'June 13 & 14, 2026',
+      'June 20 & 21, 2026',
+      'June 27 & 28, 2026'
+    ];
+    if (!validCohorts.includes(selectedCohort)) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'Invalid cohort selected.' });
     }
 
     const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
@@ -585,6 +621,7 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
     user.phone = phone.trim();
     user.userType = userType;
     user.heardFrom = finalHeardFrom;
+    user.selectedCohort = selectedCohort;
 
     if (userType === 'student') {
       user.collegeName = collegeName.trim();
@@ -620,6 +657,8 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
         domain: user.domain,
         organization: user.organization,
         heardFrom: user.heardFrom,
+        selectedCohort: user.selectedCohort,
+        isAdminCreated: user.isAdminCreated,
         isWaitlisted: user.isWaitlisted,
         registeredEvents: user.registeredEvents,
         isProfileComplete: user.isProfileComplete,
@@ -639,7 +678,8 @@ const feedbackSchema = Joi.object({
   feedback: Joi.array().items(
     Joi.object({
       session: Joi.string().required(),
-      text: Joi.string().required()
+      rating: Joi.string().valid('Excellent', 'Good', 'Average', 'Poor').required(),
+      text: Joi.string().allow('').optional()
     })
   ).min(1).required()
 });

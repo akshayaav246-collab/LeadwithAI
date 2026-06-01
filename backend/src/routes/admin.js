@@ -259,7 +259,8 @@ router.get('/users', adminAuth, async (req, res) => {
       exportCsv = 'false',
       sortOrder = 'desc',
       filterProfile = 'all',
-      filterHeardFrom = 'all'
+      filterHeardFrom = 'all',
+      filterCohort = 'all'
     } = req.query;
 
     const query = {};
@@ -316,6 +317,11 @@ router.get('/users', adminAuth, async (req, res) => {
       ];
     }
 
+    // Filter Cohort Date
+    if (filterCohort !== 'all') {
+      query.selectedCohort = filterCohort;
+    }
+
     const isExport = exportCsv === 'true';
     const sortDir = sortOrder === 'asc' ? 1 : -1;
     let usersQuery = User.find(query).sort({ createdAt: sortDir }).select('-otpHash -otpExpiry');
@@ -357,6 +363,7 @@ router.get('/users', adminAuth, async (req, res) => {
         zoomStatus: confirmed ? (confirmed.zoomRegistrationStatus || 'pending') : '-',
         emailStatus: confirmed ? (confirmed.emailConfirmationStatus || 'pending') : '-',
         isProfileComplete: u.isProfileComplete,
+        selectedCohort: u.selectedCohort,
         createdAt: u.createdAt,
       };
     });
@@ -387,12 +394,18 @@ const createRegistrantSchema = Joi.object({
   fullName: Joi.string().required(),
   email: Joi.string().email().required(),
   userType: Joi.string().valid('student', 'working').optional(),
-  referralCode: Joi.string().allow('', null).optional()
+  referralCode: Joi.string().allow('', null).optional(),
+  selectedCohort: Joi.string().valid(
+    'June 6 & 7, 2026',
+    'June 13 & 14, 2026',
+    'June 20 & 21, 2026',
+    'June 27 & 28, 2026'
+  ).allow('', null).optional()
 });
 
 router.post('/users', adminAuth, validate(createRegistrantSchema), async (req, res) => {
   try {
-    const { fullName, email, userType, referralCode } = req.body;
+    const { fullName, email, userType, referralCode, selectedCohort } = req.body;
 
     // Check duplicate (case-insensitive email)
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
@@ -415,6 +428,8 @@ router.post('/users', adminAuth, validate(createRegistrantSchema), async (req, r
       email: email.toLowerCase().trim(),
       heardFrom: 'Admin Assisted Registration',
       referralCode: mappedReferral,
+      selectedCohort: selectedCohort || null,
+      isAdminCreated: true,
       registeredEvents: [{
         eventName: EVENT_NAME,
         paymentStatus: 'pending'
@@ -430,7 +445,8 @@ router.post('/users', adminAuth, validate(createRegistrantSchema), async (req, r
     res.locals.auditTarget = user.email;
     res.locals.auditDetails = {
       fullName: user.fullName,
-      userType: userType || 'unspecified'
+      userType: userType || 'unspecified',
+      selectedCohort: user.selectedCohort
     };
 
     return res.status(201).json({
@@ -440,6 +456,7 @@ router.post('/users', adminAuth, validate(createRegistrantSchema), async (req, r
         fullName: user.fullName,
         email: user.email,
         userType: user.userType,
+        selectedCohort: user.selectedCohort,
         isProfileComplete: user.isProfileComplete,
         createdAt: user.createdAt
       }
@@ -508,11 +525,17 @@ const editUserSchema = Joi.object({
   organization: Joi.string().allow('', null).optional(),
   heardFrom:    Joi.string().optional(),
   referralCode: Joi.string().allow('', null).optional(),
+  selectedCohort: Joi.string().valid(
+    'June 6 & 7, 2026',
+    'June 13 & 14, 2026',
+    'June 20 & 21, 2026',
+    'June 27 & 28, 2026'
+  ).allow('', null).optional()
 });
 
 router.patch('/users/:id', adminAuth, validate(editUserSchema), async (req, res) => {
   try {
-    const allowedFields = ['fullName', 'phone', 'collegeName', 'course', 'year', 'domain', 'organization', 'heardFrom'];
+    const allowedFields = ['fullName', 'phone', 'collegeName', 'course', 'year', 'domain', 'organization', 'heardFrom', 'selectedCohort'];
     const updates = {};
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
@@ -636,7 +659,7 @@ router.post('/users/:id/confirm-payment', adminAuth, validate(confirmPaymentSche
     try {
       const { registerForWebinar } = require('../utils/zoom');
       const [firstName, ...lastNameParts] = user.fullName.split(' ');
-      const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '));
+      const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '), user.selectedCohort);
       eventEntry.zoomJoinUrl = joinUrl;
       eventEntry.zoomRegistrationStatus = 'success';
     } catch (zoomErr) {
@@ -706,7 +729,7 @@ router.post('/users/:id/retry-zoom', adminAuth, async (req, res) => {
     const { registerForWebinar } = require('../utils/zoom');
     const [firstName, ...lastNameParts] = user.fullName.split(' ');
 
-    const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '));
+    const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '), user.selectedCohort);
     eventEntry.zoomJoinUrl = joinUrl;
     eventEntry.zoomRegistrationStatus = 'success';
     await user.save();

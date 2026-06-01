@@ -36,10 +36,24 @@ async function getZoomAccessToken() {
  * @param {string} email 
  * @param {string} firstName 
  * @param {string} lastName 
+ * @param {string} [selectedCohort]
  * @returns {Promise<string>} The unique join URL
  */
-async function registerForWebinar(email, firstName, lastName) {
-  const webinarId = process.env.ZOOM_WEBINAR_ID;
+async function registerForWebinar(email, firstName, lastName, selectedCohort) {
+  let webinarId = process.env.ZOOM_WEBINAR_ID;
+
+  if (selectedCohort) {
+    if (selectedCohort === 'June 6 & 7, 2026') {
+      webinarId = process.env.ZOOM_WEBINAR_ID_C1 || webinarId;
+    } else if (selectedCohort === 'June 13 & 14, 2026') {
+      webinarId = process.env.ZOOM_WEBINAR_ID_C2 || webinarId;
+    } else if (selectedCohort === 'June 20 & 21, 2026') {
+      webinarId = process.env.ZOOM_WEBINAR_ID_C3 || webinarId;
+    } else if (selectedCohort === 'June 27 & 28, 2026') {
+      webinarId = process.env.ZOOM_WEBINAR_ID_C4 || webinarId;
+    }
+  }
+
   if (!webinarId) {
     throw new Error('Zoom webinar ID not configured');
   }

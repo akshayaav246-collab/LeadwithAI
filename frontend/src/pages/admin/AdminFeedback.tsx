@@ -48,21 +48,35 @@ export function AdminFeedback() {
         return;
       }
 
-      const headers = ['Name', 'Email', 'User Type', 'Institution', 'Session', 'Feedback Text', 'Submitted At'];
+      const headers = ['Name', 'Email', 'User Type', 'Organization', 'Session 1', 'Session 2', 'Session 3', 'Session 4', 'Remarks (If any)'];
       const rows: string[][] = [];
 
       exportItems.forEach((item: any) => {
-        item.feedback.forEach((f: any) => {
-          rows.push([
-            `"${item.fullName}"`,
-            `"${item.email}"`,
-            `"${item.userType}"`,
-            `"${item.institution}"`,
-            `"${f.session}"`,
-            `"${f.text.replace(/"/g, '""')}"`,
-            `"${new Date(item.createdAt).toLocaleString()}"`
-          ]);
-        });
+        const s1 = getSessionRating(item.feedback, 'Session 1');
+        const s2 = getSessionRating(item.feedback, 'Session 2');
+        const s3 = getSessionRating(item.feedback, 'Session 3');
+        const s4 = getSessionRating(item.feedback, 'Session 4');
+        
+        const remarksText = item.feedback
+          .filter((f: any) => f.text && f.text.trim())
+          .map((f: any) => {
+            const sMatch = f.session.match(/Session \d/);
+            const sLabel = sMatch ? sMatch[0] : f.session;
+            return `${sLabel}: ${f.text}`;
+          })
+          .join(' | ');
+
+        rows.push([
+          `"${item.fullName}"`,
+          `"${item.email}"`,
+          `"${item.userType}"`,
+          `"${item.institution}"`,
+          `"${s1}"`,
+          `"${s2}"`,
+          `"${s3}"`,
+          `"${s4}"`,
+          `"${remarksText.replace(/"/g, '""')}"`
+        ]);
       });
 
       const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -77,6 +91,53 @@ export function AdminFeedback() {
     } catch (err) {
       toast.error('Failed to export feedback CSV.');
     }
+  };
+
+  const getSessionRating = (feedbackArray: any[], sessionKey: string) => {
+    const f = feedbackArray.find(item => item.session.includes(sessionKey));
+    return f ? f.rating || '-' : '-';
+  };
+
+  const getRemarksList = (feedbackArray: any[]) => {
+    return feedbackArray
+      .filter(item => item.text && item.text.trim())
+      .map(item => {
+        const sMatch = item.session.match(/Session \d/);
+        const sLabel = sMatch ? sMatch[0] : item.session;
+        return { label: sLabel, text: item.text };
+      });
+  };
+
+  const getRatingBadge = (rating: string) => {
+    if (!rating || rating === '-') return <span style={{ color: '#9ca3af' }}>-</span>;
+    
+    let bg = '#e5e7eb';
+    let color = '#374151';
+    let border = '1px solid #d1d5db';
+    
+    if (rating === 'Excellent') {
+      bg = 'rgba(34,197,94,0.1)';
+      color = '#16a34a';
+      border = '1px solid rgba(34,197,94,0.2)';
+    } else if (rating === 'Good') {
+      bg = 'rgba(59,139,212,0.1)';
+      color = '#3B8BD4';
+      border = '1px solid rgba(59,139,212,0.2)';
+    } else if (rating === 'Average') {
+      bg = 'rgba(245,158,11,0.1)';
+      color = '#b45309';
+      border = '1px solid rgba(245,158,11,0.2)';
+    } else if (rating === 'Poor') {
+      bg = 'rgba(239,68,68,0.1)';
+      color = '#dc2626';
+      border = '1px solid rgba(239,68,68,0.2)';
+    }
+    
+    return (
+      <span className="admin-badge" style={{ background: bg, color: color, border: border, padding: '0.15rem 0.55rem', borderRadius: '12px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+        {rating}
+      </span>
+    );
   };
 
   return (
@@ -115,49 +176,68 @@ export function AdminFeedback() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>User Details</th>
-                <th>Institution</th>
-                <th>Feedback Submissions</th>
+                <th>Name</th>
+                <th>Organization</th>
+                <th>Session 1</th>
+                <th>Session 2</th>
+                <th>Session 3</th>
+                <th>Session 4</th>
+                <th>Remarks (If any)</th>
               </tr>
             </thead>
             <tbody>
               {feedbackList.map((user: any) => (
                 <tr key={user.id}>
-                  <td style={{ verticalAlign: 'top', width: '250px' }}>
+                  <td style={{ verticalAlign: 'top', width: '220px' }}>
                     <div className="admin-row-name">{user.fullName}</div>
                     <div className="admin-supporting-info" style={{ marginTop: '0.1rem' }}>{user.email}</div>
                     <div style={{ marginTop: '0.4rem' }}>
                       <span className="admin-badge" style={{
-                        background: user.userType === 'student' ? 'rgba(196,149,106,0.1)' : 'rgba(90,74,58,0.1)',
-                        color: user.userType === 'student' ? '#C4956A' : '#5a4a3a',
-                        border: `1px solid ${user.userType === 'student' ? 'rgba(196,149,106,0.2)' : 'rgba(90,74,58,0.2)'}`,
+                        background: user.userType === 'student' ? 'rgba(59,139,212,0.08)' : 'rgba(71,85,105,0.08)',
+                        color: user.userType === 'student' ? '#3B8BD4' : '#475569',
+                        border: `1px solid ${user.userType === 'student' ? 'rgba(59,139,212,0.2)' : 'rgba(71,85,105,0.2)'}`,
                       }}>
                         {user.userType === 'student' ? 'Student' : 'Professional'}
                       </span>
                     </div>
                   </td>
-                  <td style={{ verticalAlign: 'top', width: '200px' }} className="admin-supporting-info">
+                  <td style={{ verticalAlign: 'top', width: '180px' }} className="admin-supporting-info">
                     {user.institution}
                   </td>
-                  <td>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                      {user.feedback.map((f: any, idx: number) => (
-                        <div key={idx} style={{ padding: '0.5rem 0.75rem', background: '#FAF7F2', borderRadius: '6px', border: '1px solid #F0EBE1' }}>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#C4956A', display: 'block', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
-                            {f.session}
+                  <td style={{ verticalAlign: 'top', textAlign: 'center' }}>
+                    {getRatingBadge(getSessionRating(user.feedback, 'Session 1'))}
+                  </td>
+                  <td style={{ verticalAlign: 'top', textAlign: 'center' }}>
+                    {getRatingBadge(getSessionRating(user.feedback, 'Session 2'))}
+                  </td>
+                  <td style={{ verticalAlign: 'top', textAlign: 'center' }}>
+                    {getRatingBadge(getSessionRating(user.feedback, 'Session 3'))}
+                  </td>
+                  <td style={{ verticalAlign: 'top', textAlign: 'center' }}>
+                    {getRatingBadge(getSessionRating(user.feedback, 'Session 4'))}
+                  </td>
+                  <td style={{ verticalAlign: 'top' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {getRemarksList(user.feedback).map((rem, idx) => (
+                        <div key={idx} style={{ padding: '0.4rem 0.6rem', background: '#FAF7F2', borderRadius: '4px', border: '1px solid #F0EBE1' }}>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#3B8BD4', display: 'block', textTransform: 'uppercase', marginBottom: '0.1rem' }}>
+                            {rem.label}
                           </span>
-                          <span style={{ fontSize: '0.88rem', color: '#3B2F2F', lineHeight: '1.4' }}>
-                            {f.text}
+                          <span style={{ fontSize: '0.82rem', color: '#3B2F2F', lineHeight: '1.3' }}>
+                            {rem.text}
                           </span>
                         </div>
                       ))}
+                      {getRemarksList(user.feedback).length === 0 && (
+                        <span style={{ color: '#9ca3af' }}>-</span>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))}
               {feedbackList.length === 0 && (
                 <tr>
-                  <td colSpan={3} style={{ textAlign: 'center', padding: '2rem', color: '#8C7B6B' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: '#8C7B6B' }}>
                     No feedback found matching the criteria.
                   </td>
                 </tr>

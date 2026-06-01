@@ -27,15 +27,62 @@ export function Home() {
     <main>
       <section className="hero-section">
         <div className="hero-content">
-          <div className="hero-tag">GLOBAL KNOWLEDGE TECHNOLOGIES · MAY 30TH & 31ST · 2-DAY PROFESSIONAL AI PROGRAM</div>
+          <div className="hero-tag">GLOBAL KNOWLEDGE TECHNOLOGIES · EVERY WEEKEND IN JUNE 2026 · 2-DAY PROFESSIONAL AI PROGRAM</div>
           <h1 className="hero-title">Lead with AI: Adopt, Implement and Transform</h1>
           <p className="hero-sub">
             Stop experimenting with AI, start executing with it. In two intensive days, you'll move from passive curiosity to building real workflows, products, and creative assets that you can immediately put to use in your career, projects, or organisation.
           </p>
           <div className="hero-ctas">
             <Link href="/register" className="btn-primary">Register Now →</Link>
-            <a href={publicAsset("brochure.pdf")} download className="btn-secondary-light">Download the Brochure ↓</a>
+            <a href={publicAsset("Lead_with_AI_Brochure.pdf")} download className="btn-secondary-light">Download the Brochure ↓</a>
           </div>
+          
+          {/* Upcoming Cohorts Board */}
+          <div style={{
+            marginTop: '2rem',
+            marginBottom: '2.5rem',
+            background: 'rgba(196, 149, 106, 0.08)',
+            border: '1px solid rgba(196, 149, 106, 0.20)',
+            borderRadius: '12px',
+            padding: '1.5rem',
+            maxWidth: '680px',
+            textAlign: 'center',
+            boxSizing: 'border-box',
+            marginLeft: 'auto',
+            marginRight: 'auto'
+          }}>
+            <div style={{
+              color: 'var(--color-sienna)',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              marginBottom: '1rem'
+            }}>
+              Available June 2026 Cohorts (Choose during registration)
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+              gap: '1rem',
+              color: 'var(--color-white)',
+              fontSize: '0.95rem'
+            }}>
+              <div style={{ padding: '0.75rem 0.5rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <strong>June 6 & 7</strong>
+              </div>
+              <div style={{ padding: '0.75rem 0.5rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <strong>June 13 & 14</strong>
+              </div>
+              <div style={{ padding: '0.75rem 0.5rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <strong>June 20 & 21</strong>
+              </div>
+              <div style={{ padding: '0.75rem 0.5rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <strong>June 27 & 28</strong>
+              </div>
+            </div>
+          </div>
+
           <div className="hero-trust">
             <div className="hero-trust-item">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-sienna)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -69,56 +116,52 @@ export function Home() {
               <div className="schedule-meta-top">
                 <div className="schedule-number">01</div>
                 <div className="schedule-level level-beginner">BEGINNER</div>
-                <div className="schedule-day">DAY ONE · SATURDAY, MAY 30TH</div>
+                <div className="schedule-day">DAY ONE · SATURDAY</div>
                 <div className="schedule-time">10:00 AM – 1:00 PM</div>
               </div>
               <h3 className="schedule-module">Getting Started with Generative AI</h3>
               <p className="schedule-desc">
                 Understand how large language models actually work, explore the major tools, and build your personal AI adoption mindset.
               </p>
-              <div className="schedule-led">Led by <strong>Sendhil Kumar S</strong><br/>Founder &amp; Chairman</div>
             </article>
 
             <article className="schedule-col">
               <div className="schedule-meta-top">
                 <div className="schedule-number">02</div>
                 <div className="schedule-level level-intermediate">INTERMEDIATE</div>
-                <div className="schedule-day">DAY ONE · SATURDAY, MAY 30TH</div>
+                <div className="schedule-day">DAY ONE · SATURDAY</div>
                 <div className="schedule-time">2:00 PM – 5:00 PM</div>
               </div>
               <h3 className="schedule-module">Building Personalised AI Agents</h3>
               <p className="schedule-desc">
                 Create a writing bot that sounds like you, map your first agentic workflow, and learn how to delegate repeatable tasks to AI.
               </p>
-              <div className="schedule-led">Led by <strong>Radhika S</strong><br/>VP Technical</div>
             </article>
 
             <article className="schedule-col">
               <div className="schedule-meta-top">
                 <div className="schedule-number">03</div>
                 <div className="schedule-level level-intermediate">INTERMEDIATE</div>
-                <div className="schedule-day">DAY TWO · SUNDAY, MAY 31ST</div>
+                <div className="schedule-day">DAY TWO · SUNDAY</div>
                 <div className="schedule-time">10:00 AM – 1:00 PM</div>
               </div>
               <h3 className="schedule-module">Building Products Using AI</h3>
               <p className="schedule-desc">
                 Go from idea to functional prototype using vibe coding and no-code AI platforms, no software engineering background required.
               </p>
-              <div className="schedule-led">Led by <strong>Peter Mike Darius</strong><br/>AI Technology Leader</div>
             </article>
 
             <article className="schedule-col">
               <div className="schedule-meta-top">
                 <div className="schedule-number">04</div>
                 <div className="schedule-level level-advanced">ADVANCED</div>
-                <div className="schedule-day">DAY TWO · SUNDAY, MAY 31ST</div>
+                <div className="schedule-day">DAY TWO · SUNDAY</div>
                 <div className="schedule-time">2:00 PM – 5:00 PM</div>
               </div>
               <h3 className="schedule-module">Visual Storytelling and Content Creation</h3>
               <p className="schedule-desc">
                 Generate images, create video-ready scenes, and build creative assets for marketing, education, or personal branding.
               </p>
-              <div className="schedule-led">Led by <strong>Dinesh T</strong><br/>Chief Technology Officer</div>
             </article>
           </div>
 
@@ -135,7 +178,7 @@ export function Home() {
               <span className="section-label">WHO SHOULD ATTEND</span>
               <h2 className="section-headline">Designed for people who are done waiting for AI to "figure itself out"</h2>
               
-              <p style={{ color: 'var(--color-umber)', fontSize: '1.1rem', marginBottom: '2rem' }}>
+              <p style={{ color: '#334155', fontSize: '1.1rem', marginBottom: '2rem' }}>
                 This program is curated for visionaries who understand that the future isn't about choosing between technology and humanity, but about mastering their intersection.
               </p>
 

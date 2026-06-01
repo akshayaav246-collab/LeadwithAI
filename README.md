@@ -1,7 +1,7 @@
 # Lead with AI — Full Stack Application
 
 > **"Lead with AI: Adopt, Implement and Transform"**  
-> A 2-day professional AI program hosted by **Global Knowledge Technologies** on **May 30th and 31st**, offering hands-on learning in Generative AI for students and working professionals.
+> A 2-day professional AI program hosted by **Global Knowledge Technologies** on **all weekends of June 2026**, offering hands-on learning in Generative AI for students and working professionals.
 
 ---
 

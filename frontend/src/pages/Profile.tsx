@@ -44,6 +44,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
 
   const [heardFrom, setHeardFrom] = useState('');
   const [heardFromOther, setHeardFromOther] = useState('');
+  const [selectedCohort, setSelectedCohort] = useState(user.selectedCohort || '');
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -86,6 +87,10 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
       newErrors.heardFromOther = 'Please specify how you heard about us.';
     }
 
+    if (!selectedCohort) {
+      newErrors.selectedCohort = 'Please select your preferred date.';
+    }
+
     if (Object.keys(newErrors).length > 0) {
       const firstError = Object.values(newErrors)[0];
       toast.error(firstError);
@@ -97,6 +102,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
       const formData = new FormData();
       formData.append('phone', phone.trim());
       formData.append('userType', selectedUserType);
+      formData.append('selectedCohort', selectedCohort);
 
       if (selectedUserType === 'student') {
         formData.append('collegeName', collegeName.trim());
@@ -257,7 +263,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
                       setIdVerdict(null);
                       setIdRejectionReason('');
 
-                      if (f && !isInstitutionalEmail) {
+                      if (f && !isInstitutionalEmail && !user.isAdminCreated) {
                         setIsScanningId(true);
                         try {
                           const parsed = await api.parseIdCard(f, user.email || undefined);
@@ -396,6 +402,24 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
             </div>
           )}
 
+          {/* Preferred Weekend Cohort */}
+          <div className="register-field" style={{ marginTop: '1.25rem' }}>
+            <label htmlFor="comp-cohort">Preferred Date *</label>
+            <select
+              id="comp-cohort"
+              value={selectedCohort}
+              onChange={(e) => setSelectedCohort(e.target.value)}
+              className="register-select"
+              required
+            >
+              <option value="">Select Date</option>
+              <option value="June 6 & 7, 2026">June 6 & 7, 2026</option>
+              <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
+              <option value="June 20 & 21, 2026">June 20 & 21, 2026</option>
+              <option value="June 27 & 28, 2026">June 27 & 28, 2026</option>
+            </select>
+          </div>
+
           {/* How did you hear about us? */}
           <div className="register-field" style={{ marginTop: '1.25rem' }}>
             <label htmlFor="comp-heardFrom">How did you hear about us? *</label>
@@ -489,10 +513,10 @@ export function Profile() {
 
   // ── Feedback State ──
   const [feedbackData, setFeedbackData] = useState([
-    { session: 'Session 1: Getting Started with Generative AI', text: '' },
-    { session: 'Session 2: Building Personalised AI Agents', text: '' },
-    { session: 'Session 3: Building Products Using AI', text: '' },
-    { session: 'Session 4: Visual Storytelling & Content Creation', text: '' }
+    { session: 'Session 1: Getting Started with Generative AI', rating: '', text: '' },
+    { session: 'Session 2: Building Personalised AI Agents', rating: '', text: '' },
+    { session: 'Session 3: Building Products Using AI', rating: '', text: '' },
+    { session: 'Session 4: Visual Storytelling & Content Creation', rating: '', text: '' }
   ]);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
@@ -519,7 +543,7 @@ export function Profile() {
   }, [token]);
 
   useEffect(() => {
-    if (isFeedbackModalOpen || payError) {
+    if (payError) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -527,7 +551,7 @@ export function Profile() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isFeedbackModalOpen, payError]);
+  }, [payError]);
 
 
 
@@ -616,7 +640,7 @@ export function Profile() {
           email: order.userEmail,
           contact: order.userPhone,
         },
-        theme: { color: '#C4956A' },
+        theme: { color: '#3B8BD4' },
         handler: async (response: any) => {
           try {
             await api.verifyPayment(token!, {
@@ -645,8 +669,8 @@ export function Profile() {
   }
 
   async function handleFeedbackSubmit() {
-    if (feedbackData.some(f => !f.text.trim())) {
-      toast.error('Please provide text feedback for all 4 sessions.');
+    if (feedbackData.some(f => !f.rating)) {
+      toast.error('Please select a rating for all 4 sessions.');
       return;
     }
     setIsSubmittingFeedback(true);
@@ -704,6 +728,10 @@ export function Profile() {
               <div className="profile-detail-item">
                 <span className="profile-detail-label">Account Type</span>
                 <span className="profile-detail-value">{user.userType === 'student' ? 'Student' : 'Working Professional'}</span>
+              </div>
+              <div className="profile-detail-item">
+                <span className="profile-detail-label">Preferred Date</span>
+                <span className="profile-detail-value">{user.selectedCohort || '-'}</span>
               </div>
 
               {user.userType === 'student' && (
@@ -857,7 +885,7 @@ export function Profile() {
                   </p>
                   <Suspense fallback={
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 0', color: 'var(--color-stone)', fontSize: '0.88rem' }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin-slow 2s linear infinite', color: '#C4956A' }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin-slow 2s linear infinite', color: 'var(--color-sienna)' }}>
                         <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
                       </svg>
                       Preparing Certificate Button...
@@ -909,32 +937,67 @@ export function Profile() {
                 Share your feedback for all 4 sessions to unlock your certificate.
               </p>
               {feedbackData.map((fb, idx) => (
-                <div key={idx} style={{ marginBottom: '0.85rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.35rem' }}>
+                <div key={idx} style={{ marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.4rem' }}>
                     <label style={{ display: 'block', fontWeight: 600, color: 'var(--color-umber)', fontSize: '0.93rem' }}>
                       {fb.session} <span style={{ color: '#ef4444' }}>*</span>
                     </label>
-                    <span style={{ fontSize: '0.75rem', color: fb.text.length > 280 ? '#ef4444' : 'var(--color-stone)' }}>
+                    <span style={{ fontSize: '0.72rem', color: fb.text.length > 280 ? '#ef4444' : 'var(--color-stone)' }}>
                       {fb.text.length}/300
                     </span>
                   </div>
+
+                  {/* Rating Selector (Clickable pills acting as radio buttons) */}
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                    {['Excellent', 'Good', 'Average', 'Poor'].map((r) => {
+                      const isActive = fb.rating === r;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => {
+                            const newData = [...feedbackData];
+                            newData[idx].rating = r;
+                            setFeedbackData(newData);
+                          }}
+                          style={{
+                            flex: 1,
+                            minWidth: '70px',
+                            padding: '0.45rem 0.5rem',
+                            borderRadius: '6px',
+                            border: `1.5px solid ${isActive ? 'var(--color-sienna)' : '#d1d5db'}`,
+                            background: isActive ? 'var(--color-sienna)' : '#ffffff',
+                            color: isActive ? '#ffffff' : '#374151',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            textAlign: 'center',
+                          }}
+                        >
+                          {r}
+                        </button>
+                      );
+                    })}
+                  </div>
+
                   <textarea
-                    rows={2}
+                    rows={1.5}
                     maxLength={300}
                     style={{
                       width: '100%',
-                      padding: '0.6rem 0.85rem',
+                      padding: '0.5rem 0.75rem',
                       borderRadius: '6px',
                       border: '1.5px solid #d1d5db',
                       background: '#ffffff',
                       color: '#111827',
                       fontFamily: 'inherit',
-                      fontSize: '0.95rem',
+                      fontSize: '0.88rem',
                       outline: 'none',
                       resize: 'none',
                       boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)',
                       transition: 'border-color 0.2s',
-                      lineHeight: '1.5',
+                      lineHeight: '1.4',
                     }}
                     value={fb.text}
                     onChange={e => {
@@ -942,8 +1005,7 @@ export function Profile() {
                       newData[idx].text = e.target.value;
                       setFeedbackData(newData);
                     }}
-                    required
-                    placeholder="Share your thoughts..."
+                    placeholder="Additional remarks (optional)..."
                     onFocus={e => (e.target.style.borderColor = 'var(--color-sienna)')}
                     onBlur={e => (e.target.style.borderColor = '#d1d5db')}
                   />
@@ -952,8 +1014,8 @@ export function Profile() {
               <button 
                 className="btn-primary" 
                 onClick={handleFeedbackSubmit} 
-                disabled={isSubmittingFeedback || feedbackData.some(f => !f.text.trim())}
-                style={{ width: '100%', padding: '0.7rem', marginTop: '0.5rem', opacity: feedbackData.some(f => !f.text.trim()) ? 0.6 : 1 }}
+                disabled={isSubmittingFeedback || feedbackData.some(f => !f.rating)}
+                style={{ width: '100%', padding: '0.7rem', marginTop: '0.5rem', opacity: feedbackData.some(f => !f.rating) ? 0.6 : 1 }}
               >
                 {isSubmittingFeedback ? 'Submitting...' : 'Submit Feedback & Unlock Certificate'}
               </button>

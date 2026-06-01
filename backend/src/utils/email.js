@@ -43,13 +43,13 @@ function getHtmlTemplate({ greeting, contentHtml, otpCode }) {
   if (otpCode) {
     middleBlock = `
       <div style="margin: 30px 0; text-align: center;">
-        <div style="background-color: #3D2C26; border-radius: 8px; padding: 24px 0; font-family: Arial, Helvetica, sans-serif; font-size: 38px; font-weight: bold; color: #E6C29E; letter-spacing: 12px; padding-left: 12px; line-height: 1; text-align: center;">
+        <div style="background-color: #0D1117; border-radius: 8px; padding: 24px 0; font-family: Arial, Helvetica, sans-serif; font-size: 38px; font-weight: bold; color: #FFFFFF; letter-spacing: 12px; padding-left: 12px; line-height: 1; text-align: center;">
           ${otpCode}
         </div>
-        <div style="margin-top: 20px; font-size: 16px; color: #3D2C26; font-family: Arial, Helvetica, sans-serif; text-align: center; font-weight: bold; line-height: 1.6;">
+        <div style="margin-top: 20px; font-size: 16px; color: #0D1117; font-family: Arial, Helvetica, sans-serif; text-align: center; font-weight: bold; line-height: 1.6;">
           OTP is valid for 10 minutes.
         </div>
-        <div style="margin-top: 15px; font-size: 15px; color: #705E58; font-family: Arial, Helvetica, sans-serif; text-align: left; line-height: 1.6;">
+        <div style="margin-top: 15px; font-size: 15px; color: #64748B; font-family: Arial, Helvetica, sans-serif; text-align: left; line-height: 1.6;">
           If you didn't request this, you can safely ignore this email.
         </div>
       </div>
@@ -67,7 +67,7 @@ function getHtmlTemplate({ greeting, contentHtml, otpCode }) {
     body {
       margin: 0;
       padding: 0;
-      background-color: #F5EFEB;
+      background-color: #F0F4F8;
       font-family: Arial, Helvetica, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
@@ -75,7 +75,7 @@ function getHtmlTemplate({ greeting, contentHtml, otpCode }) {
       border-collapse: collapse;
     }
     a {
-      color: #3D2C26;
+      color: #2563EB;
       text-decoration: underline;
     }
     a:hover {
@@ -83,20 +83,20 @@ function getHtmlTemplate({ greeting, contentHtml, otpCode }) {
     }
   </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #F5EFEB; font-family: Arial, Helvetica, sans-serif;">
-  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #F5EFEB; padding: 40px 20px;">
+<body style="margin: 0; padding: 0; background-color: #F0F4F8; font-family: Arial, Helvetica, sans-serif;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #F0F4F8; padding: 40px 20px;">
     <tr>
       <td align="center" valign="top">
-        <table width="640" border="0" cellspacing="0" cellpadding="0" style="background-color: #FFFFFF; border: 2px solid #3D2C26; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; margin: 20px 0; border-collapse: separate;">
+        <table width="640" border="0" cellspacing="0" cellpadding="0" style="background-color: #FFFFFF; border: 2px solid #0D1117; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; margin: 20px 0; border-collapse: separate;">
           <!-- Header -->
           <tr>
-            <td style="background-color: #3D2C26; padding: 25px 30px; border-bottom: 1px solid #2F211D; vertical-align: middle;">
+            <td style="background-color: #0D1117; padding: 25px 30px; border-bottom: 1px solid #2563EB; vertical-align: middle;">
               <table width="100%" border="0" cellspacing="0" cellpadding="0">
                 <tr>
                   <td align="left" valign="middle">
                     <img src="https://www.globalknowledgetech.com/img/logo/gk-logo.svg" alt="Lead with AI" height="50" style="display: block; height: 50px; width: auto; border: 0;" />
                   </td>
-                  <td align="right" valign="middle" style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #E6C29E; line-height: 1.2; font-weight: bold;">
+                  <td align="right" valign="middle" style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #EFF6FF; line-height: 1.2; font-weight: bold;">
                     ${getFormattedDateTime()}
                   </td>
                 </tr>
@@ -105,26 +105,26 @@ function getHtmlTemplate({ greeting, contentHtml, otpCode }) {
           </tr>
           <!-- Body Content -->
           <tr>
-            <td style="padding: 50px 45px; line-height: 1.8; color: #2A1F14; font-size: 16px; font-family: Arial, Helvetica, sans-serif; background-color: #FFFFFF;">
-              <h2 style="font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: bold; color: #3D2C26; margin-top: 0; margin-bottom: 24px; text-align: left;">
+            <td style="padding: 50px 45px; line-height: 1.8; color: #1E293B; font-size: 16px; font-family: Arial, Helvetica, sans-serif; background-color: #FFFFFF;">
+              <h2 style="font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: bold; color: #0D1117; margin-top: 0; margin-bottom: 24px; text-align: left;">
                 ${greeting}
               </h2>
-              <div style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #2A1F14; line-height: 1.8; text-align: left;">
+              <div style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; color: #1E293B; line-height: 1.8; text-align: left;">
                 ${contentHtml}
               </div>
               ${middleBlock}
-              <p style="margin-top: 40px; margin-bottom: 24px; color: #705E58; font-size: 14px; border-top: 1px dashed #E2D9CC; padding-top: 24px; font-family: Arial, Helvetica, sans-serif; text-align: left;">
-                Have questions? We're here to help &mdash; reach us at <a href="mailto:events@gktech.ai" style="color: #3D2C26; font-weight: bold; text-decoration: underline; font-family: Arial, Helvetica, sans-serif;">events@gktech.ai</a>
+              <p style="margin-top: 40px; margin-bottom: 24px; color: #64748B; font-size: 14px; border-top: 1px dashed #CBD5E1; padding-top: 24px; font-family: Arial, Helvetica, sans-serif; text-align: left;">
+                Have questions? We're here to help &mdash; reach us at <a href="mailto:events@gktech.ai" style="color: #2563EB; font-weight: bold; text-decoration: underline; font-family: Arial, Helvetica, sans-serif;">events@gktech.ai</a>
               </p>
-              <p style="margin-top: 30px; margin-bottom: 0; color: #2A1F14; font-size: 15px; line-height: 1.6; font-family: Arial, Helvetica, sans-serif; text-align: left;">
+              <p style="margin-top: 30px; margin-bottom: 0; color: #1E293B; font-size: 15px; line-height: 1.6; font-family: Arial, Helvetica, sans-serif; text-align: left;">
                 Warm regards,<br>
-                <strong style="color: #3D2C26;">Team Global Knowledge Technologies</strong>
+                <strong style="color: #0D1117;">Team Global Knowledge Technologies</strong>
               </p>
             </td>
           </tr>
           <!-- Footer bar -->
           <tr>
-            <td style="background-color: #FFFFFF; padding: 24px 45px; border-top: 1px solid #E2D9CC; text-align: center; font-size: 12px; color: #705E58; font-family: Arial, Helvetica, sans-serif;">
+            <td style="background-color: #FFFFFF; padding: 24px 45px; border-top: 1px solid #E2E8F0; text-align: center; font-size: 12px; color: #64748B; font-family: Arial, Helvetica, sans-serif;">
               &copy; ${currentYear} Global Knowledge Technologies &middot; Lead with AI
             </td>
           </tr>
@@ -137,15 +137,37 @@ function getHtmlTemplate({ greeting, contentHtml, otpCode }) {
   `;
 }
 
+// Helper: Map selectedCohort label to .ics start and end timestamps in UTC
+function getIcsDateRange(cohortStr) {
+  // Defaults to June 6 & 7 cohort
+  let start = '20260606T043000Z'; // 10:00 AM IST is 04:30 UTC
+  let end = '20260607T123000Z';   // 6:00 PM IST is 12:30 UTC
+  
+  if (cohortStr) {
+    const s = cohortStr.toLowerCase();
+    if (s.includes('13')) {
+      start = '20260613T043000Z';
+      end = '20260614T123000Z';
+    } else if (s.includes('20')) {
+      start = '20260620T043000Z';
+      end = '20260621T123000Z';
+    } else if (s.includes('27')) {
+      start = '20260627T043000Z';
+      end = '20260628T123000Z';
+    }
+  }
+  return { start, end };
+}
+
 /**
  * Send registration confirmation email (HTML format)
  */
 async function sendRegistrationEmail(user) {
   const greeting = `Welcome, ${user.fullName.split(' ')[0]}!`;
   const contentHtml = `
-    <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop.</p>
+    <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop for the cohort <strong>${user.selectedCohort || 'Selected June 2026 Cohort'}</strong>.</p>
     <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
-    <p><a href="https://www.globalknowledgetech.com/leadwithAI/register" style="color: #C4956A; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/register</a></p>
+    <p><a href="https://www.globalknowledgetech.com/leadwithAI/register" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/register</a></p>
   `;
 
   const html = getHtmlTemplate({ greeting, contentHtml });
@@ -203,26 +225,30 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
   const joinLink = zoomJoinUrl || process.env.ZOOM_LINK || 'https://zoom.us/j/00000000000';
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
   const contentHtml = `
-    <p style="font-size: 18px; color: #5CBA9E; font-weight: bold; margin-bottom: 20px;">Payment Confirmed!</p>
+    <p style="font-size: 18px; color: #10B981; font-weight: bold; margin-bottom: 20px;">Payment Confirmed!</p>
     <p>Your seat for <strong>${eventName}</strong> is officially confirmed. We look forward to seeing you!</p>
     
-    <div style="background-color: #FAF0E6; border: 1px solid #FAF0E6; border-radius: 8px; padding: 24px; margin: 30px 0;">
+    <div style="background-color: #F0F4F8; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; margin: 30px 0;">
       <table width="100%" border="0" cellspacing="0" cellpadding="0">
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58; width: 140px;" valign="top"><strong>Event</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">${eventName}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B; width: 140px;" valign="top"><strong>Event</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${eventName}</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58;" valign="top"><strong>Amount Paid</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26; font-weight: bold;" valign="top">₹${user.userType === 'student' ? '499' : '999'}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Cohort Weekend</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${user.selectedCohort || 'Selected June 2026 Cohort'}</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58;" valign="top"><strong>Payment ID</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">${paymentId}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Amount Paid</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">₹${user.userType === 'student' ? '499' : '999'}</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58;" valign="top"><strong>Session Link</strong></td>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px;" valign="top"><a href="${joinLink}" style="color: #9B7A5A; font-weight: bold; text-decoration: underline; word-break: break-all; font-family: Arial, Helvetica, sans-serif;">${joinLink}</a></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Payment ID</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${paymentId}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Session Link</strong></td>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px;" valign="top"><a href="${joinLink}" style="color: #2563EB; font-weight: bold; text-decoration: underline; word-break: break-all; font-family: Arial, Helvetica, sans-serif;">${joinLink}</a></td>
         </tr>
       </table>
     </div>
@@ -230,6 +256,7 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
 
   const html = getHtmlTemplate({ greeting, contentHtml });
 
+  const { start, end } = getIcsDateRange(user.selectedCohort);
   const icalContent = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Global Knowledge Technologies//Lead with AI//EN
@@ -237,8 +264,8 @@ METHOD:PUBLISH
 BEGIN:VEVENT
 UID:${paymentId}@leadwithai.com
 DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z
-DTSTART:20260516T043000Z
-DTEND:20260517T123000Z
+DTSTART:${start}
+DTEND:${end}
 SUMMARY:Lead with AI: Adopt, Implement and Transform
 LOCATION:Online
 DESCRIPTION:Two-day professional AI program by Global Knowledge Technologies.
@@ -282,33 +309,33 @@ async function sendCustomBulkEmail(emails, subject, htmlContent) {
 async function sendReminderEmail(user, eventName, meetingLink) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
   const contentHtml = `
-    <p style="font-size: 18px; font-weight: bold; color: #3D2C26; margin-bottom: 20px;">Reminder: Lead with AI Workshop starts TOMORROW!</p>
+    <p style="font-size: 18px; font-weight: bold; color: #0D1117; margin-bottom: 20px;">Reminder: Lead with AI Workshop starts TOMORROW!</p>
     <p>We're excited to have you join us for two days of learning, innovation, and hands-on exploration in the world of AI. Get ready to gain practical insights, interact with experts, and connect with fellow participants.</p>
     <p>Please ensure you join the session on time.</p>
 
-    <div style="background-color: #FAF0E6; border: 1px solid #FAF0E6; border-radius: 8px; padding: 24px; margin: 30px 0;">
+    <div style="background-color: #F0F4F8; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; margin: 30px 0;">
       <table width="100%" border="0" cellspacing="0" cellpadding="0">
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58; width: 140px;" valign="top"><strong>Event</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">${eventName}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B; width: 140px;" valign="top"><strong>Event</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${eventName}</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58;" valign="top"><strong>Date</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">16th May 2026 — 17th May 2026</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${user.selectedCohort || 'Selected June 2026 Cohort'}</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58;" valign="top"><strong>Time</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">10:00 AM – 6:00 PM IST</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Time</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">10:00 AM – 6:00 PM IST</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58;" valign="top"><strong>Platform</strong></td>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">Online (Zoom)</td>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Platform</strong></td>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">Online (Zoom)</td>
         </tr>
       </table>
     </div>
 
     <p style="text-align: center; margin: 35px 0;">
-      <a href="${meetingLink}" style="display: inline-block; background-color: #3D2C26; color: #E6C29E !important; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Join the Zoom Meeting &rarr;</a>
+      <a href="${meetingLink}" style="display: inline-block; background-color: #0D1117; color: #FFFFFF !important; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Join the Zoom Meeting &rarr;</a>
     </p>
   `;
 
@@ -328,32 +355,32 @@ async function sendReminderEmail(user, eventName, meetingLink) {
 async function sendDay2ReminderEmail(user, eventName, meetingLink) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
   const contentHtml = `
-    <p style="font-size: 18px; font-weight: bold; color: #3D2C26; margin-bottom: 20px;">Get Ready for Day 2!</p>
+    <p style="font-size: 18px; font-weight: bold; color: #0D1117; margin-bottom: 20px;">Get Ready for Day 2!</p>
     <p>We hope you had a great experience during <strong>Day 1</strong> of the Lead with AI Workshop. Get ready for <strong>Day 2</strong>, where we'll continue exploring more exciting concepts, hands-on learning, and engaging discussions.</p>
 
-    <div style="background-color: #FAF0E6; border: 1px solid #FAF0E6; border-radius: 8px; padding: 24px; margin: 30px 0;">
+    <div style="background-color: #F0F4F8; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; margin: 30px 0;">
       <table width="100%" border="0" cellspacing="0" cellpadding="0">
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58; width: 140px;" valign="top"><strong>Event</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">${eventName} — Day 2</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B; width: 140px;" valign="top"><strong>Event</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${eventName} — Day 2</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58;" valign="top"><strong>Date</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">17th May 2026</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">Day 2 of your selected Cohort (${user.selectedCohort || 'June 2026'})</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58;" valign="top"><strong>Time</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E6DDD5; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">10:00 AM – 6:00 PM IST</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Time</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">10:00 AM – 6:00 PM IST</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #705E58;" valign="top"><strong>Platform</strong></td>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #3D2C26;" valign="top">Online (Zoom)</td>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Platform</strong></td>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">Online (Zoom)</td>
         </tr>
       </table>
     </div>
 
     <p style="text-align: center; margin: 35px 0;">
-      <a href="${meetingLink}" style="display: inline-block; background-color: #3D2C26; color: #E6C29E !important; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Join Day 2 Zoom Session &rarr;</a>
+      <a href="${meetingLink}" style="display: inline-block; background-color: #0D1117; color: #FFFFFF !important; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Join Day 2 Zoom Session &rarr;</a>
     </p>
   `;
 
@@ -379,7 +406,7 @@ async function sendProfileApprovedEmail(user) {
     <p>You can now log in to your account and complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong> to confirm your seat.</p>
 
     <p style="text-align: center; margin: 35px 0;">
-      <a href="${loginUrl}" style="display: inline-block; background-color: #3D2C26; color: #E6C29E; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Log In &amp; Complete Payment &rarr;</a>
+      <a href="${loginUrl}" style="display: inline-block; background-color: #0D1117; color: #FFFFFF; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Log In &amp; Complete Payment &rarr;</a>
     </p>
   `;
 

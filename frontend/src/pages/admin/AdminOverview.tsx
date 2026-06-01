@@ -62,7 +62,7 @@ export function AdminOverview() {
     { name: 'Students', value: students },
     { name: 'Professionals', value: professionals }
   ];
-  const USER_COLORS = ['#C4956A', '#3B2F2F']; // Brand Gold, Dark Brown
+  const USER_COLORS = ['#3B8BD4', '#1E293B']; // Blue, Dark Slate
 
   // Chart 2: Payment Status
   const paid = stats.paidUsers || 0;
@@ -74,7 +74,7 @@ export function AdminOverview() {
     { name: 'Paid', value: paid },
     { name: 'Unpaid', value: unpaid }
   ];
-  const PAYMENT_COLORS = ['#C4956A', '#8C7B6B']; // Brand Gold, Muted Brown
+  const PAYMENT_COLORS = ['#3B8BD4', '#94A3B8']; // Blue, Slate Gray
 
   // Chart 3: Heard From Source
   const socialMedia = stats.heardFromSocialMedia || 0;
@@ -91,7 +91,7 @@ export function AdminOverview() {
     { name: 'Newspaper', value: newspaper },
     { name: 'Others', value: others }
   ];
-  const SOURCE_COLORS = ['#C4956A', '#3B2F2F', '#8C7B6B']; // Brand Gold, Dark Brown, Muted Brown
+  const SOURCE_COLORS = ['#3B8BD4', '#1E293B', '#94A3B8']; // Blue, Dark Slate, Slate Gray
 
   return (
     <div className="admin-page">
@@ -129,14 +129,14 @@ export function AdminOverview() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem', marginBottom: '2.5rem' }}>
         
         {/* User Type Pie Chart */}
-        <div className="admin-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '8px', border: '1px solid #E2D9CC' }}>
-          <h3 style={{ marginBottom: '1.2rem', color: '#2A1F14', fontSize: '1.05rem', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        <div className="admin-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+          <h3 style={{ marginBottom: '1.2rem', color: '#0F172A', fontSize: '1.05rem', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Types of Participants
           </h3>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', width: '100%' }}>
             <div style={{ flex: '1.2', height: 160 }}>
               {total === 0 ? (
-                <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#8C7B6B', fontSize: '0.85rem' }}>No data</div>
+                <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: '0.85rem' }}>No data</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -158,9 +158,9 @@ export function AdminOverview() {
                 </ResponsiveContainer>
               )}
             </div>
-            <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderLeft: '2px solid #FAF7F2', paddingLeft: '0.75rem', fontSize: '0.82rem', color: '#2A1F14' }}>
+            <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderLeft: '2px solid #E2E8F0', paddingLeft: '0.75rem', fontSize: '0.82rem', color: '#334155' }}>
               <div>
-                <strong style={{ color: '#8C7B6B' }}>Total:</strong> {total}
+                <strong style={{ color: '#64748B' }}>Total:</strong> {total}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: USER_COLORS[0], display: 'inline-block' }} />
@@ -175,14 +175,14 @@ export function AdminOverview() {
         </div>
 
         {/* Payment Status Pie Chart */}
-        <div className="admin-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '8px', border: '1px solid #E2D9CC' }}>
-          <h3 style={{ marginBottom: '1.2rem', color: '#2A1F14', fontSize: '1.05rem', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        <div className="admin-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+          <h3 style={{ marginBottom: '1.2rem', color: '#0F172A', fontSize: '1.05rem', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Payment Status
           </h3>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', width: '100%' }}>
             <div style={{ flex: '1.2', height: 160 }}>
               {total === 0 ? (
-                <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#8C7B6B', fontSize: '0.85rem' }}>No data</div>
+                <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: '0.85rem' }}>No data</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -204,9 +204,9 @@ export function AdminOverview() {
                 </ResponsiveContainer>
               )}
             </div>
-            <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderLeft: '2px solid #FAF7F2', paddingLeft: '0.75rem', fontSize: '0.82rem', color: '#2A1F14' }}>
+            <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderLeft: '2px solid #E2E8F0', paddingLeft: '0.75rem', fontSize: '0.82rem', color: '#334155' }}>
               <div>
-                <strong style={{ color: '#8C7B6B' }}>Total:</strong> {total}
+                <strong style={{ color: '#64748B' }}>Total:</strong> {total}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: PAYMENT_COLORS[0], display: 'inline-block' }} />
@@ -221,14 +221,14 @@ export function AdminOverview() {
         </div>
 
         {/* Heard From Source Pie Chart */}
-        <div className="admin-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '8px', border: '1px solid #E2D9CC' }}>
-          <h3 style={{ marginBottom: '1.2rem', color: '#2A1F14', fontSize: '1.05rem', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        <div className="admin-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+          <h3 style={{ marginBottom: '1.2rem', color: '#0F172A', fontSize: '1.05rem', textAlign: 'center', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Heard From Source
           </h3>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', width: '100%' }}>
             <div style={{ flex: '1.2', height: 160 }}>
               {totalHeard === 0 ? (
-                <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#8C7B6B', fontSize: '0.85rem' }}>No data</div>
+                <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#64748B', fontSize: '0.85rem' }}>No data</div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -250,9 +250,9 @@ export function AdminOverview() {
                 </ResponsiveContainer>
               )}
             </div>
-            <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderLeft: '2px solid #FAF7F2', paddingLeft: '0.75rem', fontSize: '0.82rem', color: '#2A1F14' }}>
+            <div style={{ flex: '0.8', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderLeft: '2px solid #E2E8F0', paddingLeft: '0.75rem', fontSize: '0.82rem', color: '#334155' }}>
               <div>
-                <strong style={{ color: '#8C7B6B' }}>Total Responded:</strong> {totalHeard}
+                <strong style={{ color: '#64748B' }}>Total Responded:</strong> {totalHeard}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: SOURCE_COLORS[0], display: 'inline-block' }} />

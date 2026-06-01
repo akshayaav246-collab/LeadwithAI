@@ -31,7 +31,7 @@ export function Footer() {
               <li><Link href="/program">Program</Link></li>
               <li><Link href="/speakers">Speakers</Link></li>
               <li><Link href="/register">Register</Link></li>
-              <li><a href={publicAsset("brochure.pdf")} download>Download Brochure</a></li>
+              <li><a href={publicAsset("Lead_with_AI_Brochure.pdf")} download>Download Brochure</a></li>
             </ul>
           </div>
           

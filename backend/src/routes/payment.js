@@ -126,7 +126,8 @@ router.post('/verify', authMiddleware, validate(verifyPaymentSchema), async (req
         const joinUrl = await registerForWebinar(
           user.email,
           firstName,
-          lastNameParts.join(' ')
+          lastNameParts.join(' '),
+          user.selectedCohort
         );
         eventEntry.zoomJoinUrl = joinUrl;
         eventEntry.zoomRegistrationStatus = 'success';
@@ -224,7 +225,7 @@ router.post('/webhook', async (req, res) => {
       // Register for Zoom
       try {
         const [firstName, ...lastNameParts] = user.fullName.split(' ');
-        const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '));
+        const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '), user.selectedCohort);
         eventEntry.zoomJoinUrl = joinUrl;
         eventEntry.zoomRegistrationStatus = 'success';
       } catch (zoomErr) {

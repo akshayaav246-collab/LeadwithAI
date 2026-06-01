@@ -53,15 +53,9 @@ type UserType = 'student' | 'working';
 type OtpStep = 'email' | 'otp';
 
 export function Register() {
-  const { login, token, user } = useAuth();
+  const { login, token, user, updateUser } = useAuth();
   const [, navigate] = useLocation();
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (token && user) {
-      navigate('/profile');
-    }
-  }, [token, user, navigate]);
 
   // Read referral code from URL or persistent storage
   const urlParams = new URLSearchParams(window.location.search);
@@ -96,12 +90,13 @@ export function Register() {
   // Working fields
   const [domain, setDomain] = useState('');
   const [organization, setOrganization] = useState('');
+  const [selectedCohort, setSelectedCohort] = useState('');
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const clearError = (field: string) => setErrors(prev => ({ ...prev, [field]: '' }));
 
   // ── ID verification verdict state ───────────────────────
-  const [idVerdict, setIdVerdict] = useState<'APPROVED' | 'REJECTED' | 'REVIEW' | null>(null);
+  const [idVerdict, setIdVerdict] = useState<'APPROVED' | 'REJECTED' | 'REVIEW' | 'TRAFFIC_ERROR' | null>(null);
   const [idRejectionReason, setIdRejectionReason] = useState('');
   const [showIdModal, setShowIdModal] = useState(false);
 
@@ -137,12 +132,45 @@ export function Register() {
   const isInstitutionalEmail =
     userType === 'student' && /\.(ac|edu)\.in$/i.test(email.trim());
 
+  const scanIdCard = async (file: File) => {
+    if (!file || isInstitutionalEmail) return;
+    setIsScanningId(true);
+    setIdVerdict(null);
+    setIdRejectionReason('');
+    try {
+      const parsed = await api.parseIdCard(file, email || undefined);
+      setIdVerdict(parsed.verdict);
+      if (parsed.verdict === 'APPROVED') {
+        setIdRejectionReason('');
+      } else if (parsed.verdict === 'REJECTED') {
+        setIdRejectionReason(parsed.rejection_reason || 'The ID card is not found to be valid.');
+      } else if (parsed.verdict === 'TRAFFIC_ERROR') {
+        setIdRejectionReason(parsed.rejection_reason || 'Gemini server is experiencing high traffic. Please try again.');
+      } else {
+        setIdRejectionReason('');
+      }
+    } catch (err: any) {
+      console.error('ID Parse Error:', err);
+      setIdVerdict('REVIEW');
+      setIdRejectionReason('');
+    } finally {
+      setIsScanningId(false);
+    }
+  };
+
   // ── Login form state ─────────────────────────────────────────
   const [loginEmail, setLoginEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [otpStep, setOtpStep] = useState<OtpStep>('email');
   const [loginLoading, setLoginLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (token && user && !regSuccess) {
+      navigate('/profile');
+    }
+  }, [token, user, navigate, regSuccess]);
 
   // ─────────────────────────────────────────────────────────────
   // RAZORPAY CHECKOUT
@@ -173,7 +201,7 @@ export function Register() {
           email: order.userEmail,
           contact: order.userPhone,
         },
-        theme: { color: '#C4956A' },
+        theme: { color: '#3B8BD4' },
         handler: async (response: any) => {
           try {
             await api.verifyPayment(token, {
@@ -181,6 +209,8 @@ export function Register() {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
             });
+            const { user: freshUser } = await api.getMe(token);
+            updateUser(freshUser);
             setPaymentDone(true);
           } catch (err: any) {
             toast.error(err.message || 'Payment verification failed.');
@@ -200,9 +230,28 @@ export function Register() {
     }
   }
 
+  const verifyStepCompleted = (field: 'phone' | 'email') => {
+    if (!fullName.trim()) {
+      toast.warning('Please enter your full name first.');
+      return false;
+    }
+    if (field === 'email') {
+      if (!phone.trim()) {
+        toast.warning('Please enter your phone number first.');
+        return false;
+      }
+      const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
+      if (!phoneRegex.test(phone.trim())) {
+        toast.warning('Please enter a valid 10-digit mobile number first.');
+        return false;
+      }
+    }
+    return true;
+  };
+
   const checkEmailVerification = () => {
-    if (email.trim() !== '' && !isEmailVerified) {
-      toast.error('Verify the email');
+    if (!isEmailVerified) {
+      toast.warning('Please verify your email address first.');
       return true;
     }
     return false;
@@ -284,6 +333,8 @@ export function Register() {
       } else if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
         // LLM validation result only blocks non-institutional users
         newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
+      } else if (!isInstitutionalEmail && idVerdict === 'TRAFFIC_ERROR') {
+        newErrors.idCard = idRejectionReason || 'Gemini server is experiencing high traffic. Please try again.';
       } else if (!isInstitutionalEmail && isScanningId) {
         newErrors.idCard = 'Please wait — your ID card is being validated.';
       }
@@ -292,6 +343,10 @@ export function Register() {
       if (!year) newErrors.year = 'Please select your year.';
     } else {
       if (!domain.trim()) newErrors.domain = 'Please select your domain/field.';
+    }
+    
+    if (!selectedCohort) {
+      newErrors.selectedCohort = 'Please select your preferred date.';
     }
 
     if (!heardFrom) {
@@ -326,6 +381,7 @@ export function Register() {
 
       const finalHeardFrom = heardFrom === 'Others' ? heardFromOther.trim() : heardFrom;
       formData.append('heardFrom', finalHeardFrom);
+      formData.append('selectedCohort', selectedCohort);
       
       if (refCode) {
         formData.append('referralCode', refCode);
@@ -439,24 +495,26 @@ export function Register() {
             </h1>
 
             {/* ── Tabs ── */}
-            <div className="reg-tabs" role="tablist">
-              <button
-                role="tab"
-                aria-selected={activeTab === 'register'}
-                className={`reg-tab ${activeTab === 'register' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('register'); setErrors({}); }}
-              >
-                Register
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === 'login'}
-                className={`reg-tab ${activeTab === 'login' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('login'); setErrors({}); }}
-              >
-                Login
-              </button>
-            </div>
+            {!regSuccess && !paymentDone && (
+              <div className="reg-tabs" role="tablist">
+                <button
+                  role="tab"
+                  aria-selected={activeTab === 'register'}
+                  className={`reg-tab ${activeTab === 'register' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('register'); setErrors({}); }}
+                >
+                  Register
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={activeTab === 'login'}
+                  className={`reg-tab ${activeTab === 'login' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('login'); setErrors({}); }}
+                >
+                  Login
+                </button>
+              </div>
+            )}
 
             {/* ══════════════════════════════════════
                 REGISTER TAB
@@ -491,16 +549,26 @@ export function Register() {
                       </svg>
                     </div>
                       <>
-                        <h3>Registered! Complete Payment</h3>
+                        <h3>Registration completed</h3>
                         <p>Your account has been created. Please complete the <span style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}>{userType === 'student' ? '₹499' : '₹999'}</span> payment to confirm your seat.</p>
                         <button
                           type="button"
                           className="btn-primary"
-                          style={{ marginTop: '1.5rem' }}
+                          style={{ marginTop: '1.5rem', width: '100%' }}
                           onClick={() => launchRazorpay(regToken, {})}
                         >
                           Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span> Now →
                         </button>
+                        <p style={{ marginTop: '1.25rem', fontSize: '0.9rem', color: 'var(--color-stone)' }}>
+                          If you prefer to pay later, you can complete your payment anytime from your{' '}
+                          <span
+                            onClick={() => navigate('/profile')}
+                            style={{ color: 'var(--color-sienna)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}
+                          >
+                            My Profile
+                          </span>{' '}
+                          page.
+                        </p>
                       </>
                   </div>
                 ) : (
@@ -517,7 +585,6 @@ export function Register() {
                           type="text"
                           value={fullName}
                           onChange={(e) => { setFullName(e.target.value); clearError('fullName'); }}
-                          onFocus={handleOtherFieldFocus}
                           placeholder="e.g. Anjali Menon"
                           autoComplete="name"
                           required
@@ -529,14 +596,22 @@ export function Register() {
                           id="reg-phone"
                           type="tel"
                           value={phone}
-                          onChange={(e) => { setPhone(e.target.value.replace(/\D/g, '')); clearError('phone'); }}
+                          onChange={(e) => {
+                            if (!verifyStepCompleted('phone')) return;
+                            setPhone(e.target.value.replace(/\D/g, ''));
+                            clearError('phone');
+                          }}
                           onBlur={(e) => {
                             const val = e.target.value.trim();
                             if (val && !/^(?:\+91[-\s]?)?[6-9]\d{9}$/.test(val)) {
                               toast.error('Please enter a valid 10-digit mobile number.');
                             }
                           }}
-                          onFocus={handleOtherFieldFocus}
+                          onFocus={(e) => {
+                            if (!verifyStepCompleted('phone')) {
+                              e.currentTarget.blur();
+                            }
+                          }}
                           placeholder="e.g. 9876543210"
                           autoComplete="tel"
                           maxLength={10}
@@ -554,6 +629,7 @@ export function Register() {
                             type="email"
                             value={email}
                             onChange={(e) => {
+                              if (!verifyStepCompleted('email')) return;
                               setEmail(e.target.value);
                               setIsEmailVerified(false);
                               setRegOtpSent(false);
@@ -564,6 +640,11 @@ export function Register() {
                               const val = e.target.value.trim();
                               if (val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
                                 toast.error('Please enter a valid email.');
+                              }
+                            }}
+                            onFocus={(e) => {
+                              if (!verifyStepCompleted('email')) {
+                                e.currentTarget.blur();
                               }
                             }}
                             placeholder="you@example.com"
@@ -577,7 +658,10 @@ export function Register() {
                             type="button"
                             className="btn-primary"
                             style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}
-                            onClick={handleSendRegOtp}
+                            onClick={() => {
+                              if (!verifyStepCompleted('email')) return;
+                              handleSendRegOtp();
+                            }}
                             disabled={verifyLoading}
                           >
                             {verifyLoading && !regOtpSent ? 'Sending...' : 'Send OTP'}
@@ -626,274 +710,365 @@ export function Register() {
                       </div>
                     )}
 
-                    {/* Student / Working Toggle */}
-                    <div className="register-field">
-                      <label>I am a *</label>
-                      <div className="reg-toggle">
-                        <button
-                          type="button"
-                          className={`reg-toggle-btn ${userType === 'student' ? 'active' : ''}`}
-                          onClick={() => handleToggleUserType('student')}
-                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M21.42 10.922a2 2 0 0 0-.019-3.838L12.83 4.34a2 2 0 0 0-1.66 0L2.6 7.08a2 2 0 0 0 0 3.832l8.57 3.698a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
-                          Student
-                        </button>
-                        <button
-                          type="button"
-                          className={`reg-toggle-btn ${userType === 'working' ? 'active' : ''}`}
-                          onClick={() => handleToggleUserType('working')}
-                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                          Working Professional/Others
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Student-specific fields */}
-                    {userType === 'student' && (
-                      <div className="reg-conditional-fields">
-                        {/* ── ID Card section (always visible) ── */}
+                    {/* Guarded fields after email verification */}
+                    <div style={{ position: 'relative', marginTop: '1.5rem' }}>
+                      {!isEmailVerified && (
+                        <div
+                          onClick={() => {
+                            toast.warning('Please verify your email address first.');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            zIndex: 10,
+                            cursor: 'not-allowed',
+                          }}
+                        />
+                      )}
+                      
+                      <div 
+                        style={{ 
+                          opacity: isEmailVerified ? 1 : 0.6, 
+                          pointerEvents: isEmailVerified ? 'auto' : 'none',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '1.4rem'
+                        }}
+                      >
+                        {/* Student / Working Toggle */}
                         <div className="register-field">
-                          <label htmlFor="reg-idcard">
-                            college id card *(Both sides)
-                            {isScanningId && (
-                              <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                                <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                                Validating...
-                              </span>
-                            )}
-                          </label>
+                          <label>I am a *</label>
+                          <div className="reg-toggle">
+                            <button
+                              type="button"
+                              className={`reg-toggle-btn ${userType === 'student' ? 'active' : ''}`}
+                              onClick={() => handleToggleUserType('student')}
+                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                              disabled={!isEmailVerified}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M21.42 10.922a2 2 0 0 0-.019-3.838L12.83 4.34a2 2 0 0 0-1.66 0L2.6 7.08a2 2 0 0 0 0 3.832l8.57 3.698a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
+                              Student
+                            </button>
+                            <button
+                              type="button"
+                              className={`reg-toggle-btn ${userType === 'working' ? 'active' : ''}`}
+                              onClick={() => handleToggleUserType('working')}
+                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                              disabled={!isEmailVerified}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                              Working Professional/Others
+                            </button>
+                          </div>
+                        </div>
 
-                          {!isInstitutionalEmail && (
-                            <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
-                              Please upload your physical College ID card to qualify for student pricing (₹499).
-                            </p>
-                          )}
+                        {/* Student-specific fields */}
+                        {userType === 'student' && (
+                          <div className="reg-conditional-fields">
+                            {/* ── ID Card section (always visible) ── */}
+                            <div className="register-field">
+                              <label htmlFor="reg-idcard">
+                                college id card *(Both sides)
+                                {isScanningId && (
+                                  <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                    <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                    Validating...
+                                  </span>
+                                )}
+                              </label>
 
-                          <div
-                            className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
-                            onClick={() => {
-                              if (checkEmailVerification()) return;
-                              if (!isScanningId) fileInputRef.current?.click();
-                            }}
-                            style={{ cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
-                          >
-                            <input
-                              ref={fileInputRef}
-                              id="reg-idcard"
-                              type="file"
-                              accept=".pdf"
-                              style={{ display: 'none' }}
-                              onChange={async (e: ChangeEvent<HTMLInputElement>) => {
-                                const f = e.target.files?.[0] || null;
-                                setIdFile(f);
-                                if (f) clearError('idCard');
-                                setIdVerdict(null);
-                                setIdRejectionReason('');
-                                setShowIdModal(false);
+                              {!isInstitutionalEmail && (
+                                <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
+                                  Please upload your physical College ID card to qualify for student pricing (₹499).
+                                </p>
+                              )}
 
-                                // LLM validation only for non-institutional emails
-                                if (f && !isInstitutionalEmail) {
-                                  setIsScanningId(true);
-                                  try {
-                                    const parsed = await api.parseIdCard(f, email || undefined);
-                                    setIdVerdict(parsed.verdict);
-                                    if (parsed.verdict === 'APPROVED') {
-                                      setIdRejectionReason('');
-                                    } else if (parsed.verdict === 'REJECTED') {
-                                      setIdRejectionReason(parsed.rejection_reason || 'The ID card is not found to be valid.');
-                                    } else {
-                                      setIdRejectionReason('');
-                                    }
-                                  } catch (err) {
-                                    console.error('ID Parse Error:', err);
-                                    setIdVerdict('REVIEW');
+                              <div
+                                className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
+                                onClick={() => {
+                                  if (checkEmailVerification()) return;
+                                  if (!isScanningId) fileInputRef.current?.click();
+                                }}
+                                style={{ cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
+                              >
+                                <input
+                                  ref={fileInputRef}
+                                  id="reg-idcard"
+                                  type="file"
+                                  accept=".pdf"
+                                  style={{ display: 'none' }}
+                                  disabled={!isEmailVerified}
+                                  onChange={async (e: ChangeEvent<HTMLInputElement>) => {
+                                    const f = e.target.files?.[0] || null;
+                                    setIdFile(f);
+                                    if (f) clearError('idCard');
+                                    setIdVerdict(null);
                                     setIdRejectionReason('');
-                                  } finally {
-                                    setIsScanningId(false);
-                                  }
-                                }
-                              }}
-                            />
-                            {idFile ? (
-                              <span className="upload-filename">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                                {idFile.name}
-                              </span>
-                            ) : (
-                              <span className="upload-placeholder">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                PDF only(max. 5MB)
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Single PDF containing both sides text removed */}
+                                    setShowIdModal(false);
 
-                          {/* Inline validation feedback for non-institutional */}
-                          {!isInstitutionalEmail && idFile && !isScanningId && (
-                            <>
-                              {idVerdict === 'APPROVED' && (
-                                <div className="id-verdict-line">
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                                  <span>The ID is found to be valid.</span>
-                                </div>
-                              )}
-                              {idVerdict === 'REJECTED' && (
-                                <div className="id-rejected-block">
-                                  <div className="id-verdict-line">
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                    <span>ID Verification Failed.</span>
+                                    // LLM validation only for non-institutional emails
+                                    if (f && !isInstitutionalEmail) {
+                                      await scanIdCard(f);
+                                    }
+                                  }}
+                                />
+                                {idFile ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                    <span className="upload-filename" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      {idVerdict === 'TRAFFIC_ERROR' ? (
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                      ) : (
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                      )}
+                                      {idFile.name}
+                                    </span>
+                                    {idVerdict === 'TRAFFIC_ERROR' && (
+                                      <button
+                                        type="button"
+                                        style={{
+                                          background: '#fef3c7',
+                                          color: '#d97706',
+                                          border: '1px solid #fcd34d',
+                                          borderRadius: '4px',
+                                          padding: '2px 8px',
+                                          fontSize: '12px',
+                                          fontWeight: 'bold',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '4px',
+                                        }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (idFile) scanIdCard(idFile);
+                                        }}
+                                      >
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                                        Reload / Retry
+                                      </button>
+                                    )}
                                   </div>
-                                  <div className="id-rejected-hint">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                    If you are a working professional or from an organisation, please{' '}
-                                    <button
-                                      type="button"
-                                      className="id-rejected-switch-btn"
-                                      onClick={() => { setUserType('working'); resetIdUpload(); }}
-                                    >
-                                      register under Working Professional / Others
-                                    </button>
-                                    {' '}instead.
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
+                                ) : (
+                                  <span className="upload-placeholder">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                    PDF only(max. 5MB)
+                                  </span>
+                                )}
+                              </div>
 
-                        <div className="register-grid-2">
-                          <div className="register-field">
-                            <label htmlFor="reg-college">College Name *</label>
-                            <input
-                              id="reg-college"
-                              type="text"
-                              value={collegeName}
-                              onChange={(e) => { setCollegeName(e.target.value); clearError('collegeName'); }}
-                              onFocus={handleOtherFieldFocus}
-                              placeholder="e.g. PSG College of Technology"
-                              required
-                            />
+                              {/* Inline validation feedback for non-institutional */}
+                              {!isInstitutionalEmail && idFile && !isScanningId && (
+                                <>
+                                  {idVerdict === 'APPROVED' && (
+                                    <div className="id-verdict-line">
+                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                      <span>The ID is found to be valid.</span>
+                                    </div>
+                                  )}
+                                  {idVerdict === 'TRAFFIC_ERROR' && (
+                                    <div className="id-rejected-block">
+                                      <div className="id-verdict-line" style={{ color: '#d97706' }}>
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                        <span>Gemini server is experiencing high traffic. Please try again.</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {idVerdict === 'REJECTED' && (
+                                    <div className="id-rejected-block">
+                                      <div className="id-verdict-line">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        <span>ID Verification Failed.</span>
+                                      </div>
+                                      <div className="id-rejected-hint" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                        <span>If you are working professional register under </span>
+                                        <button
+                                          type="button"
+                                          style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            padding: 0,
+                                            margin: 0,
+                                            font: 'inherit',
+                                            color: '#2563eb',
+                                            fontWeight: 'bold',
+                                            textDecoration: 'underline',
+                                            cursor: 'pointer',
+                                            display: 'inline',
+                                          }}
+                                          onClick={() => { setUserType('working'); resetIdUpload(); }}
+                                          disabled={!isEmailVerified}
+                                        >
+                                          Working professional/others
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+
+                            <div className="register-grid-2">
+                              <div className="register-field">
+                                <label htmlFor="reg-college">College Name *</label>
+                                <input
+                                  id="reg-college"
+                                  type="text"
+                                  value={collegeName}
+                                  onChange={(e) => { setCollegeName(e.target.value); clearError('collegeName'); }}
+                                  onFocus={handleOtherFieldFocus}
+                                  placeholder="e.g. PSG College of Technology"
+                                  disabled={!isEmailVerified}
+                                  required
+                                />
+                              </div>
+                              <div className="register-field">
+                                <label htmlFor="reg-course">Course *</label>
+                                <input
+                                  id="reg-course"
+                                  type="text"
+                                  value={course}
+                                  onChange={(e) => { setCourse(e.target.value); clearError('course'); }}
+                                  onFocus={handleOtherFieldFocus}
+                                  placeholder="e.g. B.Tech CSE"
+                                  disabled={!isEmailVerified}
+                                  required
+                                />
+                              </div>
+                            </div>
+                            <div className="register-field">
+                              <label htmlFor="reg-year">Year *</label>
+                              <select
+                                id="reg-year"
+                                value={year}
+                                onChange={(e) => { setYear(e.target.value); clearError('year'); }}
+                                onFocus={handleOtherFieldFocus}
+                                className="register-select"
+                                disabled={!isEmailVerified}
+                                required
+                              >
+                                <option value="">Select year</option>
+                                <option value="1st Year">1st Year</option>
+                                <option value="2nd Year">2nd Year</option>
+                                <option value="3rd Year">3rd Year</option>
+                                <option value="4th Year">4th Year</option>
+                                <option value="5th Year">5th Year</option>
+                                <option value="Postgraduate">Postgraduate</option>
+                              </select>
+                            </div>
                           </div>
-                          <div className="register-field">
-                            <label htmlFor="reg-course">Course *</label>
-                            <input
-                              id="reg-course"
-                              type="text"
-                              value={course}
-                              onChange={(e) => { setCourse(e.target.value); clearError('course'); }}
-                              onFocus={handleOtherFieldFocus}
-                              placeholder="e.g. B.Tech CSE"
-                              required
-                            />
+                        )}
+
+                        {/* Working professional fields */}
+                        {userType === 'working' && (
+                          <div className="reg-conditional-fields">
+                            <div className="register-grid-2">
+                              <div className="register-field">
+                                <label htmlFor="reg-domain">Domain</label>
+                                <select
+                                  id="reg-domain"
+                                  value={domain}
+                                  onChange={(e) => { setDomain(e.target.value); clearError('domain'); }}
+                                  onFocus={handleOtherFieldFocus}
+                                  className="register-select"
+                                  disabled={!isEmailVerified}
+                                  required
+                                >
+                                  <option value="">Select your industry</option>
+                                  {DOMAIN_OPTIONS.map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="register-field">
+                                <label htmlFor="reg-org">Organization</label>
+                                <input
+                                  id="reg-org"
+                                  type="text"
+                                  value={organization}
+                                  onChange={(e) => setOrganization(e.target.value)}
+                                  onFocus={handleOtherFieldFocus}
+                                  placeholder="e.g. Tata Consultancy Services"
+                                  disabled={!isEmailVerified}
+                                />
+                              </div>
+                            </div>
                           </div>
-                        </div>
+                        )}
+
+                        {/* Preferred Weekend Cohort */}
                         <div className="register-field">
-                          <label htmlFor="reg-year">Year *</label>
+                          <label htmlFor="reg-cohort">Preferred Date *</label>
                           <select
-                            id="reg-year"
-                            value={year}
-                            onChange={(e) => { setYear(e.target.value); clearError('year'); }}
+                            id="reg-cohort"
+                            value={selectedCohort}
+                            onChange={(e) => { setSelectedCohort(e.target.value); clearError('selectedCohort'); }}
                             onFocus={handleOtherFieldFocus}
                             className="register-select"
+                            disabled={!isEmailVerified}
                             required
                           >
-                            <option value="">Select year</option>
-                            <option value="1st Year">1st Year</option>
-                            <option value="2nd Year">2nd Year</option>
-                            <option value="3rd Year">3rd Year</option>
-                            <option value="4th Year">4th Year</option>
-                            <option value="5th Year">5th Year</option>
-                            <option value="Postgraduate">Postgraduate</option>
+                            <option value="">Select Date</option>
+                            <option value="June 6 & 7, 2026">June 6 & 7, 2026</option>
+                            <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
+                            <option value="June 20 & 21, 2026">June 20 & 21, 2026</option>
+                            <option value="June 27 & 28, 2026">June 27 & 28, 2026</option>
                           </select>
                         </div>
-                      </div>
-                    )}
 
-                    {/* Working professional fields */}
-                    {userType === 'working' && (
-                      <div className="reg-conditional-fields">
-                        <div className="register-grid-2">
-                          <div className="register-field">
-                            <label htmlFor="reg-domain">Domain</label>
-                            <select
-                              id="reg-domain"
-                              value={domain}
-                              onChange={(e) => { setDomain(e.target.value); clearError('domain'); }}
-                              onFocus={handleOtherFieldFocus}
-                              className="register-select"
-                              required
-                            >
-                              <option value="">Select your industry</option>
-                              {DOMAIN_OPTIONS.map(opt => (
-                                <option key={opt} value={opt}>{opt}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="register-field">
-                            <label htmlFor="reg-org">Organization</label>
+                        {/* How did you hear about us? */}
+                        <div className="register-field">
+                          <label htmlFor="reg-heardFrom">How did you hear about us? *</label>
+                          <select
+                            id="reg-heardFrom"
+                            value={heardFrom}
+                            onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+                            onFocus={handleOtherFieldFocus}
+                            className="register-select"
+                            disabled={!isEmailVerified}
+                            required
+                          >
+                            <option value="">Select an option</option>
+                            <option value="Social Media">Social Media</option>
+                            <option value="Newspaper">Newspaper</option>
+                            <option value="Others">Others</option>
+                          </select>
+                        </div>
+
+                        {heardFrom === 'Others' && (
+                          <div className="register-field" style={{ marginTop: '1rem' }}>
+                            <label htmlFor="reg-heardFromOther">Please specify *</label>
                             <input
-                              id="reg-org"
+                              id="reg-heardFromOther"
                               type="text"
-                              value={organization}
-                              onChange={(e) => setOrganization(e.target.value)}
+                              value={heardFromOther}
+                              onChange={(e) => { setHeardFromOther(e.target.value); clearError('heardFromOther'); }}
                               onFocus={handleOtherFieldFocus}
-                              placeholder="e.g. Tata Consultancy Services"
+                              placeholder="e.g. Friend, Professor, etc."
+                              disabled={!isEmailVerified}
+                              required
                             />
                           </div>
-                        </div>
-                      </div>
-                    )}
+                        )}
 
-                    {/* How did you hear about us? */}
-                    <div className="register-field">
-                      <label htmlFor="reg-heardFrom">How did you hear about us? *</label>
-                      <select
-                        id="reg-heardFrom"
-                        value={heardFrom}
-                        onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
-                        onFocus={handleOtherFieldFocus}
-                        className="register-select"
-                        required
-                      >
-                        <option value="">Select an option</option>
-                        <option value="Social Media">Social Media</option>
-                        <option value="Newspaper">Newspaper</option>
-                        <option value="Others">Others</option>
-                      </select>
+                        <button
+                          type="submit"
+                          className="btn-primary register-submit"
+                          disabled={regLoading || !isEmailVerified}
+                        >
+                          {regLoading ? (
+                            <span className="btn-loading">
+                              <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                            </span>
+                          ) : (
+                            <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span>)</span></>
+                          )}
+                        </button>
+                      </div>
                     </div>
-
-                    {heardFrom === 'Others' && (
-                      <div className="register-field" style={{ marginTop: '1rem' }}>
-                        <label htmlFor="reg-heardFromOther">Please specify *</label>
-                        <input
-                          id="reg-heardFromOther"
-                          type="text"
-                          value={heardFromOther}
-                          onChange={(e) => { setHeardFromOther(e.target.value); clearError('heardFromOther'); }}
-                          onFocus={handleOtherFieldFocus}
-                          placeholder="e.g. Friend, Professor, etc."
-                          required
-                        />
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      className="btn-primary register-submit"
-                      disabled={regLoading}
-                    >
-                      {regLoading ? (
-                        <span className="btn-loading">
-                          <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
-                        </span>
-                      ) : (
-                        <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span>)</span></>
-                      )}
-                    </button>
 
                     <p className="register-note">
                       Already registered?{' '}

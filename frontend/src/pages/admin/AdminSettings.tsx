@@ -202,7 +202,7 @@ export function AdminSettings() {
                 <button
                   className="btn-primary"
                   onClick={handleToggleFeedback}
-                  style={{ padding: '6px 14px', fontSize: '13px', backgroundColor: feedbackEnabled ? '#2e7d32' : '#C4956A', borderColor: feedbackEnabled ? '#2e7d32' : '#C4956A' }}
+                  style={{ padding: '6px 14px', fontSize: '13px', backgroundColor: feedbackEnabled ? '#2e7d32' : '#3B8BD4', borderColor: feedbackEnabled ? '#2e7d32' : '#3B8BD4', color: '#fff' }}
                 >
                   {feedbackEnabled ? 'Enabled (Turn Off)' : 'Disabled (Turn On)'}
                 </button>
@@ -216,7 +216,7 @@ export function AdminSettings() {
                 <button
                   className="btn-primary"
                   onClick={handleToggleMaintenance}
-                  style={{ padding: '6px 14px', fontSize: '13px', backgroundColor: isMaintenance ? '#dc2626' : '#C4956A', borderColor: isMaintenance ? '#dc2626' : '#C4956A' }}
+                  style={{ padding: '6px 14px', fontSize: '13px', backgroundColor: isMaintenance ? '#dc2626' : '#3B8BD4', borderColor: isMaintenance ? '#dc2626' : '#3B8BD4', color: '#fff' }}
                 >
                   {isMaintenance ? 'Maintenance Active (Turn Off)' : 'Normal Mode (Turn On)'}
                 </button>
@@ -336,11 +336,11 @@ export function AdminSettings() {
                               onChange={e => setEditingLabel(e.target.value)}
                               onKeyDown={e => { if (e.key === 'Enter') handleSaveLabel(ref.code); if (e.key === 'Escape') handleCancelEdit(); }}
                               autoFocus
-                              style={{ flex: 1, padding: '3px 8px', border: '1px solid #C4956A', borderRadius: 4, fontSize: '0.85rem', minWidth: 0 }}
+                              style={{ flex: 1, padding: '3px 8px', border: '1px solid #3B8BD4', borderRadius: 4, fontSize: '0.85rem', minWidth: 0 }}
                             />
                             <button
                               onClick={() => handleSaveLabel(ref.code)}
-                              style={{ background: '#C4956A', border: 'none', color: '#fff', padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                              style={{ background: '#3B8BD4', border: 'none', color: '#fff', padding: '3px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
                             >Save</button>
                             <button
                               onClick={handleCancelEdit}
@@ -364,7 +364,7 @@ export function AdminSettings() {
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                           <button
                             onClick={() => handleStartEdit(ref.code, ref.label)}
-                            style={{ background: 'transparent', border: 'none', color: '#C4956A', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}
+                            style={{ background: 'transparent', border: 'none', color: '#3B8BD4', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}
                           >
                             Edit
                           </button>

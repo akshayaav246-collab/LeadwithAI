@@ -193,7 +193,7 @@ export function Program() {
             color: 'var(--color-white)'
           }}>
             <div className="program-hero-sub" style={{ margin: 0, color: 'inherit', fontWeight: 500 }}>
-              <strong style={{ fontWeight: 700 }}>Graduation Ceremony</strong> · Day Two, 31st May 2026
+              <strong style={{ fontWeight: 700 }}>Graduation Ceremony</strong> · Day Two Afternoon
             </div>
             <div style={{
               border: '1px solid rgba(255,255,255,0.5)',
@@ -295,23 +295,6 @@ export function Program() {
               </ul>
             </div>
 
-            <div className="program-led-by">
-              <div className="program-led-avatar" aria-hidden="true">
-                {active.speakerInitials}
-              </div>
-              <div>
-                <div className="program-led-label">LED BY</div>
-                <div className="program-led-name">
-                  <Link
-                    href={`/speakers#${active.speakerId}`}
-                    style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1.5px solid var(--color-sienna)', paddingBottom: '1px', fontWeight: 700 }}
-                  >
-                    {active.speakerName}
-                  </Link>
-                  <span className="program-led-role">, {active.speakerRole}</span>
-                </div>
-              </div>
-            </div>
 
             <div className="program-nav">
               <button

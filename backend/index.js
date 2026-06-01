@@ -15,8 +15,6 @@ const PORT = process.env.PORT || 4002;
 // Event details
 const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
 const MEETING_LINK = process.env.ZOOM_LINK || 'https://zoom.us/j/00000000000';
-const EVENT_DATE_DAY1 = new Date('2026-05-30T04:30:00Z'); // May 30 10:00 AM IST
-const EVENT_DATE_DAY2 = new Date('2026-05-30T12:30:00Z'); // May 30 6:00 PM IST (end of Day 1)
 // --- Middleware ------------------------------
 // Request Logging
 app.use((req, res, next) => {
@@ -127,25 +125,66 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
+// Helper: Determine if tomorrow (Friday in Kolkata) is the day before a cohort weekend, and return its name
+function getCohortNameForTomorrow() {
+  const tomorrow = new Date(new Date().getTime() + 24 * 60 * 60 * 1000);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric'
+  });
+  const parts = formatter.formatToParts(tomorrow);
+  const y = parseInt(parts.find(p => p.type === 'year').value);
+  const m = parseInt(parts.find(p => p.type === 'month').value); // 1-indexed, June is 6
+  const d = parseInt(parts.find(p => p.type === 'day').value);
+
+  if (y === 2026 && m === 6) {
+    if (d === 6) return 'June 6 & 7, 2026';
+    if (d === 13) return 'June 13 & 14, 2026';
+    if (d === 20) return 'June 20 & 21, 2026';
+    if (d === 27) return 'June 27 & 28, 2026';
+  }
+  return null;
+}
+
+// Helper: Determine if today (Saturday in Kolkata) is a cohort day 1, and return its name
+function getCohortNameForToday() {
+  const today = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric'
+  });
+  const parts = formatter.formatToParts(today);
+  const y = parseInt(parts.find(p => p.type === 'year').value);
+  const m = parseInt(parts.find(p => p.type === 'month').value); // June is 6
+  const d = parseInt(parts.find(p => p.type === 'day').value);
+
+  if (y === 2026 && m === 6) {
+    if (d === 6) return 'June 6 & 7, 2026';
+    if (d === 13) return 'June 13 & 14, 2026';
+    if (d === 20) return 'June 20 & 21, 2026';
+    if (d === 27) return 'June 27 & 28, 2026';
+  }
+  return null;
+}
+
 // --- Reminder Email Cron Jobs ---------------
-// DAY 1 REMINDER: Runs at 9:00 AM IST (03:30 UTC) on May 29th
-// Sends "starts TOMORROW" reminder to all paid participants
+// Runs daily at 9:00 AM IST (03:30 UTC)
+// Sends "starts TOMORROW" reminder to all paid participants registered for the upcoming Saturday cohort
 function scheduleReminderEmails() {
   cron.schedule('30 3 * * *', async () => {
     try {
-      const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-      const isTomorrow =
-        tomorrow.getUTCFullYear() === EVENT_DATE_DAY1.getUTCFullYear() &&
-        tomorrow.getUTCMonth() === EVENT_DATE_DAY1.getUTCMonth() &&
-        tomorrow.getUTCDate() === EVENT_DATE_DAY1.getUTCDate();
-      if (!isTomorrow) {
-        console.log(`[Cron Day1] Not 1 day before event. Skipping.`);
+      const cohort = getCohortNameForTomorrow();
+      if (!cohort) {
+        console.log(`[Cron Day1] Tomorrow is not a cohort Saturday. Skipping.`);
         return;
       }
-      console.log('[Cron Day1] Sending Day 1 reminder emails...');
+      console.log(`[Cron Day1] Sending Day 1 reminder emails for cohort: ${cohort}...`);
       const paidUsers = await User.find({
+        selectedCohort: cohort,
         registeredEvents: { $elemMatch: { eventName: EVENT_NAME, paymentStatus: 'confirmed' } }
       });
       let sent = 0;
@@ -162,23 +201,20 @@ function scheduleReminderEmails() {
       console.error('[Cron Day1] Job error:', err.message);
     }
   }, { timezone: 'Asia/Kolkata' });
-  console.log('✓ Day 1 reminder cron scheduled (9:00 AM IST on May 29th)');
+  console.log('✓ Day 1 reminder cron scheduled (Daily at 9:00 AM IST)');
 
-  // DAY 2 REMINDER: Runs at 6:30 PM IST (13:00 UTC) on May 30th
-  // Sends "get ready for Day 2" email after Day 1 ends
+  // Runs daily at 6:30 PM IST (13:00 UTC)
+  // Sends "get ready for Day 2" email after Day 1 ends to paid participants of today's cohort
   cron.schedule('0 13 * * *', async () => {
     try {
-      const now = new Date();
-      const isDay1 =
-        now.getUTCFullYear() === EVENT_DATE_DAY1.getUTCFullYear() &&
-        now.getUTCMonth() === EVENT_DATE_DAY1.getUTCMonth() &&
-        now.getUTCDate() === EVENT_DATE_DAY1.getUTCDate();
-      if (!isDay1) {
-        console.log(`[Cron Day2] Not May 30th. Skipping.`);
+      const cohort = getCohortNameForToday();
+      if (!cohort) {
+        console.log(`[Cron Day2] Today is not a cohort Saturday. Skipping.`);
         return;
       }
-      console.log('[Cron Day2] Sending Day 2 reminder emails...');
+      console.log(`[Cron Day2] Sending Day 2 reminder emails for cohort: ${cohort}...`);
       const paidUsers = await User.find({
+        selectedCohort: cohort,
         registeredEvents: { $elemMatch: { eventName: EVENT_NAME, paymentStatus: 'confirmed' } }
       });
       let sent = 0;
@@ -195,7 +231,7 @@ function scheduleReminderEmails() {
       console.error('[Cron Day2] Job error:', err.message);
     }
   }, { timezone: 'Asia/Kolkata' });
-  console.log('✓ Day 2 reminder cron scheduled (6:30 PM IST on May 30th)');
+  console.log('✓ Day 2 reminder cron scheduled (Daily at 6:30 PM IST)');
 }
 // --- MongoDB + Start Server ------------------
 mongoose.connection.on('disconnected', () => {

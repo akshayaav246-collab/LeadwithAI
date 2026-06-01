@@ -7,33 +7,36 @@
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
 }
 
-.admin-layout, .admin-login-container {
+.admin-layout {
   display: flex;
   min-height: 100vh;
-  background-color: #F5F0E8;
+  background-color: #F0F4F8;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(59, 139, 212, 0.06), transparent 50%),
+    radial-gradient(circle at 85% 80%, rgba(30, 64, 175, 0.04), transparent 50%);
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────── */
 .admin-sidebar {
   width: 260px;
   background: #fff;
-  border-right: 2px solid #E2D9CC;
+  border-right: 2px solid #E2E8F0;
   display: flex;
   flex-direction: column;
   position: sticky;
   top: 0;
   height: 100vh;
-  box-shadow: 2px 0 12px rgba(59,47,47,0.06);
+  box-shadow: 2px 0 12px rgba(0,0,0,0.06);
 }
 
 .admin-sidebar-header {
   padding: 1.8rem 1.5rem 1.4rem;
-  border-bottom: 2px solid #E2D9CC;
+  border-bottom: 2px solid rgba(255,255,255,0.08);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.6rem;
-  background: #3B2F2F;
+  background: #0D1117;
 }
 
 .admin-sidebar-logo {
@@ -45,7 +48,7 @@
 }
 
 .admin-sidebar-header h3 {
-  color: #C4956A;
+  color: #3B8BD4;
   margin: 0;
   font-size: 1.15rem;
   font-family: var(--font-heading);
@@ -57,9 +60,9 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: rgba(196,149,106,0.18);
-  color: #C4956A;
-  border: 1px solid rgba(196,149,106,0.4);
+  background: rgba(59,139,212,0.18);
+  color: #3B8BD4;
+  border: 1px solid rgba(59,139,212,0.4);
   padding: 0.25rem 0.7rem;
   border-radius: 20px;
   font-size: 0.75rem;
@@ -73,7 +76,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #C4956A;
+  background: #3B8BD4;
   display: inline-block;
 }
 
@@ -110,7 +113,7 @@
   text-align: left;
   font-size: 1.05rem;
   font-weight: 600;
-  color: #5a4a3a;
+  color: #475569;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.18s ease;
@@ -120,29 +123,29 @@
 }
 
 .admin-nav-item:hover {
-  background: #FAF7F2;
-  color: #3B2F2F;
+  background: rgba(59, 139, 212, 0.08);
+  color: #2563EB;
 }
 
 .admin-nav-item.active {
-  background: #FAF7F2;
-  border-left-color: #C4956A;
-  color: #3B2F2F;
+  background: rgba(59, 139, 212, 0.12);
+  border-left-color: #3B8BD4;
+  color: #2563EB;
   font-weight: 600;
 }
 
 /* ── Sidebar Footer / Logout ─────────────────────────────────── */
 .admin-sidebar-footer {
   padding: 1.2rem 1.5rem 1.5rem;
-  border-top: 2px solid #E2D9CC;
+  border-top: 2px solid #E2E8F0;
 }
 
 .admin-logout-btn {
   width: 100%;
   padding: 0.75rem;
   background: #fff;
-  border: 2px solid #E2D9CC;
-  color: #5a4a3a;
+  border: 1px solid #D1D5DB;
+  color: #475569;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
@@ -156,9 +159,9 @@
 }
 
 .admin-logout-btn:hover {
-  background: #3B2F2F;
-  border-color: #3B2F2F;
-  color: #C4956A;
+  background: #F1F5F9;
+  border-color: #94A3B8;
+  color: #0F172A;
 }
 
 /* ── Main Content ────────────────────────────────────────────── */
@@ -166,7 +169,10 @@
   flex: 1;
   padding: 2.5rem 3rem;
   overflow-y: auto;
-  background: #F5F0E8;
+  background: #F0F4F8;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(59, 139, 212, 0.06), transparent 50%),
+    radial-gradient(circle at 85% 80%, rgba(30, 64, 175, 0.04), transparent 50%);
 }
 
 .admin-page {
@@ -184,9 +190,9 @@
 .admin-page-title {
   margin: 0 0 2rem;
   font-size: 1.9rem;
-  color: #3B2F2F;
+  color: #0F172A;
   font-family: var(--font-heading);
-  border-bottom: 2px solid #E2D9CC;
+  border-bottom: 2px solid rgba(59, 139, 212, 0.15);
   padding-bottom: 0.8rem;
 }
 
@@ -206,27 +212,27 @@
 
 .admin-stat-card {
   background: #fff;
-  border: 2px solid #E2D9CC;
+  border: 2px solid rgba(59, 139, 212, 0.12);
   border-radius: 14px;
   padding: 1.6rem 1.8rem;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  box-shadow: 0 4px 14px rgba(59,47,47,0.06);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
   transition: box-shadow 0.2s;
 }
 
 .admin-stat-card:hover {
-  box-shadow: 0 8px 24px rgba(59,47,47,0.1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
 }
 
 .admin-stat-card.highlight {
-  border-color: #C4956A;
+  border-color: #3B8BD4;
   background: linear-gradient(135deg, #FFF9F3, #FFF4E6);
 }
 
 .stat-label {
-  color: #8C7B6B;
+  color: #64748B;
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -234,7 +240,7 @@
 }
 
 .stat-value {
-  color: #3B2F2F;
+  color: #0D1117;
   font-size: 2.8rem;
   font-weight: 700;
   font-family: var(--font-heading);
@@ -242,7 +248,7 @@
 }
 
 .admin-stat-card.highlight .stat-value {
-  color: #C4956A;
+  color: #3B8BD4;
 }
 
 /* ── Section Headings ────────────────────────────────────────── */
@@ -251,21 +257,21 @@
 }
 
 .admin-section h3 {
-  color: #3B2F2F;
+  color: #1E293B;
   font-family: var(--font-heading);
   font-size: 1.2rem;
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #E2D9CC;
+  border-bottom: 1px solid rgba(59, 139, 212, 0.15);
 }
 
 /* ── Tables ──────────────────────────────────────────────────── */
 .admin-table-container {
   background: #fff;
-  border: 2px solid #E2D9CC;
+  border: 2px solid rgba(59, 139, 212, 0.12);
   border-radius: 14px;
   overflow-x: auto;
-  box-shadow: 0 4px 14px rgba(59,47,47,0.06);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
 }
 
 .admin-table {
@@ -276,19 +282,19 @@
 
 .admin-table th {
   padding: 1.1rem 1.4rem;
-  background: #FAF7F2;
-  color: #5a4a3a;
+  background: #161B22;
+  color: #94A3B8;
   font-weight: 700;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  border-bottom: 2px solid #E2D9CC;
+  border-bottom: 2px solid rgba(255,255,255,0.08);
 }
 
 .admin-table td {
   padding: 1rem 1.4rem;
-  border-bottom: 1px solid #F0EBE1;
-  color: #2A1F14;
+  border-bottom: 1px solid #E2E8F0;
+  color: #1E293B;
   font-size: 0.93rem;
   vertical-align: middle;
 }
@@ -298,7 +304,11 @@
 }
 
 .admin-table tbody tr:hover {
-  background: #FAF7F2;
+  background: #F8FAFC;
+}
+
+.admin-table tbody tr:hover td {
+  color: #0F172A;
 }
 
 /* ── Filter Controls ─────────────────────────────────────────── */
@@ -311,23 +321,23 @@
 .admin-search-input {
   flex: 1;
   padding: 0.75rem 1.1rem;
-  border: 2px solid #E2D9CC;
+  border: 2px solid rgba(59, 139, 212, 0.15);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.97rem;
   background: #fff;
-  color: #2A1F14;
+  color: #000000;
   transition: border-color 0.2s;
 }
 
 .admin-search-input:focus {
   outline: none;
-  border-color: #C4956A;
+  border-color: #3B8BD4;
 }
 
 .admin-select {
   padding: 0.75rem 2.5rem 0.75rem 1.1rem;
-  border: 2px solid #E2D9CC;
+  border: 2px solid rgba(59, 139, 212, 0.15);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.97rem;
@@ -337,7 +347,7 @@
   background-position: right 1rem center;
   appearance: none;
   -webkit-appearance: none;
-  color: #2A1F14;
+  color: #000000;
   min-width: 200px;
   transition: border-color 0.2s;
   cursor: pointer;
@@ -345,16 +355,16 @@
 
 .admin-select:focus {
   outline: none;
-  border-color: #C4956A;
+  border-color: #3B8BD4;
 }
 
 /* ── Cards (for forms) ───────────────────────────────────────── */
 .admin-card {
   background: #fff;
-  border: 2px solid #E2D9CC;
+  border: 2px solid rgba(59, 139, 212, 0.12);
   border-radius: 14px;
   padding: 2.5rem;
-  box-shadow: 0 4px 14px rgba(59,47,47,0.06);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
 }
 
 /* ── Forms ───────────────────────────────────────────────────── */
@@ -365,7 +375,7 @@
 .admin-form label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #3B2F2F;
+  color: #0D1117;
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
@@ -378,11 +388,11 @@
 .admin-form input[type="password"] {
   width: 100%;
   padding: 0.8rem 1.1rem;
-  border: 2px solid #E2D9CC;
+  border: 2px solid rgba(59, 139, 212, 0.15);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.97rem;
-  color: #2A1F14;
+  color: #000000;
   background: #fff;
   transition: border-color 0.2s;
   box-sizing: border-box;
@@ -394,18 +404,18 @@
 .admin-search-input:focus,
 .admin-textarea:focus {
   outline: none;
-  border-color: #C4956A;
-  box-shadow: 0 0 0 3px rgba(196,149,106,0.12);
+  border-color: #3B8BD4;
+  box-shadow: 0 0 0 3px rgba(59,139,212,0.12);
 }
 
 .admin-textarea {
   width: 100%;
   padding: 0.9rem 1.1rem;
-  border: 2px solid #E2D9CC;
+  border: 2px solid rgba(59, 139, 212, 0.15);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.97rem;
-  color: #2A1F14;
+  color: #000000;
   background: #fff;
   resize: vertical;
   transition: border-color 0.2s;
@@ -445,7 +455,7 @@
 }
 
 .admin-loading {
-  color: #8C7B6B;
+  color: #64748B;
   padding: 2rem;
   text-align: center;
   font-size: 1rem;
@@ -457,23 +467,26 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #F5F0E8, #EDE8DF);
+  background: #F0F4F8;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(59, 139, 212, 0.06), transparent 50%),
+    radial-gradient(circle at 85% 80%, rgba(30, 64, 175, 0.04), transparent 50%);
   padding: 1rem;
   font-family: var(--font-body);
 }
 
 .admin-login-card {
   background: #fff;
-  border: 2px solid #E2D9CC;
+  border: 2px solid rgba(59, 139, 212, 0.12);
   border-radius: 16px;
   padding: 3rem;
   width: 100%;
   max-width: 450px;
-  box-shadow: 0 12px 32px rgba(59,47,47,0.1);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.1);
 }
 
 .admin-login-card h2 {
-  color: #3B2F2F;
+  color: #0D1117;
   margin-top: 0;
   margin-bottom: 2rem;
   text-align: center;
@@ -488,7 +501,7 @@
 .admin-login-card label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #3B2F2F;
+  color: #0D1117;
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
@@ -499,19 +512,19 @@
 .admin-login-card input {
   width: 100%;
   padding: 0.8rem 1.1rem;
-  border: 2px solid #E2D9CC;
+  border: 2px solid rgba(59, 139, 212, 0.15);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.97rem;
-  color: #2A1F14;
+  color: #000000;
   transition: border-color 0.2s;
   box-sizing: border-box;
 }
 
 .admin-login-card input:focus {
   outline: none;
-  border-color: #C4956A;
-  box-shadow: 0 0 0 3px rgba(196,149,106,0.12);
+  border-color: #3B8BD4;
+  box-shadow: 0 0 0 3px rgba(59,139,212,0.12);
 }
 
 .admin-login-card button {
@@ -521,8 +534,8 @@
 
 /* ── Primary Button ──────────────────────────────────────────── */
 .btn-primary {
-  background: #3B2F2F;
-  color: #C4956A;
+  background: var(--color-sienna);
+  color: var(--color-white);
   border: none;
   padding: 0.85rem 2rem;
   border-radius: 8px;
@@ -535,7 +548,7 @@
 }
 
 .btn-primary:hover {
-  background: #4d3d3d;
+  background: var(--color-sienna-dark);
 }
 
 .btn-primary:active {
@@ -553,7 +566,7 @@
   .admin-sidebar { width: 100%; height: auto; position: relative; }
   .admin-nav { flex-direction: row; overflow-x: auto; padding: 0.5rem 1rem; gap: 0; }
   .admin-nav-item { border-left: none; border-bottom: 3px solid transparent; white-space: nowrap; border-radius: 0; margin-right: 0; }
-  .admin-nav-item.active { border-left-color: transparent; border-bottom-color: #C4956A; }
+  .admin-nav-item.active { border-left-color: transparent; border-bottom-color: #3B8BD4; }
   .admin-main { padding: 1.5rem; }
   .admin-controls { flex-direction: column; }
   .admin-stats-grid { grid-template-columns: 1fr; }
@@ -563,13 +576,13 @@
 .admin-row-name {
   font-size: 15px !important;
   font-weight: 700 !important;
-  color: #2A1F14 !important;
+  color: #000000 !important;
 }
 
 .admin-supporting-info {
   font-size: 13.5px !important;
   font-weight: 500 !important;
-  color: #5a4a3a !important;
+  color: #64748B !important;
 }
 
 /* Override all inputs and buttons text size to 16px with bold weight for high clarity */
@@ -582,4 +595,105 @@
 .admin-logout-btn {
   font-size: 16px !important;
   font-weight: 600 !important;
+}
+
+/* Explicitly set text color and placeholder style for all inputs, selects, and textareas in the admin panel to prevent them from inheriting light-colored body text */
+.admin-layout input,
+.admin-login-container input,
+.admin-layout select,
+.admin-login-container select,
+.admin-layout textarea,
+.admin-login-container textarea {
+  color: #0F172A !important;
+}
+
+/* Ensure placeholder text is distinct and readable */
+.admin-layout input::placeholder,
+.admin-login-container input::placeholder,
+.admin-layout textarea::placeholder {
+  color: #94A3B8 !important;
+  opacity: 0.95 !important;
+}
+
+/* Webkit browser date input placeholder text color styling */
+.admin-layout input[type="date"]::-webkit-datetime-edit-text,
+.admin-layout input[type="date"]::-webkit-datetime-edit-month-field,
+.admin-layout input[type="date"]::-webkit-datetime-edit-day-field,
+.admin-layout input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #64748B !important;
+}
+
+/* ── Mobile Layout Enhancements (max-width: 768px) ── */
+.admin-header-logout {
+  display: none !important;
+}
+
+.admin-brand-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+@media (max-width: 768px) {
+  /* 3. Bring logout button to the right side of logo and admin badge in header */
+  .admin-sidebar-header {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 1.2rem 1.5rem !important;
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+  
+  .admin-header-logout {
+    display: flex !important;
+    width: auto !important;
+    padding: 0.45rem 0.8rem !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    background: #1E293B !important;
+    border: 1px solid #334155 !important;
+    color: #F8FAFC !important;
+    border-radius: 6px !important;
+    gap: 0.4rem !important;
+  }
+
+  .admin-header-logout svg {
+    width: 14px;
+    height: 14px;
+    stroke: #F8FAFC !important;
+  }
+
+  .admin-header-logout:hover {
+    background: #334155 !important;
+  }
+
+  .admin-sidebar-footer {
+    display: none !important;
+  }
+
+  /* 4. Wrap 'Add Registrant' and 'Export CSV' below the page title */
+  .admin-page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  .admin-page-header > div {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    gap: 0.75rem !important;
+  }
+  
+  /* 5. In email, reduce the recipients select width and height */
+  .admin-select {
+    width: 100% !important;
+    max-width: 280px !important;
+    padding: 0.6rem 2rem 0.6rem 0.9rem !important;
+    font-size: 14px !important;
+    height: auto !important;
+  }
 }

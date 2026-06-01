@@ -50,11 +50,14 @@ const userSchema = new mongoose.Schema(
     isWaitlisted: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     referralCode: { type: String, default: null },
+    selectedCohort: { type: String, default: null },
+    isAdminCreated: { type: Boolean, default: false },
 
     // Feedback for the 4 sessions
     feedback: [{
       session: { type: String, required: true },
-      text: { type: String, required: true }
+      rating:  { type: String, enum: ['Excellent', 'Good', 'Average', 'Poor'], required: true },
+      text:    { type: String, default: '' }
     }],
     isFeedbackSubmitted: { type: Boolean, default: false },
 

@@ -112,13 +112,11 @@ function SpeakerRow({ speaker, index }: { speaker: Speaker; index: number }) {
                 <div className="speaker-initials">{speaker.initials}</div>
               )}
             </div>
-            <div className="speaker-module-tag">{speaker.moduleLabel}</div>
           </div>
           <div className="speaker-bio-col speaker-anim-bio">
             <div>
               <div className="speaker-role">{speaker.role.toUpperCase()}</div>
               <h2 className="speaker-name">{speaker.name}</h2>
-              <h4 className="speaker-module">{speaker.module}</h4>
             </div>
             <div className="speaker-bio-content">
               <p className="speaker-bio-text">{speaker.bio}</p>

@@ -28,7 +28,7 @@ function IdCardLink({ path }: { path: string | null }) {
             alt="ID Card"
             style={{
               width: 80, height: 56, objectFit: 'cover',
-              borderRadius: 6, border: '1.5px solid #E2D9CC', cursor: 'pointer',
+              borderRadius: 6, border: '1.5px solid rgba(59, 139, 212, 0.2)', cursor: 'pointer',
             }}
           />
         </a>
@@ -37,7 +37,7 @@ function IdCardLink({ path }: { path: string | null }) {
         href={url}
         target="_blank"
         rel="noreferrer"
-        style={{ fontSize: '0.78rem', color: '#C4956A', textDecoration: 'underline' }}
+        style={{ fontSize: '0.78rem', color: '#3B8BD4', textDecoration: 'underline' }}
       >
         {isImage ? 'View full' : 'View PDF'}
       </a>
@@ -47,9 +47,9 @@ function IdCardLink({ path }: { path: string | null }) {
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.88rem', padding: '0.3rem 0', borderBottom: '1px solid #F0EBE1' }}>
-      <span style={{ color: '#8C7B6B', minWidth: 130, fontWeight: 600 }}>{label}</span>
-      <span style={{ color: '#2A1F14' }}>{value || '—'}</span>
+    <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.88rem', padding: '0.3rem 0', borderBottom: '1px solid #E2E8F0' }}>
+      <span style={{ color: '#64748B', minWidth: 130, fontWeight: 600 }}>{label}</span>
+      <span style={{ color: '#0F172A' }}>{value || '—'}</span>
     </div>
   );
 }
@@ -116,6 +116,7 @@ export function AdminUsers() {
   const [filterWaitlist, setFilterWaitlist] = useState('all');
   const [filterReferral, setFilterReferral] = useState('all');
   const [filterHeardFrom, setFilterHeardFrom] = useState('all');
+  const [filterCohort, setFilterCohort] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   
   const [referralsList, setReferralsList] = useState<any[]>([]);
@@ -133,7 +134,8 @@ export function AdminUsers() {
     domain: '',
     organization: '',
     heardFrom: '',
-    referralCode: ''
+    referralCode: '',
+    selectedCohort: ''
   });
 
   // Manual Payment Confirmation State
@@ -173,7 +175,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder]);
+  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -187,6 +189,7 @@ export function AdminUsers() {
         filterWaitlist,
         filterReferral,
         filterHeardFrom,
+        filterCohort,
         sortOrder
       });
       setUsers(data.data || []);
@@ -202,7 +205,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
-  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, adminToken]);
+  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, adminToken]);
 
   const handleExportCSV = async () => {
     try {
@@ -213,6 +216,7 @@ export function AdminUsers() {
         filterWaitlist,
         filterReferral,
         filterHeardFrom,
+        filterCohort,
         exportCsv: 'true',
         sortOrder
       });
@@ -223,7 +227,7 @@ export function AdminUsers() {
         return;
       }
       const headers = [
-        'Name', 'Email', 'Phone', 'Type',
+        'Name', 'Email', 'Phone', 'Type', 'Selected Date',
         'College', 'Course', 'Year',
         'Domain', 'Organization',
         'Waitlisted', 'Active', 'Heard From', 'Referral Code',
@@ -231,6 +235,7 @@ export function AdminUsers() {
       ];
       const rows = exportUsers.map((u: any) => [
         `"${u.fullName}"`, `"${u.email}"`, `"${u.phone}"`, `"${u.userType}"`,
+        `"${u.selectedCohort || '-'}"`,
         `"${u.collegeName}"`, `"${u.course}"`, `"${u.year}"`,
         `"${u.domain}"`, `"${u.organization}"`,
         u.isWaitlisted ? 'Yes' : 'No', u.isActive ? 'Active' : 'Inactive', `"${u.heardFrom || '-'}"`, `"${u.referralCode || '-'}"`,
@@ -305,7 +310,8 @@ export function AdminUsers() {
       domain: user.domain === '-' ? '' : user.domain,
       organization: user.organization === '-' ? '' : user.organization,
       heardFrom: user.heardFrom === '-' ? '' : user.heardFrom,
-      referralCode: resolvedCode
+      referralCode: resolvedCode,
+      selectedCohort: user.selectedCohort || ''
     });
   };
 
@@ -381,18 +387,18 @@ export function AdminUsers() {
 
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         <div style={{
-          background: '#fff', border: '2px solid #E2D9CC', borderRadius: 10,
-          padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center',
+          background: '#fff', border: '2px solid rgba(59, 139, 212, 0.15)', borderRadius: 10,
+          padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.3rem', flex: 1
         }}>
-          <span style={{ fontSize: '1.3rem', fontWeight: 700, color: '#3B2F2F' }}>{totalRegistrants}</span>
-          <span style={{ fontSize: '0.8rem', color: '#8C7B6B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Registrants</span>
+          <span style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0F172A' }}>{totalRegistrants}</span>
+          <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Registrants</span>
         </div>
         <div style={{
-          background: '#fff', border: '2px solid #E2D9CC', borderRadius: 10,
-          padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center',
+          background: '#fff', border: '2px solid rgba(59, 139, 212, 0.15)', borderRadius: 10,
+          padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.3rem', flex: 1
         }}>
-          <span style={{ fontSize: '1.3rem', fontWeight: 700, color: '#3B2F2F' }}>{total}</span>
-          <span style={{ fontSize: '0.8rem', color: '#8C7B6B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Filtered Total</span>
+          <span style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0F172A' }}>{total}</span>
+          <span style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Filtered Total</span>
         </div>
       </div>
 
@@ -431,9 +437,12 @@ export function AdminUsers() {
             <option key={r.code} value={r.label}>{r.label}</option>
           ))}
         </select>
-        <select value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="admin-select">
-          <option value="desc">Registered: Newest First</option>
-          <option value="asc">Registered: Oldest First</option>
+        <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)} className="admin-select">
+          <option value="all">All Dates</option>
+          <option value="June 6 & 7, 2026">June 6 & 7, 2026</option>
+          <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
+          <option value="June 20 & 21, 2026">June 20 & 21, 2026</option>
+          <option value="June 27 & 28, 2026">June 27 & 28, 2026</option>
         </select>
       </div>
 
@@ -455,7 +464,7 @@ export function AdminUsers() {
                 <th style={{ textAlign: 'center' }}>Referral</th>
                 <th style={{ textAlign: 'center' }}>Payment</th>
                 <th style={{ textAlign: 'center' }}>Heard From</th>
-                <th style={{ textAlign: 'center' }}>Registered</th>
+                <th style={{ textAlign: 'center' }}>Preferred Date</th>
               </tr>
             </thead>
             <tbody>
@@ -470,9 +479,9 @@ export function AdminUsers() {
                     <td className="admin-supporting-info" style={{ textAlign: 'center' }}>{user.phone}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className="admin-badge" style={{
-                        background: user.userType === 'student' ? 'rgba(196,149,106,0.1)' : 'rgba(90,74,58,0.1)',
-                        color: user.userType === 'student' ? '#C4956A' : '#5a4a3a',
-                        border: `1px solid ${user.userType === 'student' ? 'rgba(196,149,106,0.2)' : 'rgba(90,74,58,0.2)'}`,
+                        background: user.userType === 'student' ? 'rgba(59,139,212,0.08)' : 'rgba(71,85,105,0.08)',
+                        color: user.userType === 'student' ? '#3B8BD4' : '#475569',
+                        border: `1px solid ${user.userType === 'student' ? 'rgba(59,139,212,0.2)' : 'rgba(71,85,105,0.2)'}`,
                       }}>
                         {user.userType === 'student' ? 'Student' : 'Professional'}
                       </span>
@@ -489,20 +498,20 @@ export function AdminUsers() {
                     <td className="admin-supporting-info" style={{ textAlign: 'center' }}>
                       {user.heardFrom || '-'}
                     </td>
-                    <td className="admin-supporting-info" style={{ textAlign: 'center' }}>{new Date(user.createdAt).toLocaleDateString()}</td>
+                    <td className="admin-supporting-info" style={{ textAlign: 'center' }}>{user.selectedCohort || '-'}</td>
                   </tr>
 
                   {expandedId === user.id && (
                     <tr>
-                      <td colSpan={10} style={{ background: '#FAF7F2', padding: '1.2rem 2rem' }}>
+                      <td colSpan={10} style={{ background: '#F0F4F8', padding: '1.2rem 2rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: user.userType === 'student' && user.idCardPath ? '1fr 1fr 180px' : '1fr 1fr', gap: '1.5rem' }}>
                           
                           {/* Profile completion check */}
                           {!user.isProfileComplete && (
                             <div style={{
                               gridColumn: '1 / -1',
-                              background: '#fffbeb',
-                              border: '1.5px solid #fef3c7',
+                              background: '#fff',
+                              border: '1.5px solid rgba(59, 139, 212, 0.2)',
                               borderRadius: '8px',
                               padding: '1rem',
                               display: 'flex',
@@ -510,7 +519,7 @@ export function AdminUsers() {
                               gap: '0.75rem',
                               boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
                             }}>
-                              <div style={{ color: '#d97706', display: 'flex', alignItems: 'center', height: '20px' }}>
+                              <div style={{ color: '#3B8BD4', display: 'flex', alignItems: 'center', height: '20px' }}>
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                                   <line x1="12" y1="9" x2="12" y2="13"/>
@@ -518,9 +527,9 @@ export function AdminUsers() {
                                 </svg>
                               </div>
                               <div>
-                                <h4 style={{ margin: '0 0 0.25rem 0', color: '#92400e', fontSize: '0.92rem', fontWeight: 700 }}>Incomplete Profile Details</h4>
-                                <p style={{ margin: 0, fontSize: '0.85rem', color: '#b45309', lineHeight: '1.4' }}>
-                                  The registrant has not completed their profile yet. Missing fields: <strong style={{ color: '#92400e' }}>{getMissingFields(user).join(', ') || 'None'}</strong>.
+                                <h4 style={{ margin: '0 0 0.25rem 0', color: '#0F172A', fontSize: '0.92rem', fontWeight: 700 }}>Incomplete Profile Details</h4>
+                                <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B', lineHeight: '1.4' }}>
+                                  The registrant has not completed their profile yet. Missing fields: <strong style={{ color: '#0F172A' }}>{getMissingFields(user).join(', ') || 'None'}</strong>.
                                 </p>
                               </div>
                             </div>
@@ -528,7 +537,7 @@ export function AdminUsers() {
 
                           {/* Personal */}
                           <div>
-                            <div style={{ fontWeight: 700, color: '#3B2F2F', marginBottom: '0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                               Personal Details
                             </div>
                             <DetailRow label="Full Name" value={user.fullName} />
@@ -537,6 +546,7 @@ export function AdminUsers() {
                             <DetailRow label="User Type" value={user.userType === 'student' ? 'Student' : 'Working Professional'} />
                             <DetailRow label="Registered On" value={new Date(user.createdAt).toLocaleString()} />
                             <DetailRow label="Heard From" value={user.heardFrom} />
+                            <DetailRow label="Selected Date" value={user.selectedCohort || '-'} />
                             
                             {/* Controls Panel */}
                             <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -572,7 +582,7 @@ export function AdminUsers() {
 
                           {/* Academic/Professional + Payment */}
                           <div>
-                            <div style={{ fontWeight: 700, color: '#3B2F2F', marginBottom: '0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                               {user.userType === 'student' ? 'Academic Details' : 'Professional Details'}
                             </div>
                             {user.userType === 'student' ? (
@@ -589,7 +599,7 @@ export function AdminUsers() {
                             )}
 
                             <div style={{ marginTop: '0.8rem' }}>
-                              <div style={{ fontWeight: 700, color: '#3B2F2F', marginBottom: '0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                                 Payment
                               </div>
                               <DetailRow label="Status" value={
@@ -618,8 +628,8 @@ export function AdminUsers() {
 
                               {user.isPaid && (
                                 <>
-                                  <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.88rem', padding: '0.3rem 0', borderBottom: '1px solid #F0EBE1', alignItems: 'center' }}>
-                                    <span style={{ color: '#8C7B6B', minWidth: 130, fontWeight: 600 }}>Zoom Status</span>
+                                  <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.88rem', padding: '0.3rem 0', borderBottom: '1px solid rgba(59, 139, 212, 0.15)', alignItems: 'center' }}>
+                                    <span style={{ color: '#64748B', minWidth: 130, fontWeight: 600 }}>Zoom Status</span>
                                     <span className={`admin-badge ${user.zoomStatus === 'success' ? 'success' : user.zoomStatus === 'failed' ? 'danger' : 'warning'}`} style={{ backgroundColor: user.zoomStatus === 'failed' ? '#fee2e2' : undefined, color: user.zoomStatus === 'failed' ? '#dc2626' : undefined }}>
                                       {user.zoomStatus}
                                     </span>
@@ -627,8 +637,8 @@ export function AdminUsers() {
                                       <button onClick={() => handleRetry(user.id, 'zoom')} style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '0.2rem 0.5rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #dc2626', background: '#fff', color: '#dc2626' }}>Retry</button>
                                     )}
                                   </div>
-                                  <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.88rem', padding: '0.3rem 0', borderBottom: '1px solid #F0EBE1', alignItems: 'center' }}>
-                                    <span style={{ color: '#8C7B6B', minWidth: 130, fontWeight: 600 }}>Email Status</span>
+                                  <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.88rem', padding: '0.3rem 0', borderBottom: '1px solid rgba(59, 139, 212, 0.15)', alignItems: 'center' }}>
+                                    <span style={{ color: '#64748B', minWidth: 130, fontWeight: 600 }}>Email Status</span>
                                     <span className={`admin-badge ${user.emailStatus === 'success' ? 'success' : user.emailStatus === 'failed' ? 'danger' : 'warning'}`} style={{ backgroundColor: user.emailStatus === 'failed' ? '#fee2e2' : undefined, color: user.emailStatus === 'failed' ? '#dc2626' : undefined }}>
                                       {user.emailStatus}
                                     </span>
@@ -656,7 +666,7 @@ export function AdminUsers() {
                           {/* ID Card */}
                           {user.userType === 'student' && (
                             <div>
-                              <div style={{ fontWeight: 700, color: '#3B2F2F', marginBottom: '0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '0.6rem', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                                 ID Card
                               </div>
                               <IdCardLink path={user.idCardPath} />
@@ -681,22 +691,22 @@ export function AdminUsers() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderTop: '1px solid #E2D9CC', backgroundColor: '#FAF7F2' }}>
-              <div style={{ fontSize: '0.88rem', color: '#8C7B6B' }}>
-                Showing page <span style={{ fontWeight: 600, color: '#2A1F14' }}>{page}</span> of <span style={{ fontWeight: 600, color: '#2A1F14' }}>{totalPages}</span> ({total} total)
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderTop: '1px solid rgba(59, 139, 212, 0.2)', backgroundColor: '#F0F4F8' }}>
+              <div style={{ fontSize: '0.88rem', color: '#64748B' }}>
+                Showing page <span style={{ fontWeight: 600, color: '#0F172A' }}>{page}</span> of <span style={{ fontWeight: 600, color: '#0F172A' }}>{totalPages}</span> ({total} total)
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  style={{ padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid #E2D9CC', backgroundColor: page === 1 ? '#F0EBE1' : '#fff', cursor: page === 1 ? 'not-allowed' : 'pointer', color: '#3B2F2F' }}
+                  style={{ padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid rgba(59, 139, 212, 0.2)', backgroundColor: page === 1 ? '#E2E8F0' : '#fff', cursor: page === 1 ? 'not-allowed' : 'pointer', color: '#64748B' }}
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  style={{ padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid #E2D9CC', backgroundColor: page === totalPages ? '#F0EBE1' : '#fff', cursor: page === totalPages ? 'not-allowed' : 'pointer', color: '#3B2F2F' }}
+                  style={{ padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid rgba(59, 139, 212, 0.2)', backgroundColor: page === totalPages ? '#E2E8F0' : '#fff', cursor: page === totalPages ? 'not-allowed' : 'pointer', color: '#64748B' }}
                 >
                   Next
                 </button>
@@ -797,6 +807,21 @@ export function AdminUsers() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Selected Date *</label>
+                <select
+                  value={editForm.selectedCohort}
+                  onChange={e => setEditForm({ ...editForm, selectedCohort: e.target.value })}
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                  required
+                >
+                  <option value="June 6 & 7, 2026">June 6 & 7, 2026</option>
+                  <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
+                  <option value="June 20 & 21, 2026">June 20 & 21, 2026</option>
+                  <option value="June 27 & 28, 2026">June 27 & 28, 2026</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Referral Code</label>
                 <select
                   value={editForm.referralCode}
@@ -816,7 +841,7 @@ export function AdminUsers() {
                 <button
                   type="button"
                   onClick={() => setEditingUser(null)}
-                  style={{ padding: '0.5rem 1rem', border: '1px solid #E2D9CC', borderRadius: 6, background: 'transparent', cursor: 'pointer' }}
+                  style={{ padding: '0.5rem 1rem', border: '1px solid #C8BDB0', borderRadius: 6, background: '#F4EFEA', cursor: 'pointer', color: '#3B2F2F', fontWeight: 600 }}
                 >
                   Cancel
                 </button>
@@ -841,7 +866,7 @@ export function AdminUsers() {
               <button
                 type="button"
                 onClick={() => setStatusConfirmUser(null)}
-                style={{ padding: '0.5rem 1rem', border: '1px solid #E2D9CC', borderRadius: 6, background: 'transparent', cursor: 'pointer' }}
+                style={{ padding: '0.5rem 1rem', border: '1px solid #C8BDB0', borderRadius: 6, background: '#F4EFEA', cursor: 'pointer', color: '#3B2F2F', fontWeight: 600 }}
               >
                 Cancel
               </button>
@@ -882,7 +907,7 @@ export function AdminUsers() {
                 <button
                   type="button"
                   onClick={() => { setPaymentConfirmUser(null); setRazorpayPaymentId(''); }}
-                  style={{ padding: '0.5rem 1rem', border: '1px solid #E2D9CC', borderRadius: 6, background: 'transparent', cursor: 'pointer' }}
+                  style={{ padding: '0.5rem 1rem', border: '1px solid #C8BDB0', borderRadius: 6, background: '#F4EFEA', cursor: 'pointer', color: '#3B2F2F', fontWeight: 600 }}
                 >
                   Cancel
                 </button>
@@ -960,11 +985,12 @@ export function AdminUsers() {
                   ))}
                 </select>
               </div>
+
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
-                  onClick={() => { setIsAddModalOpen(false); setAddForm({ fullName: '', email: '', userType: '', referralCode: '' }); }}
-                  style={{ padding: '0.5rem 1rem', border: '1px solid #E2D9CC', borderRadius: 6, background: 'transparent', cursor: 'pointer' }}
+                  onClick={() => { setIsAddModalOpen(false); setAddForm({ fullName: '', email: '', userType: '', referralCode: '', selectedCohort: '' }); }}
+                  style={{ padding: '0.5rem 1rem', border: '1px solid #C8BDB0', borderRadius: 6, background: '#F4EFEA', cursor: 'pointer', color: '#3B2F2F', fontWeight: 600 }}
                 >
                   Cancel
                 </button>

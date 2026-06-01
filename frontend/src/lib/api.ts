@@ -52,7 +52,7 @@ export function getMe(token: string) {
   return request<{ user: any }>('/api/auth/me', {}, token);
 }
 
-export function submitFeedback(token: string, feedback: { session: string; text: string }[]) {
+export function submitFeedback(token: string, feedback: { session: string; rating: string; text: string }[]) {
   return request<{ message: string }>('/api/auth/feedback', { method: 'POST', body: JSON.stringify({ feedback }) }, token);
 }
 
@@ -60,7 +60,7 @@ export function completeProfile(token: string, formData: FormData) {
   return request<{ message: string; user: any }>('/api/auth/complete-profile', { method: 'PATCH', body: formData }, token);
 }
 
-export function createAdminUser(token: string, payload: { fullName: string; email: string; userType?: string; referralCode?: string }) {
+export function createAdminUser(token: string, payload: { fullName: string; email: string; userType?: string; referralCode?: string; selectedCohort?: string }) {
   return request<{ message: string; user: any }>('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) }, token);
 }
 
@@ -248,7 +248,7 @@ export type IdCardResult = {
   academicYearRange: string | null;
   year_of_study: string | null;
   confidence: 'high' | 'medium' | 'low';
-  verdict: 'APPROVED' | 'REJECTED' | 'REVIEW';
+  verdict: 'APPROVED' | 'REJECTED' | 'REVIEW' | 'TRAFFIC_ERROR';
   rejection_reason: string | null;
   source: 'gemini' | 'tesseract';
 };

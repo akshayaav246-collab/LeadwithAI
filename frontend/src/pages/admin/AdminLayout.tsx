@@ -43,12 +43,23 @@ export function AdminLayout() {
     <div className="admin-layout">
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
-          <img
-            src={publicAsset('LogoAdmin.png')}
-            alt="Global Knowledge Technologies"
-            className="admin-sidebar-logo"
-          />
-          <span className="admin-role-badge">Admin</span>
+          <div className="admin-brand-wrapper">
+            <img
+              src={publicAsset('LogoAdmin.png')}
+              alt="Global Knowledge Technologies"
+              className="admin-sidebar-logo"
+            />
+            <span className="admin-role-badge">Admin</span>
+          </div>
+          <button className="admin-logout-btn admin-header-logout" onClick={handleLogout}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Logout
+          </button>
         </div>
 
         <nav className="admin-nav">
@@ -87,7 +98,7 @@ export function AdminLayout() {
             color: '#8C7B6B',
             gap: '1rem'
           }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin-slow 2s linear infinite', color: '#C4956A' }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin-slow 2s linear infinite', color: '#3B8BD4' }}>
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, letterSpacing: '0.05em' }}>Loading...</span>
