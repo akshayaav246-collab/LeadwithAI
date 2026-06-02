@@ -531,6 +531,9 @@ export function Register() {
                     </div>
                     <h3>You're in, {fullName.split(' ')[0]}!</h3>
                     <p>Payment confirmed. A receipt has been sent to <strong>{email}</strong>.</p>
+                    <p style={{ marginTop: '0.5rem', fontSize: '0.95rem', color: '#166534', fontWeight: 600 }}>
+                      Workshop details will be shared shortly through mail
+                    </p>
                     <button
                       type="button"
                       className="btn-primary"

@@ -148,6 +148,10 @@ export function retryZoomRegistration(token: string, userId: string) {
   return request<{ message: string; zoomJoinUrl: string }>(`/api/admin/users/${userId}/retry-zoom`, { method: 'POST' }, token);
 }
 
+export function registerAllZoomAttendees(token: string) {
+  return request<{ message: string; registeredCount: number; failedCount: number; failures: any[] }>('/api/admin/users/register-zoom-all', { method: 'POST' }, token);
+}
+
 export function retryEmailConfirmation(token: string, userId: string) {
   return request<{ message: string }>(`/api/admin/users/${userId}/retry-email`, { method: 'POST' }, token);
 }

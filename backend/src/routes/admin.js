@@ -745,6 +745,72 @@ router.post('/users/:id/retry-zoom', adminAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// POST /api/admin/users/register-zoom-all
+// Batch register attendees in Zoom who are not registered yet
+// ─────────────────────────────────────────────
+router.post('/users/register-zoom-all', adminAuth, async (req, res) => {
+  try {
+    const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
+    const users = await User.find({
+      'registeredEvents': {
+        $elemMatch: {
+          eventName: EVENT_NAME,
+          paymentStatus: 'confirmed',
+          zoomRegistrationStatus: { $ne: 'success' }
+        }
+      }
+    });
+
+    if (users.length === 0) {
+      return res.json({ message: 'All paid attendees are already registered in Zoom.', registeredCount: 0, failedCount: 0 });
+    }
+
+    const { registerForWebinar } = require('../utils/zoom');
+    const { sendZoomJoinLinkEmail } = require('../utils/email');
+
+    let registeredCount = 0;
+    let failedCount = 0;
+    const failures = [];
+
+    for (const user of users) {
+      const eventEntry = user.registeredEvents.find(e => e.eventName === EVENT_NAME && e.paymentStatus === 'confirmed');
+      if (!eventEntry) continue;
+
+      try {
+        const [firstName, ...lastNameParts] = user.fullName.split(' ');
+        const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '), user.selectedCohort);
+        
+        eventEntry.zoomJoinUrl = joinUrl;
+        eventEntry.zoomRegistrationStatus = 'success';
+        await user.save();
+
+        // Send email with Zoom link
+        await sendZoomJoinLinkEmail(user, EVENT_NAME, joinUrl);
+        
+        registeredCount++;
+      } catch (err) {
+        console.error(`Failed Zoom registration/email for ${user.email}:`, err.message);
+        failedCount++;
+        failures.push({ email: user.email, name: user.fullName, error: err.message });
+      }
+    }
+
+    res.locals.auditTarget = 'all-unregistered-zoom';
+    res.locals.auditDetails = { registeredCount, failedCount, failures };
+
+    return res.json({
+      message: `Zoom registration completed: ${registeredCount} succeeded, ${failedCount} failed.`,
+      registeredCount,
+      failedCount,
+      failures
+    });
+  } catch (err) {
+    console.error('Batch Zoom registration error:', err);
+    res.status(500).json({ error: 'Failed to complete batch Zoom registration' });
+  }
+});
+
+// ─────────────────────────────────────────────
 // POST /api/admin/users/:id/retry-email
 // ─────────────────────────────────────────────
 router.post('/users/:id/retry-email', adminAuth, async (req, res) => {

@@ -222,7 +222,6 @@ async function sendOtpEmail(email, otp, name) {
  * Send payment confirmation email
  */
 async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoinUrl) {
-  const joinLink = zoomJoinUrl || process.env.ZOOM_LINK || 'https://zoom.us/j/00000000000';
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
   const contentHtml = `
     <p style="font-size: 18px; color: #10B981; font-weight: bold; margin-bottom: 20px;">Payment Confirmed!</p>
@@ -247,8 +246,7 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${paymentId}</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Session Link</strong></td>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px;" valign="top"><a href="${joinLink}" style="color: #2563EB; font-weight: bold; text-decoration: underline; word-break: break-all; font-family: Arial, Helvetica, sans-serif;">${joinLink}</a></td>
+          <td colspan="2" style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #166534; font-weight: bold;" valign="top">Workshop details will be shared shortly through mail.</td>
         </tr>
       </table>
     </div>
@@ -420,6 +418,44 @@ async function sendProfileApprovedEmail(user) {
   });
 }
 
+async function sendZoomJoinLinkEmail(user, eventName, zoomJoinUrl) {
+  const greeting = `Dear ${user.fullName.split(' ')[0]},`;
+  const contentHtml = `
+    <p style="font-size: 18px; font-weight: bold; color: #0D1117; margin-bottom: 20px;">Your Workshop Access Link is Ready!</p>
+    <p>Thank you for registering and confirming your payment for <strong>${eventName}</strong>. Your unique Zoom join link for the session is now ready.</p>
+    
+    <div style="background-color: #F0F4F8; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; margin: 30px 0;">
+      <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B; width: 140px;" valign="top"><strong>Event</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${eventName}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Cohort Weekend</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${user.selectedCohort || 'Selected June 2026 Cohort'}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Session Link</strong></td>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px;" valign="top"><a href="${zoomJoinUrl}" style="color: #2563EB; font-weight: bold; text-decoration: underline; word-break: break-all; font-family: Arial, Helvetica, sans-serif;">${zoomJoinUrl}</a></td>
+        </tr>
+      </table>
+    </div>
+
+    <p style="text-align: center; margin: 35px 0;">
+      <a href="${zoomJoinUrl}" style="display: inline-block; background-color: #0D1117; color: #FFFFFF !important; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Join Workshop &rarr;</a>
+    </p>
+  `;
+
+  const html = getHtmlTemplate({ greeting, contentHtml });
+
+  await transporter.sendMail({
+    from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
+    to: user.email,
+    subject: `Your Zoom link for ${eventName} is ready! 🚀`,
+    html,
+  });
+}
+
 module.exports = {
   sendRegistrationEmail,
   sendVerificationOtpEmail,
@@ -429,4 +465,5 @@ module.exports = {
   sendReminderEmail,
   sendDay2ReminderEmail,
   sendProfileApprovedEmail,
+  sendZoomJoinLinkEmail,
 };

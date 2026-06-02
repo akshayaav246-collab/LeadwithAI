@@ -8,7 +8,8 @@ import {
   toggleUserWaitlist,
   manualConfirmPayment,
   getAdminSettings,
-  createAdminUser
+  createAdminUser,
+  registerAllZoomAttendees
 } from '../../lib/api';
 import { CertificateGenerator } from '../../components/admin/CertificateGenerator';
 import { toast } from 'sonner';
@@ -153,6 +154,8 @@ export function AdminUsers() {
     userType: '', // '', 'student', or 'working'
     referralCode: ''
   });
+
+  const [isZoomRegistering, setIsZoomRegistering] = useState(false);
 
   const adminToken = localStorage.getItem('adminToken') || '';
 
@@ -369,6 +372,26 @@ export function AdminUsers() {
     }
   };
 
+  const handleRegisterAllZoom = async () => {
+    if (isZoomRegistering) return;
+    const confirm = window.confirm(
+      "Are you sure you want to register all paid/confirmed attendees who are not yet registered in Zoom? This will trigger Zoom API registration and send them their access links by email."
+    );
+    if (!confirm) return;
+
+    setIsZoomRegistering(true);
+    const toastId = toast.loading("Registering attendees in Zoom...");
+    try {
+      const res = await registerAllZoomAttendees(adminToken);
+      toast.success(res.message, { id: toastId });
+      fetchUsers();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to batch register zoom attendees", { id: toastId });
+    } finally {
+      setIsZoomRegistering(false);
+    }
+  };
+
   const toggleRow = (id: string) => setExpandedId(prev => (prev === id ? null : id));
 
   return (
@@ -376,6 +399,14 @@ export function AdminUsers() {
       <div className="admin-page-header">
         <h2 className="admin-page-title">User Management</h2>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <button
+            className="btn-primary"
+            onClick={handleRegisterAllZoom}
+            disabled={isZoomRegistering}
+            style={{ backgroundColor: '#2563eb', borderColor: '#2563eb', opacity: isZoomRegistering ? 0.7 : 1 }}
+          >
+            {isZoomRegistering ? "Registering..." : "Register Attendees in Zoom"}
+          </button>
           <button className="btn-primary" onClick={() => setIsAddModalOpen(true)} style={{ backgroundColor: '#16a34a', borderColor: '#16a34a' }}>
             Add Registrant
           </button>
