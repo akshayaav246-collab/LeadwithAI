@@ -68,6 +68,7 @@ function Router() {
         <Route path="/program/:moduleIndex" component={Program} />
         <Route path="/speakers" component={Speakers} />
         <Route path="/register" component={Register} />
+        <Route path="/login" component={Register} />
         <Route path="/profile" component={Profile} />
         <Route path="/verify/:id" component={VerifyCertificate} />
         

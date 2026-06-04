@@ -9,7 +9,9 @@ import {
   deleteReferralCode,
   updateReferralLabel,
   getAdmins,
-  deleteAdmin
+  deleteAdmin,
+  triggerCohortReminders,
+  cancelCohortReminders
 } from '../../lib/api';
 import { toast } from 'sonner';
 
@@ -22,6 +24,7 @@ export function AdminSettings() {
   const [newCap, setNewCap] = useState<number | ''>('');
   const [referrals, setReferrals] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
+  const [activeReminderCohort, setActiveReminderCohort] = useState<string | null>(null);
   
   // New referral input state
   const [refCode, setRefCode] = useState('');
@@ -45,6 +48,7 @@ export function AdminSettings() {
       setRegistrationCap(settings.registrationCap);
       setNewCap(settings.registrationCap);
       setReferrals(settings.referralCodes || []);
+      setActiveReminderCohort(settings.activeReminderCohort || null);
       
       const adminList = await getAdmins(token);
       setAdmins(adminList);
@@ -179,6 +183,39 @@ export function AdminSettings() {
     });
   };
 
+  const handleSendReminders = () => {
+    setConfirmModal({
+      message: 'Are you sure you want to activate the automated cohort reminder schedule for June 13 & 14, 2026? Day 1 email will be sent on June 12 at 10:00 AM IST and Day 2 email will be sent on June 13 at 6:30 PM IST.',
+      onConfirm: async () => {
+        try {
+          const res = await triggerCohortReminders(token);
+          setActiveReminderCohort(res.activeReminderCohort);
+          toast.success(res.message);
+        } catch (err: any) {
+          toast.error('Failed to activate reminders: ' + err.message);
+        }
+        setConfirmModal(null);
+      }
+    });
+  };
+
+  const handleCancelReminders = () => {
+    setConfirmModal({
+      message: 'Are you sure you want to cancel the automated cohort reminder schedule for June 13 & 14, 2026?',
+      onConfirm: async () => {
+        try {
+          const res = await cancelCohortReminders(token);
+          setActiveReminderCohort(res.activeReminderCohort);
+          toast.success(res.message);
+        } catch (err: any) {
+          toast.error('Failed to cancel reminders: ' + err.message);
+        }
+        setConfirmModal(null);
+      }
+    });
+  };
+
+
   if (loading) return <div className="admin-loading">Loading settings...</div>;
   if (error) return <div className="admin-error">{error}</div>;
 
@@ -244,6 +281,51 @@ export function AdminSettings() {
               </button>
             </form>
           </div>
+
+          {/* Cohort Reminders Card */}
+          <div className="admin-card" style={{ marginBottom: '2rem' }}>
+            <h3>Cohort Reminders</h3>
+            <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginTop: '0.3rem' }}>
+              Activate or cancel the automated reminder emails schedule for the upcoming June 13 & 14, 2026 cohort.
+            </p>
+            <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#2A1F14' }}>Status:</span>
+              {activeReminderCohort ? (
+                <span className="admin-badge success">Scheduled & Active ({activeReminderCohort})</span>
+              ) : (
+                <span className="admin-badge danger" style={{ backgroundColor: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}>Inactive</span>
+              )}
+            </div>
+            <div style={{ background: '#FAF7F2', border: '1px solid #E2D9CC', borderRadius: 8, padding: '1rem', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ fontSize: '0.85rem', color: '#2A1F14', lineHeight: '1.4' }}>
+                • <strong>Day 1 email</strong>: June 12 (Friday) morning at 10:00 AM IST <br />
+                • <strong>Day 2 email</strong>: June 13 (Saturday) evening at 6:30 PM IST <br />
+                Emails are sent automatically to paid users of the active cohort.
+              </div>
+            </div>
+            <div style={{ marginTop: '1.2rem', display: 'flex', gap: '0.8rem' }}>
+              {activeReminderCohort ? (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleCancelReminders}
+                  style={{ width: '100%', padding: '0.65rem', backgroundColor: '#dc2626', borderColor: '#dc2626' }}
+                >
+                  Cancel Reminder Schedule
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleSendReminders}
+                  style={{ width: '100%', padding: '0.65rem' }}
+                >
+                  Activate Reminder Schedule
+                </button>
+              )}
+            </div>
+          </div>
+
 
           {/* Admin Accounts List */}
           <div className="admin-card">
@@ -406,7 +488,7 @@ export function AdminSettings() {
               <button
                 type="button"
                 onClick={() => setConfirmModal(null)}
-                style={{ padding: '0.5rem 1rem', border: '1px solid #E2D9CC', borderRadius: 6, background: 'transparent', cursor: 'pointer' }}
+                style={{ padding: '0.5rem 1rem', border: '1px solid #c8bdb0', borderRadius: 6, background: '#f8f6f2', color: '#4a3f35', fontWeight: 600, cursor: 'pointer' }}
               >
                 Cancel
               </button>

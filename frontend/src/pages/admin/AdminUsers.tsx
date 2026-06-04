@@ -7,6 +7,7 @@ import {
   toggleUserStatus,
   toggleUserWaitlist,
   manualConfirmPayment,
+  rejectNepalPayment,
   getAdminSettings,
   createAdminUser,
   registerAllZoomAttendees
@@ -136,12 +137,18 @@ export function AdminUsers() {
     organization: '',
     heardFrom: '',
     referralCode: '',
-    selectedCohort: ''
+    selectedCohort: '',
+    country: ''
   });
 
   // Manual Payment Confirmation State
   const [paymentConfirmUser, setPaymentConfirmUser] = useState<any>(null);
   const [razorpayPaymentId, setRazorpayPaymentId] = useState('');
+
+  // Payment Rejection State
+  const [paymentRejectUser, setPaymentRejectUser] = useState<any | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
 
   // Status Confirm State
   const [statusConfirmUser, setStatusConfirmUser] = useState<any>(null);
@@ -314,7 +321,8 @@ export function AdminUsers() {
       organization: user.organization === '-' ? '' : user.organization,
       heardFrom: user.heardFrom === '-' ? '' : user.heardFrom,
       referralCode: resolvedCode,
-      selectedCohort: user.selectedCohort || ''
+      selectedCohort: user.selectedCohort || '',
+      country: user.country || 'India'
     });
   };
 
@@ -342,6 +350,23 @@ export function AdminUsers() {
       fetchUsers();
     } catch (err: any) {
       toast.error(`Failed to confirm payment: ${err.message}`);
+    }
+  };
+
+  const handleRejectNepalPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentRejectUser || !rejectionReason.trim()) return;
+    setIsRejecting(true);
+    try {
+      await rejectNepalPayment(adminToken, paymentRejectUser.id, rejectionReason.trim());
+      toast.success('Payment proof rejected successfully.');
+      setPaymentRejectUser(null);
+      setRejectionReason('');
+      fetchUsers();
+    } catch (err: any) {
+      toast.error(`Failed to reject payment: ${err.message}`);
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -470,11 +495,9 @@ export function AdminUsers() {
         </select>
         <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)} className="admin-select">
           <option value="all">All Dates</option>
-          <option value="June 6 & 7, 2026">June 6 & 7, 2026</option>
           <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
-          <option value="June 20 & 21, 2026">June 20 & 21, 2026</option>
-          <option value="June 27 & 28, 2026">June 27 & 28, 2026</option>
         </select>
+
       </div>
 
       {loading ? (
@@ -639,6 +662,15 @@ export function AdminUsers() {
                                 </span>
                               } />
                               
+                              <DetailRow label="Country" value={user.country || 'India'} />
+                              
+                              {user.paymentMethod === 'nepal_upi' && (
+                                <>
+                                  <DetailRow label="Payment Method" value="Nepal UPI" />
+                                  <DetailRow label="Submitted UTR" value={user.nepalUpiTxnRef || '—'} />
+                                </>
+                              )}
+
                               {user.isPaid && user.paymentId && user.paymentId !== '-' && (
                                 <DetailRow label="Payment ID" value={
                                   <span style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{user.paymentId}</span>
@@ -646,14 +678,25 @@ export function AdminUsers() {
                               )}
 
                               {!user.isPaid && (
-                                <div style={{ marginTop: '0.5rem' }}>
+                                <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
                                   <button
                                     className="btn-primary"
                                     onClick={(e) => { e.stopPropagation(); setPaymentConfirmUser(user); }}
                                     style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: '#16a34a', borderColor: '#16a34a' }}
                                   >
-                                    Manually Confirm Payment
+                                    {user.paymentMethod === 'nepal_upi' ? 'Verify & Confirm' : 'Manually Confirm Payment'}
                                   </button>
+                                  {user.paymentMethod === 'nepal_upi' && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setPaymentRejectUser(user); }}
+                                      style={{
+                                        padding: '0.4rem 0.8rem', fontSize: '0.8rem', borderRadius: 6, cursor: 'pointer',
+                                        background: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', fontWeight: 600
+                                      }}
+                                    >
+                                      Reject Proof
+                                    </button>
+                                  )}
                                 </div>
                               )}
 
@@ -838,6 +881,20 @@ export function AdminUsers() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Country</label>
+                <select
+                  value={editForm.country}
+                  onChange={e => setEditForm({ ...editForm, country: e.target.value })}
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                >
+                  <option value="">-- Select Country --</option>
+                  <option value="India">India</option>
+                  <option value="Nepal">Nepal</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Selected Date *</label>
                 <select
                   value={editForm.selectedCohort}
@@ -845,12 +902,10 @@ export function AdminUsers() {
                   style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
                   required
                 >
-                  <option value="June 6 & 7, 2026">June 6 & 7, 2026</option>
                   <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
-                  <option value="June 20 & 21, 2026">June 20 & 21, 2026</option>
-                  <option value="June 27 & 28, 2026">June 27 & 28, 2026</option>
                 </select>
               </div>
+
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Referral Code</label>
@@ -920,16 +975,18 @@ export function AdminUsers() {
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2D9CC', padding: '2rem', width: '90%', maxWidth: '400px' }}>
             <h3 style={{ marginBottom: '0.5rem', color: '#3B2F2F' }}>Confirm Payment Manually</h3>
             <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginBottom: '1.2rem' }}>
-              Confirm payment for <strong>{paymentConfirmUser.fullName}</strong>. A Razorpay Payment ID is required.
+              Confirm payment for <strong>{paymentConfirmUser.fullName}</strong>. {paymentConfirmUser.paymentMethod === 'nepal_upi' ? 'Enter the UTR reference code to match and verify payment.' : 'A Razorpay Payment ID is required.'}
             </p>
             <form onSubmit={handleConfirmManualPayment}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1.2rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Razorpay Payment ID</label>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>
+                  {paymentConfirmUser.paymentMethod === 'nepal_upi' ? 'Transaction ID (UTR) to Match' : 'Razorpay Payment ID'}
+                </label>
                 <input
                   type="text"
                   value={razorpayPaymentId}
                   onChange={e => setRazorpayPaymentId(e.target.value)}
-                  placeholder="pay_xyz123abc"
+                  placeholder={paymentConfirmUser.paymentMethod === 'nepal_upi' ? 'Enter UTR' : 'pay_xyz123abc'}
                   style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
                   required
                 />
@@ -944,6 +1001,42 @@ export function AdminUsers() {
                 </button>
                 <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1.5rem', backgroundColor: '#16a34a', borderColor: '#16a34a' }}>
                   Confirm
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Nepal Payment Rejection Modal ── */}
+      {paymentRejectUser && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2D9CC', padding: '2rem', width: '90%', maxWidth: '400px' }}>
+            <h3 style={{ marginBottom: '0.5rem', color: '#b91c1c' }}>Reject Nepal Payment Proof</h3>
+            <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginBottom: '1.2rem' }}>
+              Reject the payment proof for <strong>{paymentRejectUser.fullName}</strong>. An email notification with the reason will be sent to the registrant.
+            </p>
+            <form onSubmit={handleRejectNepalPayment}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1.2rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Reason for Rejection *</label>
+                <textarea
+                  value={rejectionReason}
+                  onChange={e => setRejectionReason(e.target.value)}
+                  placeholder="e.g. The UTR number does not match any transaction in our bank statement."
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, minHeight: '80px', fontFamily: 'inherit' }}
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => { setPaymentRejectUser(null); setRejectionReason(''); }}
+                  style={{ padding: '0.5rem 1rem', border: '1px solid #C8BDB0', borderRadius: 6, background: '#F4EFEA', cursor: 'pointer', color: '#3B2F2F', fontWeight: 600 }}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1.5rem', backgroundColor: '#dc2626', borderColor: '#dc2626' }} disabled={isRejecting}>
+                  {isRejecting ? 'Rejecting...' : 'Reject Proof'}
                 </button>
               </div>
             </form>
@@ -1020,7 +1113,7 @@ export function AdminUsers() {
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
-                  onClick={() => { setIsAddModalOpen(false); setAddForm({ fullName: '', email: '', userType: '', referralCode: '', selectedCohort: '' }); }}
+                  onClick={() => { setIsAddModalOpen(false); setAddForm({ fullName: '', email: '', userType: '', referralCode: '' }); }}
                   style={{ padding: '0.5rem 1rem', border: '1px solid #C8BDB0', borderRadius: 6, background: '#F4EFEA', cursor: 'pointer', color: '#3B2F2F', fontWeight: 600 }}
                 >
                   Cancel

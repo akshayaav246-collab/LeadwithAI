@@ -60,6 +60,10 @@ export function completeProfile(token: string, formData: FormData) {
   return request<{ message: string; user: any }>('/api/auth/complete-profile', { method: 'PATCH', body: formData }, token);
 }
 
+export function changeCohort(token: string, cohort: string) {
+  return request<{ message: string; user: any }>('/api/auth/change-cohort', { method: 'POST', body: JSON.stringify({ cohort }) }, token);
+}
+
 export function createAdminUser(token: string, payload: { fullName: string; email: string; userType?: string; referralCode?: string; selectedCohort?: string }) {
   return request<{ message: string; user: any }>('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) }, token);
 }
@@ -91,7 +95,7 @@ export function addCollege(college: string) {
 }
 
 export function getPublicSettings() {
-  return request<{ feedbackEnabled: boolean; isMaintenanceMode: boolean }>('/api/public/settings');
+  return request<{ feedbackEnabled: boolean; isMaintenanceMode: boolean; availableCohorts?: string[] }>('/api/public/settings');
 }
 
 // ─── Admin Auth ───────────────────────────────────────────────
@@ -192,8 +196,25 @@ export function getAdminSettings(token: string) {
     isMaintenanceMode: boolean;
     registrationCap: number;
     referralCodes: { code: string; label: string; isActive: boolean }[];
+    activeReminderCohort: string | null;
   }>('/api/admin/settings', {}, token);
 }
+
+export function triggerCohortReminders(token: string) {
+  return request<{
+    message: string;
+    cohort: string;
+    activeReminderCohort: string | null;
+  }>('/api/admin/settings/send-reminders', { method: 'POST' }, token);
+}
+
+export function cancelCohortReminders(token: string) {
+  return request<{
+    message: string;
+    activeReminderCohort: null;
+  }>('/api/admin/settings/cancel-reminders', { method: 'POST' }, token);
+}
+
 
 export function updateFeedbackSetting(token: string, feedbackEnabled: boolean) {
   return request<{ feedbackEnabled: boolean }>('/api/admin/settings/feedback', { method: 'PATCH', body: JSON.stringify({ feedbackEnabled }) }, token);
@@ -262,4 +283,16 @@ export function parseIdCard(file: File, email?: string) {
   formData.append('idCard', file);
   if (email) formData.append('email', email);
   return request<IdCardResult>('/api/auth/parse-id', { method: 'POST', body: formData });
+}
+
+export function submitNepalProof(token: string, txnRef: string) {
+  return request<{ message: string; user: any }>('/api/payment/submit-nepal-proof', {
+    method: 'POST',
+    body: JSON.stringify({ txnRef })
+  }, token);
+}
+
+
+export function rejectNepalPayment(token: string, userId: string, reason: string) {
+  return request<{ message: string; user: any }>(`/api/admin/users/${userId}/reject-payment`, { method: 'POST', body: JSON.stringify({ reason }) }, token);
 }

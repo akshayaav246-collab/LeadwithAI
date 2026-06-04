@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { useAuth, type RegisteredEvent } from '@/context/AuthContext';
 import * as api from '@/lib/api';
 import { toast } from 'sonner';
+import { publicAsset } from '@/lib/assets';
 
 
 const DOMAIN_OPTIONS = [
@@ -24,19 +25,21 @@ interface ProfileCompletionFormProps {
   token: string;
   updateUser: (user: any) => void;
   logout: () => void;
+  availableCohorts: string[];
 }
 
-function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompletionFormProps) {
+function ProfileCompletionForm({ user, token, updateUser, logout, availableCohorts }: ProfileCompletionFormProps) {
   const [phone, setPhone] = useState('');
   const [selectedUserType, setSelectedUserType] = useState<'student' | 'working'>(
     user.userType || 'student'
   );
+  const [country, setCountry] = useState(user.country || 'India');
   const [collegeName, setCollegeName] = useState('');
   const [course, setCourse] = useState('');
   const [year, setYear] = useState('');
   const [idFile, setIdFile] = useState<File | null>(null);
   const [isScanningId, setIsScanningId] = useState(false);
-  const [idVerdict, setIdVerdict] = useState<'APPROVED' | 'REJECTED' | 'REVIEW' | null>(null);
+  const [idVerdict, setIdVerdict] = useState<'APPROVED' | 'REJECTED' | 'REVIEW' | 'TRAFFIC_ERROR' | null>(null);
   const [idRejectionReason, setIdRejectionReason] = useState('');
 
   const [domain, setDomain] = useState('');
@@ -44,7 +47,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
 
   const [heardFrom, setHeardFrom] = useState('');
   const [heardFromOther, setHeardFromOther] = useState('');
-  const [selectedCohort, setSelectedCohort] = useState(user.selectedCohort || '');
+  const [selectedCohort, setSelectedCohort] = useState(user.selectedCohort || 'June 13 & 14, 2026');
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -57,9 +60,11 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
-    if (!phoneRegex.test(phone.trim())) {
-      newErrors.phone = 'Please enter a valid 10-digit mobile number.';
+    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
+    const cleanedPhone = phone.replace(/[^\d+]/g, '');
+    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
+    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
+      newErrors.phone = 'Please enter a valid phone number (e.g. +91 98765 43210).';
     }
 
     if (!selectedUserType) {
@@ -69,10 +74,12 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
     if (selectedUserType === 'student') {
       if (!idFile && !user.idCardPath) {
         newErrors.idCard = 'Please upload your College ID Card.';
-      } else if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
-        newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
-      } else if (!isInstitutionalEmail && isScanningId) {
-        newErrors.idCard = 'Please wait — your ID card is being validated.';
+      } else if (country !== 'Nepal') {
+        if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
+          newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
+        } else if (!isInstitutionalEmail && isScanningId) {
+          newErrors.idCard = 'Please wait — your ID card is being validated.';
+        }
       }
       if (!collegeName.trim()) newErrors.collegeName = 'Please enter your college name.';
       if (!course.trim()) newErrors.course = 'Please enter your course.';
@@ -103,6 +110,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
       formData.append('phone', phone.trim());
       formData.append('userType', selectedUserType);
       formData.append('selectedCohort', selectedCohort);
+      formData.append('country', country);
 
       if (selectedUserType === 'student') {
         formData.append('collegeName', collegeName.trim());
@@ -168,10 +176,34 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
               id="comp-phone"
               type="text"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="e.g. 9876543210"
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s()-]/g, ''))}
+              placeholder="+91 98765 43210"
+              maxLength={25}
               required
             />
+          </div>
+
+          {/* Country Selection */}
+          <div className="register-field">
+            <label htmlFor="comp-country">Country *</label>
+            <select
+              id="comp-country"
+              value={country}
+              onChange={(e) => {
+                const selectedVal = e.target.value;
+                setCountry(selectedVal);
+                if (selectedVal === 'Nepal') {
+                  setIdFile(null);
+                  setIdVerdict(null);
+                  setIdRejectionReason('');
+                }
+              }}
+              className="register-select"
+              required
+            >
+              <option value="India">India</option>
+              <option value="Nepal">Nepal</option>
+            </select>
           </div>
 
           {/* Account Type Selector / Lock */}
@@ -232,97 +264,97 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
           {selectedUserType === 'student' && (
             <div className="reg-conditional-fields" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1.25rem' }}>
               <div className="register-field">
-                <label htmlFor="comp-idcard">
-                  college id card *(Both sides)
-                  {isScanningId && (
-                    <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                      <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                      Validating...
-                    </span>
+                  <label htmlFor="comp-idcard">
+                    college id card *(Both sides)
+                    {isScanningId && (
+                      <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                        Validating...
+                      </span>
+                    )}
+                  </label>
+                  {!isInstitutionalEmail && (
+                    <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
+                      Please upload your physical College ID card to qualify for student pricing (₹499).
+                    </p>
                   )}
-                </label>
-                {!isInstitutionalEmail && (
-                  <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
-                    Please upload your physical College ID card to qualify for student pricing (₹499).
-                  </p>
-                )}
-                <div
-                  className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
-                  onClick={() => !isScanningId && fileInputRef.current?.click()}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60px', cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
-                >
-                  <input
-                    ref={fileInputRef}
-                    id="comp-idcard"
-                    type="file"
-                    accept=".pdf"
-                    style={{ display: 'none' }}
-                    onChange={async (e) => {
-                      const f = e.target.files?.[0] || null;
-                      setIdFile(f);
-                      setIdVerdict(null);
-                      setIdRejectionReason('');
+                  <div
+                    className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
+                    onClick={() => !isScanningId && fileInputRef.current?.click()}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60px', cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      id="comp-idcard"
+                      type="file"
+                      accept=".pdf"
+                      style={{ display: 'none' }}
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0] || null;
+                        setIdFile(f);
+                        setIdVerdict(null);
+                        setIdRejectionReason('');
 
-                      if (f && !isInstitutionalEmail && !user.isAdminCreated) {
-                        setIsScanningId(true);
-                        try {
-                          const parsed = await api.parseIdCard(f, user.email || undefined);
-                          setIdVerdict(parsed.verdict);
-                          if (parsed.verdict === 'APPROVED') {
+                        if (f && !isInstitutionalEmail && !user.isAdminCreated && country !== 'Nepal') {
+                          setIsScanningId(true);
+                          try {
+                            const parsed = await api.parseIdCard(f, user.email || undefined);
+                            setIdVerdict(parsed.verdict);
+                            if (parsed.verdict === 'APPROVED') {
+                              setIdRejectionReason('');
+                            } else if (parsed.verdict === 'REJECTED') {
+                              setIdRejectionReason(parsed.rejection_reason || 'The ID card is not found to be valid.');
+                            } else {
+                              setIdRejectionReason('');
+                            }
+                          } catch (err) {
+                            console.error('ID Parse Error:', err);
+                            setIdVerdict('REVIEW');
                             setIdRejectionReason('');
-                          } else if (parsed.verdict === 'REJECTED') {
-                            setIdRejectionReason(parsed.rejection_reason || 'The ID card is not found to be valid.');
-                          } else {
-                            setIdRejectionReason('');
+                          } finally {
+                            setIsScanningId(false);
                           }
-                        } catch (err) {
-                          console.error('ID Parse Error:', err);
-                          setIdVerdict('REVIEW');
-                          setIdRejectionReason('');
-                        } finally {
-                          setIsScanningId(false);
                         }
-                      }
-                    }}
-                  />
-                  {idFile ? (
-                    <span className="upload-filename">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                      {idFile.name}
-                    </span>
-                  ) : (
-                    <span className="upload-placeholder">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                      PDF only (max. 5MB)
-                    </span>
+                      }}
+                    />
+                    {idFile ? (
+                      <span className="upload-filename">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        {idFile.name}
+                      </span>
+                    ) : (
+                      <span className="upload-placeholder">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        PDF only (max. 5MB)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Inline validation feedback for non-institutional */}
+                  {!isInstitutionalEmail && idFile && !isScanningId && (
+                    <>
+                      {idVerdict === 'APPROVED' && (
+                        <div className="id-verdict-line" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#166534', background: 'rgba(34,197,94,0.07)', padding: '0.5rem', borderRadius: '4px', border: '1px solid rgba(34,197,94,0.2)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          <span>The ID is found to be valid.</span>
+                        </div>
+                      )}
+                      {idVerdict === 'REJECTED' && (
+                        <div className="id-rejected-block" style={{ marginTop: '0.5rem' }}>
+                          <div className="id-verdict-line" style={{ color: '#ef4444', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            <span>ID Verification Failed.</span>
+                          </div>
+                          <div className="id-rejected-hint" style={{ fontSize: '0.85rem', color: '#ef4444', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            <span>{idRejectionReason || 'The ID card could not be verified.'}</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
+
                 </div>
-
-                {/* Inline validation feedback for non-institutional */}
-                {!isInstitutionalEmail && idFile && !isScanningId && (
-                  <>
-                    {idVerdict === 'APPROVED' && (
-                      <div className="id-verdict-line" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#166534', background: 'rgba(34,197,94,0.07)', padding: '0.5rem', borderRadius: '4px', border: '1px solid rgba(34,197,94,0.2)', marginTop: '0.5rem', fontSize: '0.85rem' }}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        <span>The ID is found to be valid.</span>
-                      </div>
-                    )}
-                    {idVerdict === 'REJECTED' && (
-                      <div className="id-rejected-block" style={{ marginTop: '0.5rem' }}>
-                        <div className="id-verdict-line" style={{ color: '#ef4444', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                          <span>ID Verification Failed.</span>
-                        </div>
-                        <div className="id-rejected-hint" style={{ fontSize: '0.85rem', color: '#ef4444', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                          <span>{idRejectionReason || 'The ID card could not be verified.'}</span>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-              </div>
 
               <div className="register-grid-2">
                 <div className="register-field">
@@ -402,23 +434,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout }: ProfileCompl
             </div>
           )}
 
-          {/* Preferred Weekend Cohort */}
-          <div className="register-field" style={{ marginTop: '1.25rem' }}>
-            <label htmlFor="comp-cohort">Preferred Date *</label>
-            <select
-              id="comp-cohort"
-              value={selectedCohort}
-              onChange={(e) => setSelectedCohort(e.target.value)}
-              className="register-select"
-              required
-            >
-              <option value="">Select Date</option>
-              <option value="June 6 & 7, 2026">June 6 & 7, 2026</option>
-              <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
-              <option value="June 20 & 21, 2026">June 20 & 21, 2026</option>
-              <option value="June 27 & 28, 2026">June 27 & 28, 2026</option>
-            </select>
-          </div>
+
 
           {/* How did you hear about us? */}
           <div className="register-field" style={{ marginTop: '1.25rem' }}>
@@ -519,6 +535,16 @@ export function Profile() {
     { session: 'Session 4: Visual Storytelling & Content Creation', rating: '', text: '' }
   ]);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [availableCohorts, setAvailableCohorts] = useState<string[]>([]);
+
+  // Nepal payment proof state in Profile page
+  const [profileNepalTxnRef, setProfileNepalTxnRef] = useState('');
+  const [profileNepalScreenshot, setProfileNepalScreenshot] = useState<File | null>(null);
+  const [isProfileSubmittingNepalProof, setIsProfileSubmittingNepalProof] = useState(false);
+
+  // Invalid Cohort change state
+  const [newCohortSelection, setNewCohortSelection] = useState('June 13 & 14, 2026');
+  const [isUpdatingCohort, setIsUpdatingCohort] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -533,6 +559,9 @@ export function Profile() {
       .then(([userData, settings]) => {
         updateUser(userData.user);
         setFeedbackEnabled(settings.feedbackEnabled);
+        if (settings && settings.availableCohorts) {
+          setAvailableCohorts(settings.availableCohorts);
+        }
       })
       .catch(() => {
         // Token invalid — log out
@@ -594,12 +623,33 @@ export function Profile() {
               token={token!}
               updateUser={updateUser}
               logout={logout}
+              availableCohorts={availableCohorts}
             />
           </div>
         </section>
       </main>
     );
   }
+
+  const handleProfileNepalProofSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!token) return;
+    if (!profileNepalTxnRef.trim()) {
+      toast.error('Please enter the Transaction Reference ID (UTR).');
+      return;
+    }
+    setIsProfileSubmittingNepalProof(true);
+    try {
+      const res = await api.submitNepalProof(token, profileNepalTxnRef.trim());
+      updateUser(res.user);
+      toast.success('Payment details submitted successfully!');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit payment details.');
+    } finally {
+      setIsProfileSubmittingNepalProof(false);
+    }
+  };
+
 
   const confirmedEvents = user.registeredEvents?.filter((e) => e.paymentStatus === 'confirmed') ?? [];
   const pendingEvents = user.registeredEvents?.filter((e) => e.paymentStatus !== 'confirmed') ?? [];
@@ -730,7 +780,11 @@ export function Profile() {
                 <span className="profile-detail-value">{user.userType === 'student' ? 'Student' : 'Working Professional'}</span>
               </div>
               <div className="profile-detail-item">
-                <span className="profile-detail-label">Preferred Date</span>
+                <span className="profile-detail-label">Country</span>
+                <span className="profile-detail-value">{user.country || 'India'}</span>
+              </div>
+              <div className="profile-detail-item">
+                <span className="profile-detail-label">Date</span>
                 <span className="profile-detail-value">{user.selectedCohort || '-'}</span>
               </div>
 
@@ -810,32 +864,128 @@ export function Profile() {
                         </p>
                       )}
                     </div>
-                    <div className="ticket-card-right">
+                    <div className="ticket-card-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        <span
-                          className={`ticket-badge badge-${(user as any).isWaitlisted ? 'waitlisted' : evt.paymentStatus}`}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: (user as any).isWaitlisted ? 'rgba(107, 114, 128, 0.1)' : undefined, color: (user as any).isWaitlisted ? '#4b5563' : undefined, border: (user as any).isWaitlisted ? '1px solid rgba(107, 114, 128, 0.2)' : undefined }}
-                        >
-                          {evt.paymentStatus === 'confirmed' ? (
-                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>Payment Completed</>
-                          ) : evt.paymentStatus === 'failed' ? (
-                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Payment Failed</>
-                          ) : (user as any).isWaitlisted ? (
-                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Waitlisted</>
-                          ) : (
-                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Payment Pending</>
-                          )}
-                        </span>
+                        {(() => {
+                          const isNepalVerificationPending = user.country === 'Nepal' && evt.paymentStatus === 'pending' && evt.nepalUpiTxnRef;
+                          return (
+                            <span
+                              className={`ticket-badge ${isNepalVerificationPending ? '' : `badge-${(user as any).isWaitlisted ? 'waitlisted' : evt.paymentStatus}`}`}
+                              style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '4px', 
+                                background: (user as any).isWaitlisted 
+                                  ? 'rgba(107, 114, 128, 0.1)' 
+                                  : isNepalVerificationPending 
+                                  ? 'rgba(245, 158, 11, 0.1)' 
+                                  : undefined, 
+                                color: (user as any).isWaitlisted 
+                                  ? '#4b5563' 
+                                  : isNepalVerificationPending 
+                                  ? '#b45309' 
+                                  : undefined, 
+                                border: (user as any).isWaitlisted 
+                                  ? '1px solid rgba(107, 114, 128, 0.2)' 
+                                  : isNepalVerificationPending 
+                                  ? '1px solid rgba(245, 158, 11, 0.25)' 
+                                  : undefined 
+                              }}
+                            >
+                              {evt.paymentStatus === 'confirmed' ? (
+                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>Payment Completed</>
+                              ) : evt.paymentStatus === 'failed' ? (
+                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Payment Failed</>
+                              ) : (user as any).isWaitlisted ? (
+                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Waitlisted</>
+                              ) : isNepalVerificationPending ? (
+                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Verification Pending</>
+                              ) : (
+                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Payment Pending</>
+                              )}
+                            </span>
+                          );
+                        })()}
                       </div>
-                      {evt.paymentStatus === 'pending' && !(user as any).isWaitlisted && (
-                        <button className="btn-primary" onClick={handlePayNow} style={{ marginTop: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'inline-block' }}>Complete Payment →</button>
+                      {user.country === 'Nepal' && evt.paymentStatus === 'pending' && evt.nepalUpiTxnRef && (
+                        <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 500 }}>
+                          Txn ID: <strong>{evt.nepalUpiTxnRef}</strong>
+                        </span>
+                      )}
+                    </div>
+                    {evt.paymentStatus === 'pending' && !(user as any).isWaitlisted && (
+                      user.country === 'Nepal' ? (
+                        !evt.nepalUpiTxnRef ? (
+                            <form onSubmit={handleProfileNepalProofSubmit} style={{ marginTop: '1rem', width: '100%', textAlign: 'left', background: '#fcfbf9', border: '1px solid #e7dfd5', borderRadius: '8px', padding: '1rem' }}>
+                              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem', color: 'var(--color-espresso)' }}>Complete Nepal UPI Payment</h4>
+                              <p style={{ margin: '0 0 1rem 0', fontSize: '0.8rem', color: 'var(--color-stone)' }}>Please scan the QR code and pay <strong>{user.userType === 'student' ? '₹499' : '₹999'}</strong>, then enter the UTR code below.</p>
+                              
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0.5rem 0 1rem 0' }}>
+                                <img 
+                                  src={publicAsset("Qr_code_Nepal.png")} 
+                                  alt="UPI QR" 
+                                  style={{ maxWidth: '180px', border: '1px solid #ccc', borderRadius: '6px' }} 
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    const parent = e.currentTarget.parentElement;
+                                    if (parent) {
+                                      const placeholder = parent.querySelector('.qr-placeholder');
+                                      if (!placeholder) {
+                                        const newPlaceholder = document.createElement('div');
+                                        newPlaceholder.className = 'qr-placeholder';
+                                        newPlaceholder.style.width = '180px';
+                                        newPlaceholder.style.height = '180px';
+                                        newPlaceholder.style.display = 'flex';
+                                        newPlaceholder.style.alignItems = 'center';
+                                        newPlaceholder.style.justifyContent = 'center';
+                                        newPlaceholder.style.border = '2px dashed #CBD5E1';
+                                        newPlaceholder.style.borderRadius = '6px';
+                                        newPlaceholder.style.background = '#F8FAFC';
+                                        newPlaceholder.style.color = '#64748B';
+                                        newPlaceholder.style.fontSize = '0.75rem';
+                                        newPlaceholder.style.fontWeight = '500';
+                                        newPlaceholder.style.textAlign = 'center';
+                                        newPlaceholder.style.padding = '0.5rem';
+                                        newPlaceholder.innerText = 'QR Code Image (Qr_code_Nepal.png) not found.';
+                                        parent.insertBefore(newPlaceholder, parent.firstChild);
+                                      }
+                                    }
+                                  }}
+                                />
+                              </div>
+
+                              <div className="register-field" style={{ marginBottom: '1rem' }}>
+                                <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Transaction ID (UTR) *</label>
+                                <input
+                                  type="text"
+                                  value={profileNepalTxnRef}
+                                  onChange={(e) => setProfileNepalTxnRef(e.target.value)}
+                                  placeholder="Enter UTR reference ID"
+                                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }}
+                                  required
+                                />
+                              </div>
+
+                              <button
+                                type="submit"
+                                className="btn-primary"
+                                style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem' }}
+                                disabled={isProfileSubmittingNepalProof}
+                              >
+                                {isProfileSubmittingNepalProof ? 'Submitting...' : 'Submit Payment Details'}
+                              </button>
+                            </form>
+
+                          ) : null
+                        ) : (
+                          <button className="btn-primary" onClick={handlePayNow} style={{ marginTop: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'inline-block' }}>Complete Payment →</button>
+                        )
                       )}
                       {(user as any).isWaitlisted && evt.paymentStatus !== 'confirmed' && (
                         <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--color-stone)', background: '#f9fafb', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                           You have been successfully registered! Updates for the upcoming session will be sent soon by email.
                         </p>
                       )}
-                    </div>
                   </div>
                 ))}
               </div>
@@ -1038,6 +1188,44 @@ export function Profile() {
                 Dismiss
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ── Invalid Cohort Modal (Update to June 13 & 14, 2026) ── */}
+      {user.selectedCohort !== 'June 13 & 14, 2026' && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001, padding: '1rem' }}>
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2D9CC', padding: '2.5rem', width: '100%', maxWidth: '480px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)', textAlign: 'center' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '50%', background: '#FFFBEB', border: '1px solid #FDE68A', marginBottom: '1.25rem' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <h3 style={{ marginBottom: '0.75rem', color: '#2A1F14', fontSize: '1.25rem', fontWeight: 700 }}>Event Date Update</h3>
+            <p style={{ fontSize: '0.88rem', color: '#64748B', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+              Please note that the <strong>Lead with AI</strong> professional program is scheduled to run on <strong>June 13th & June 14th, 2026</strong>.
+            </p>
+            <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+              Click below to update your date selection to June 13 & 14, 2026 and continue.
+            </p>
+            <button 
+              type="button" 
+              onClick={async () => {
+                if (isUpdatingCohort) return;
+                setIsUpdatingCohort(true);
+                try {
+                  const res = await api.changeCohort(token!, 'June 13 & 14, 2026');
+                  updateUser(res.user);
+                  toast.success('Your cohort date was successfully updated to June 13 & 14, 2026!');
+                } catch (err: any) {
+                  toast.error(err.message || 'Failed to update cohort date.');
+                } finally {
+                  setIsUpdatingCohort(false);
+                }
+              }}
+              className="btn-primary" 
+              style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: '#3b8bd4', borderColor: '#3b8bd4' }}
+              disabled={isUpdatingCohort}
+            >
+              {isUpdatingCohort ? 'Updating...' : 'Update Date & Continue'}
+            </button>
           </div>
         </div>
       )}

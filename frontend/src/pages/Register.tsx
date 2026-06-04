@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import * as api from '@/lib/api';
 import { Autocomplete } from '@/components/Autocomplete';
 import { toast } from 'sonner';
+import { publicAsset } from '@/lib/assets';
 
 const COURSE_OPTIONS = [
   "B.E. Computer Science and Engineering",
@@ -54,7 +55,7 @@ type OtpStep = 'email' | 'otp';
 
 export function Register() {
   const { login, token, user, updateUser } = useAuth();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
 
 
   // Read referral code from URL or persistent storage
@@ -71,15 +72,36 @@ export function Register() {
       const ref = urlParams.get('ref');
       window.location.href = `/?ref=${ref}`;
     }
+
+    api.getPublicSettings()
+      .then(settings => {
+        if (settings && settings.availableCohorts) {
+          setAvailableCohorts(settings.availableCohorts);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load available cohorts:', err);
+      });
   }, []);
 
-  // ── Tab state ────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<Tab>('register');
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    return window.location.pathname.endsWith('/login') ? 'login' : 'register';
+  });
+
+  // Synchronize activeTab state when URL location changes
+  useEffect(() => {
+    const expectedTab = location.endsWith('/login') ? 'login' : 'register';
+    if (activeTab !== expectedTab) {
+      setActiveTab(expectedTab);
+      setErrors({});
+    }
+  }, [location]);
 
   // ── Register form state ──────────────────────────────────────
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [country, setCountry] = useState('India');
   const [userType, setUserType] = useState<UserType>('student');
   // Student fields
   const [collegeName, setCollegeName] = useState('');
@@ -90,7 +112,14 @@ export function Register() {
   // Working fields
   const [domain, setDomain] = useState('');
   const [organization, setOrganization] = useState('');
-  const [selectedCohort, setSelectedCohort] = useState('');
+  const [selectedCohort, setSelectedCohort] = useState('June 13 & 14, 2026');
+  const [availableCohorts, setAvailableCohorts] = useState<string[]>([]);
+
+  // Nepal payment proof state
+  const [nepalTxnRef, setNepalTxnRef] = useState('');
+  const [nepalScreenshot, setNepalScreenshot] = useState<File | null>(null);
+  const [isSubmittingNepalProof, setIsSubmittingNepalProof] = useState(false);
+  const [nepalProofSubmitted, setNepalProofSubmitted] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const clearError = (field: string) => setErrors(prev => ({ ...prev, [field]: '' }));
@@ -133,7 +162,7 @@ export function Register() {
     userType === 'student' && /\.(ac|edu)\.in$/i.test(email.trim());
 
   const scanIdCard = async (file: File) => {
-    if (!file || isInstitutionalEmail) return;
+    if (!file || isInstitutionalEmail || country === 'Nepal') return;
     setIsScanningId(true);
     setIdVerdict(null);
     setIdRejectionReason('');
@@ -240,9 +269,11 @@ export function Register() {
         toast.warning('Please enter your phone number first.');
         return false;
       }
-      const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
-      if (!phoneRegex.test(phone.trim())) {
-        toast.warning('Please enter a valid 10-digit mobile number first.');
+      const hasInvalidChars = /[^\d+\s()-]/.test(phone);
+      const cleaned = phone.replace(/[^\d+]/g, '');
+      const phoneRegex = /^\+?[1-9]\d{6,14}$/;
+      if (hasInvalidChars || !phoneRegex.test(cleaned)) {
+        toast.warning('Please enter a valid phone number first (e.g. +91 98765 43210).');
         return false;
       }
     }
@@ -323,20 +354,24 @@ export function Register() {
     // Validation
     if (!fullName.trim()) newErrors.fullName = 'Please enter your full name.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Please enter a valid email.';
-    const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
-    if (!phoneRegex.test(phone.trim())) newErrors.phone = 'Please enter a valid 10-digit mobile number.';
+    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
+    const cleanedPhone = phone.replace(/[^\d+]/g, '');
+    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
+    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) newErrors.phone = 'Please enter a valid phone number (e.g. +91 98765 43210).';
     
     if (userType === 'student') {
-      // ID card is mandatory for all students
+      // ID card is mandatory for all students except from Nepal
       if (!idFile) {
         newErrors.idCard = 'Please upload your College ID Card.';
-      } else if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
-        // LLM validation result only blocks non-institutional users
-        newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
-      } else if (!isInstitutionalEmail && idVerdict === 'TRAFFIC_ERROR') {
-        newErrors.idCard = idRejectionReason || 'Gemini server is experiencing high traffic. Please try again.';
-      } else if (!isInstitutionalEmail && isScanningId) {
-        newErrors.idCard = 'Please wait — your ID card is being validated.';
+      } else if (country !== 'Nepal') {
+        if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
+          // LLM validation result only blocks non-institutional users
+          newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
+        } else if (!isInstitutionalEmail && idVerdict === 'TRAFFIC_ERROR') {
+          newErrors.idCard = idRejectionReason || 'Gemini server is experiencing high traffic. Please try again.';
+        } else if (!isInstitutionalEmail && isScanningId) {
+          newErrors.idCard = 'Please wait — your ID card is being validated.';
+        }
       }
       if (!collegeName.trim()) newErrors.collegeName = 'Please enter your college name.';
       if (!course.trim()) newErrors.course = 'Please enter your course.';
@@ -383,6 +418,7 @@ export function Register() {
       formData.append('heardFrom', finalHeardFrom);
       formData.append('selectedCohort', selectedCohort);
       
+      formData.append('country', country);
       if (refCode) {
         formData.append('referralCode', refCode);
       }
@@ -404,6 +440,28 @@ export function Register() {
       setRegLoading(false);
     }
   };
+
+  // ─────────────────────────────────────────────────────────────
+  // NEPAL PAYMENT PROOF SUBMIT
+  // ─────────────────────────────────────────────────────────────
+  const handleNepalProofSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!nepalTxnRef.trim()) {
+      toast.error('Please enter the Transaction Reference ID (UTR).');
+      return;
+    }
+    setIsSubmittingNepalProof(true);
+    try {
+      await api.submitNepalProof(regToken, nepalTxnRef.trim());
+      setNepalProofSubmitted(true);
+      toast.success('Payment details submitted successfully!');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit payment details.');
+    } finally {
+      setIsSubmittingNepalProof(false);
+    }
+  };
+
 
   // ─────────────────────────────────────────────────────────────
   // SEND OTP
@@ -501,7 +559,7 @@ export function Register() {
                   role="tab"
                   aria-selected={activeTab === 'register'}
                   className={`reg-tab ${activeTab === 'register' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('register'); setErrors({}); }}
+                  onClick={() => { navigate('/register'); }}
                 >
                   Register
                 </button>
@@ -509,7 +567,7 @@ export function Register() {
                   role="tab"
                   aria-selected={activeTab === 'login'}
                   className={`reg-tab ${activeTab === 'login' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('login'); setErrors({}); }}
+                  onClick={() => { navigate('/login'); }}
                 >
                   Login
                 </button>
@@ -546,14 +604,96 @@ export function Register() {
                 ) : regSuccess ? (
                   /* ── Registered — payment pending ── */
                   <div className="register-success" role="status">
-                    <div className="register-success-icon" style={{ background: 'rgba(196,149,106,0.12)', color: 'var(--color-sienna)' }} aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                      </svg>
-                    </div>
+                    {country === 'Nepal' ? (
+                      nepalProofSubmitted ? (
+                        <>
+                          <div className="register-success-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </div>
+                          <h3>Profile Created Successfully!</h3>
+                          <p><strong>Your registration is currently pending admin verification. We will send you a confirmation email once approved.</strong></p>
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            style={{ marginTop: '1.5rem', width: '100%' }}
+                            onClick={() => navigate('/profile')}
+                          >
+                            Go to My Profile →
+                          </button>
+                        </>
+                      ) : (
+                        <form onSubmit={handleNepalProofSubmit} style={{ width: '100%' }}>
+                          <h3>Profile Registration Completed</h3>
+                          <p style={{ marginBottom: '1.5rem' }}><strong>Please scan the QR code below using your UPI app and pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span>. Once done, enter the transaction ID.</strong></p>
+                          
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <img 
+                              src={publicAsset("Qr_code_Nepal.png")} 
+                              alt="Nepal UPI QR Code" 
+                              style={{ maxWidth: '240px', border: '2px solid #E2E8F0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} 
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const parent = e.currentTarget.parentElement;
+                                if (parent) {
+                                  const placeholder = parent.querySelector('.qr-placeholder');
+                                  if (!placeholder) {
+                                    const newPlaceholder = document.createElement('div');
+                                    newPlaceholder.className = 'qr-placeholder';
+                                    newPlaceholder.style.width = '240px';
+                                    newPlaceholder.style.height = '240px';
+                                    newPlaceholder.style.display = 'flex';
+                                    newPlaceholder.style.alignItems = 'center';
+                                    newPlaceholder.style.justifyContent = 'center';
+                                    newPlaceholder.style.border = '2px dashed #CBD5E1';
+                                    newPlaceholder.style.borderRadius = '12px';
+                                    newPlaceholder.style.background = '#F8FAFC';
+                                    newPlaceholder.style.color = '#64748B';
+                                    newPlaceholder.style.fontSize = '0.85rem';
+                                    newPlaceholder.style.fontWeight = '500';
+                                    newPlaceholder.style.textAlign = 'center';
+                                    newPlaceholder.style.padding = '1rem';
+                                    newPlaceholder.innerText = 'QR Code Image (Qr_code_Nepal.png) not found. Please upload to frontend/public/ folder.';
+                                    parent.insertBefore(newPlaceholder, parent.firstChild);
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
+
+                          <div className="register-field" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
+                            <label htmlFor="nepal-txn-ref" style={{ fontWeight: 600 }}>Transaction ID (UTR Code) *</label>
+                            <input
+                              id="nepal-txn-ref"
+                              type="text"
+                              value={nepalTxnRef}
+                              onChange={(e) => setNepalTxnRef(e.target.value)}
+                              placeholder="Enter transaction reference ID"
+                              required
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="btn-primary"
+                            style={{ width: '100%' }}
+                            disabled={isSubmittingNepalProof}
+                          >
+                            {isSubmittingNepalProof ? 'Submitting...' : 'Submit Payment Details →'}
+                          </button>
+
+                        </form>
+                      )
+                    ) : (
                       <>
+                        <div className="register-success-icon" style={{ background: 'rgba(196,149,106,0.12)', color: 'var(--color-sienna)' }} aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                        </div>
                         <h3>Registration completed</h3>
-                        <p>Your account has been created. Please complete the <span style={{ fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}>{userType === 'student' ? '₹499' : '₹999'}</span> payment to confirm your seat.</p>
+                        <p><strong>Please complete the <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span> payment to confirm your seat.</strong></p>
                         <button
                           type="button"
                           className="btn-primary"
@@ -562,17 +702,8 @@ export function Register() {
                         >
                           Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span> Now →
                         </button>
-                        <p style={{ marginTop: '1.25rem', fontSize: '0.9rem', color: 'var(--color-stone)' }}>
-                          If you prefer to pay later, you can complete your payment anytime from your{' '}
-                          <span
-                            onClick={() => navigate('/profile')}
-                            style={{ color: 'var(--color-sienna)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}
-                          >
-                            My Profile
-                          </span>{' '}
-                          page.
-                        </p>
                       </>
+                    )}
                   </div>
                 ) : (
                   /* ── Register Form ── */
@@ -601,23 +732,17 @@ export function Register() {
                           value={phone}
                           onChange={(e) => {
                             if (!verifyStepCompleted('phone')) return;
-                            setPhone(e.target.value.replace(/\D/g, ''));
+                            setPhone(e.target.value.replace(/[^\d+\s()-]/g, ''));
                             clearError('phone');
-                          }}
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val && !/^(?:\+91[-\s]?)?[6-9]\d{9}$/.test(val)) {
-                              toast.error('Please enter a valid 10-digit mobile number.');
-                            }
                           }}
                           onFocus={(e) => {
                             if (!verifyStepCompleted('phone')) {
                               e.currentTarget.blur();
                             }
                           }}
-                          placeholder="e.g. 9876543210"
+                          placeholder="+91 98765 43210"
                           autoComplete="tel"
-                          maxLength={10}
+                          maxLength={25}
                           required
                         />
                       </div>
@@ -714,7 +839,7 @@ export function Register() {
                     )}
 
                     {/* Guarded fields after email verification */}
-                    <div style={{ position: 'relative', marginTop: '1.5rem' }}>
+                    <div style={{ position: 'relative' }}>
                       {!isEmailVerified && (
                         <div
                           onClick={() => {
@@ -741,6 +866,29 @@ export function Register() {
                           gap: '1.4rem'
                         }}
                       >
+                        {/* Country Selection */}
+                        <div className="register-field">
+                          <label htmlFor="reg-country">Country *</label>
+                          <select
+                            id="reg-country"
+                            value={country}
+                            onChange={(e) => {
+                              const selectedVal = e.target.value;
+                              setCountry(selectedVal);
+                              if (selectedVal === 'Nepal') {
+                                setIdVerdict(null);
+                                setIdRejectionReason('');
+                              }
+                            }}
+                            className="register-select"
+                            disabled={!isEmailVerified}
+                            required
+                          >
+                            <option value="India">India</option>
+                            <option value="Nepal">Nepal</option>
+                          </select>
+                        </div>
+
                         {/* Student / Working Toggle */}
                         <div className="register-field">
                           <label>I am a *</label>
@@ -771,148 +919,147 @@ export function Register() {
                         {/* Student-specific fields */}
                         {userType === 'student' && (
                           <div className="reg-conditional-fields">
-                            {/* ── ID Card section (always visible) ── */}
                             <div className="register-field">
-                              <label htmlFor="reg-idcard">
-                                college id card *(Both sides)
-                                {isScanningId && (
-                                  <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                                    <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                                    Validating...
-                                  </span>
-                                )}
-                              </label>
-
-                              {!isInstitutionalEmail && (
-                                <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
-                                  Please upload your physical College ID card to qualify for student pricing (₹499).
-                                </p>
-                              )}
-
-                              <div
-                                className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
-                                onClick={() => {
-                                  if (checkEmailVerification()) return;
-                                  if (!isScanningId) fileInputRef.current?.click();
-                                }}
-                                style={{ cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
-                              >
-                                <input
-                                  ref={fileInputRef}
-                                  id="reg-idcard"
-                                  type="file"
-                                  accept=".pdf"
-                                  style={{ display: 'none' }}
-                                  disabled={!isEmailVerified}
-                                  onChange={async (e: ChangeEvent<HTMLInputElement>) => {
-                                    const f = e.target.files?.[0] || null;
-                                    setIdFile(f);
-                                    if (f) clearError('idCard');
-                                    setIdVerdict(null);
-                                    setIdRejectionReason('');
-                                    setShowIdModal(false);
-
-                                    // LLM validation only for non-institutional emails
-                                    if (f && !isInstitutionalEmail) {
-                                      await scanIdCard(f);
-                                    }
-                                  }}
-                                />
-                                {idFile ? (
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                    <span className="upload-filename" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                      {idVerdict === 'TRAFFIC_ERROR' ? (
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                      ) : (
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                                      )}
-                                      {idFile.name}
+                                <label htmlFor="reg-idcard">
+                                  college id card *(Both sides)
+                                  {isScanningId && (
+                                    <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                      <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                      Validating...
                                     </span>
-                                    {idVerdict === 'TRAFFIC_ERROR' && (
-                                      <button
-                                        type="button"
-                                        style={{
-                                          background: '#fef3c7',
-                                          color: '#d97706',
-                                          border: '1px solid #fcd34d',
-                                          borderRadius: '4px',
-                                          padding: '2px 8px',
-                                          fontSize: '12px',
-                                          fontWeight: 'bold',
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '4px',
-                                        }}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (idFile) scanIdCard(idFile);
-                                        }}
-                                      >
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                                        Reload / Retry
-                                      </button>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="upload-placeholder">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                    PDF only(max. 5MB)
-                                  </span>
-                                )}
-                              </div>
+                                  )}
+                                </label>
 
-                              {/* Inline validation feedback for non-institutional */}
-                              {!isInstitutionalEmail && idFile && !isScanningId && (
-                                <>
-                                  {idVerdict === 'APPROVED' && (
-                                    <div className="id-verdict-line">
-                                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                                      <span>The ID is found to be valid.</span>
-                                    </div>
-                                  )}
-                                  {idVerdict === 'TRAFFIC_ERROR' && (
-                                    <div className="id-rejected-block">
-                                      <div className="id-verdict-line" style={{ color: '#d97706' }}>
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                        <span>Gemini server is experiencing high traffic. Please try again.</span>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {idVerdict === 'REJECTED' && (
-                                    <div className="id-rejected-block">
-                                      <div className="id-verdict-line">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                        <span>ID Verification Failed.</span>
-                                      </div>
-                                      <div className="id-rejected-hint" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                        <span>If you are working professional register under </span>
+                                {!isInstitutionalEmail && (
+                                  <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
+                                    Please upload your physical College ID card to qualify for student pricing (₹499).
+                                  </p>
+                                )}
+
+                                <div
+                                  className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
+                                  onClick={() => {
+                                    if (checkEmailVerification()) return;
+                                    if (!isScanningId) fileInputRef.current?.click();
+                                  }}
+                                  style={{ cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
+                                >
+                                  <input
+                                    ref={fileInputRef}
+                                    id="reg-idcard"
+                                    type="file"
+                                    accept=".pdf"
+                                    style={{ display: 'none' }}
+                                    disabled={!isEmailVerified}
+                                    onChange={async (e: ChangeEvent<HTMLInputElement>) => {
+                                      const f = e.target.files?.[0] || null;
+                                      setIdFile(f);
+                                      if (f) clearError('idCard');
+                                      setIdVerdict(null);
+                                      setIdRejectionReason('');
+                                      setShowIdModal(false);
+
+                                      // LLM validation only for non-institutional emails, skip for Nepal
+                                      if (f && !isInstitutionalEmail && country !== 'Nepal') {
+                                        await scanIdCard(f);
+                                      }
+                                    }}
+                                  />
+                                  {idFile ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                      <span className="upload-filename" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        {idVerdict === 'TRAFFIC_ERROR' ? (
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                        ) : (
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                        )}
+                                        {idFile.name}
+                                      </span>
+                                      {idVerdict === 'TRAFFIC_ERROR' && (
                                         <button
                                           type="button"
                                           style={{
-                                            background: 'none',
-                                            border: 'none',
-                                            padding: 0,
-                                            margin: 0,
-                                            font: 'inherit',
-                                            color: '#2563eb',
+                                            background: '#fef3c7',
+                                            color: '#d97706',
+                                            border: '1px solid #fcd34d',
+                                            borderRadius: '4px',
+                                            padding: '2px 8px',
+                                            fontSize: '12px',
                                             fontWeight: 'bold',
-                                            textDecoration: 'underline',
                                             cursor: 'pointer',
-                                            display: 'inline',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
                                           }}
-                                          onClick={() => { setUserType('working'); resetIdUpload(); }}
-                                          disabled={!isEmailVerified}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (idFile) scanIdCard(idFile);
+                                          }}
                                         >
-                                          Working professional/others
+                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                                          Reload / Retry
                                         </button>
-                                      </div>
+                                      )}
                                     </div>
+                                  ) : (
+                                    <span className="upload-placeholder">
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                      PDF only(max. 5MB)
+                                    </span>
                                   )}
-                                </>
-                              )}
-                            </div>
+                                </div>
+
+                                {/* Inline validation feedback for non-institutional */}
+                                {!isInstitutionalEmail && idFile && !isScanningId && (
+                                  <>
+                                    {idVerdict === 'APPROVED' && (
+                                      <div className="id-verdict-line">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                        <span>The ID is found to be valid.</span>
+                                      </div>
+                                    )}
+                                    {idVerdict === 'TRAFFIC_ERROR' && (
+                                      <div className="id-rejected-block">
+                                        <div className="id-verdict-line" style={{ color: '#d97706' }}>
+                                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                          <span>Gemini server is experiencing high traffic. Please try again.</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {idVerdict === 'REJECTED' && (
+                                      <div className="id-rejected-block">
+                                        <div className="id-verdict-line">
+                                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                          <span>ID Verification Failed.</span>
+                                        </div>
+                                        <div className="id-rejected-hint" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                          <span>If you are working professional register under </span>
+                                          <button
+                                            type="button"
+                                            style={{
+                                              background: 'none',
+                                              border: 'none',
+                                              padding: 0,
+                                              margin: 0,
+                                              font: 'inherit',
+                                              color: '#2563eb',
+                                              fontWeight: 'bold',
+                                              textDecoration: 'underline',
+                                              cursor: 'pointer',
+                                              display: 'inline',
+                                            }}
+                                            onClick={() => { setUserType('working'); resetIdUpload(); }}
+                                            disabled={!isEmailVerified}
+                                          >
+                                            Working professional/others
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
 
                             <div className="register-grid-2">
                               <div className="register-field">
@@ -1003,24 +1150,7 @@ export function Register() {
                         )}
 
                         {/* Preferred Weekend Cohort */}
-                        <div className="register-field">
-                          <label htmlFor="reg-cohort">Preferred Date *</label>
-                          <select
-                            id="reg-cohort"
-                            value={selectedCohort}
-                            onChange={(e) => { setSelectedCohort(e.target.value); clearError('selectedCohort'); }}
-                            onFocus={handleOtherFieldFocus}
-                            className="register-select"
-                            disabled={!isEmailVerified}
-                            required
-                          >
-                            <option value="">Select Date</option>
-                            <option value="June 6 & 7, 2026">June 6 & 7, 2026</option>
-                            <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
-                            <option value="June 20 & 21, 2026">June 20 & 21, 2026</option>
-                            <option value="June 27 & 28, 2026">June 27 & 28, 2026</option>
-                          </select>
-                        </div>
+
 
                         {/* How did you hear about us? */}
                         <div className="register-field">
@@ -1075,7 +1205,7 @@ export function Register() {
 
                     <p className="register-note">
                       Already registered?{' '}
-                      <button type="button" className="register-link register-link-btn" onClick={() => setActiveTab('login')}>
+                      <button type="button" className="register-link register-link-btn" onClick={() => navigate('/login')}>
                         Log in here
                       </button>
                     </p>
@@ -1116,7 +1246,7 @@ export function Register() {
 
                     <p className="register-note">
                       Don't have an account?{' '}
-                      <button type="button" className="register-link register-link-btn" onClick={() => setActiveTab('register')}>
+                      <button type="button" className="register-link register-link-btn" onClick={() => navigate('/register')}>
                         Register here
                       </button>
                     </p>

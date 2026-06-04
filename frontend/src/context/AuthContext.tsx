@@ -7,6 +7,9 @@ export interface RegisteredEvent {
   paymentStatus: 'pending' | 'confirmed' | 'failed';
   registeredAt: string;
   zoomJoinUrl?: string;
+  paymentMethod?: 'razorpay' | 'nepal_upi';
+  nepalUpiTxnRef?: string;
+  nepalUpiScreenshotPath?: string;
 }
 
 export interface AuthUser {
@@ -23,6 +26,8 @@ export interface AuthUser {
   heardFrom?: string;
   isProfileComplete?: boolean;
   registeredEvents: RegisteredEvent[];
+  country?: 'India' | 'Nepal';
+  selectedCohort?: string;
 }
 
 interface AuthContextValue {

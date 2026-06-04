@@ -1,5 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
+const path = require('path');
+const multer = require('multer');
 const Razorpay = require('razorpay');
 const User = require('../models/User');
 const { sendPaymentConfirmationEmail } = require('../utils/email');
@@ -254,5 +256,90 @@ router.post('/webhook', async (req, res) => {
     res.status(500).send('Internal Server Error');
   }
 });
+
+// --- Multer config for Nepal Payment Proof ---
+const paymentProofStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '../../uploads'));
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `proof-${unique}${path.extname(file.originalname)}`);
+  },
+});
+
+const uploadProof = multer({
+  storage: paymentProofStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png|pdf/i;
+    const extname = filetypes.test(path.extname(file.originalname));
+    const mimetype = filetypes.test(file.mimetype) || file.mimetype === 'application/pdf';
+    if (extname && mimetype) {
+      return cb(null, true);
+    }
+    cb(new Error('Only images (JPEG/JPG/PNG) and PDF files are allowed as proof (max 5MB)'));
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/payment/submit-nepal-proof (protected)
+// ─────────────────────────────────────────────
+router.post('/submit-nepal-proof', authMiddleware, async (req, res) => {
+  try {
+    const { txnRef } = req.body;
+    if (!txnRef || !txnRef.trim()) {
+      return res.status(400).json({ error: 'Transaction reference ID (UTR) is required.' });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    let eventEntry = user.registeredEvents.find(e => e.eventName === EVENT_NAME);
+    if (!eventEntry) {
+      eventEntry = {
+        eventName: EVENT_NAME,
+        paymentStatus: 'pending',
+      };
+      user.registeredEvents.push(eventEntry);
+      eventEntry = user.registeredEvents[user.registeredEvents.length - 1];
+    }
+
+    eventEntry.paymentMethod = 'nepal_upi';
+    eventEntry.nepalUpiTxnRef = txnRef.trim();
+    eventEntry.paymentStatus = 'pending';
+
+    await user.save();
+
+    return res.json({
+      message: 'Payment proof submitted successfully!',
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        userType: user.userType,
+        collegeName: user.collegeName,
+        course: user.course,
+        year: user.year,
+        domain: user.domain,
+        organization: user.organization,
+        heardFrom: user.heardFrom,
+        selectedCohort: user.selectedCohort,
+        isWaitlisted: user.isWaitlisted,
+        country: user.country,
+        registeredEvents: user.registeredEvents,
+        isProfileComplete: user.isProfileComplete,
+      }
+    });
+
+  } catch (err) {
+    console.error('Submit Nepal proof error:', err);
+    res.status(500).json({ error: 'Failed to submit payment proof.' });
+  }
+});
+
 
 module.exports = router;

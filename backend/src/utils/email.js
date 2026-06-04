@@ -14,22 +14,19 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Helper: Get formatted date and time in India Standard Time
+// Helper: Get formatted date in India Standard Time
 function getFormattedDateTime() {
   const options = {
     timeZone: 'Asia/Kolkata',
     weekday: 'short',
     year: 'numeric',
     month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
+    day: 'numeric'
   };
   try {
     return new Intl.DateTimeFormat('en-US', options).format(new Date());
   } catch (e) {
-    return new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    return new Date().toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
   }
 }
 
@@ -165,9 +162,9 @@ function getIcsDateRange(cohortStr) {
 async function sendRegistrationEmail(user) {
   const greeting = `Welcome, ${user.fullName.split(' ')[0]}!`;
   const contentHtml = `
-    <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop for the cohort <strong>${user.selectedCohort || 'Selected June 2026 Cohort'}</strong>.</p>
+    <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop scheduled on <strong>June 13 & 14, 2026</strong>.</p>
     <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
-    <p><a href="https://www.globalknowledgetech.com/leadwithAI/register" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/register</a></p>
+    <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
   `;
 
   const html = getHtmlTemplate({ greeting, contentHtml });
@@ -234,8 +231,8 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${eventName}</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Cohort Weekend</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${user.selectedCohort || 'Selected June 2026 Cohort'}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">June 13 & 14, 2026</td>
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Amount Paid</strong></td>
@@ -304,7 +301,7 @@ async function sendCustomBulkEmail(emails, subject, htmlContent) {
 /**
  * Send Day 1 reminder email (sent on May 15th — day before event)
  */
-async function sendReminderEmail(user, eventName, meetingLink) {
+async function sendReminderEmail(user, eventName) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
   const contentHtml = `
     <p style="font-size: 18px; font-weight: bold; color: #0D1117; margin-bottom: 20px;">Reminder: Lead with AI Workshop starts TOMORROW!</p>
@@ -319,22 +316,14 @@ async function sendReminderEmail(user, eventName, meetingLink) {
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${user.selectedCohort || 'Selected June 2026 Cohort'}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">June 13 & 14, 2026</td>
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Time</strong></td>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">10:00 AM – 6:00 PM IST</td>
         </tr>
-        <tr>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Platform</strong></td>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">Online (Zoom)</td>
-        </tr>
       </table>
     </div>
-
-    <p style="text-align: center; margin: 35px 0;">
-      <a href="${meetingLink}" style="display: inline-block; background-color: #0D1117; color: #FFFFFF !important; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Join the Zoom Meeting &rarr;</a>
-    </p>
   `;
 
   const html = getHtmlTemplate({ greeting, contentHtml });
@@ -350,7 +339,7 @@ async function sendReminderEmail(user, eventName, meetingLink) {
 /**
  * Send Day 2 reminder email (sent on May 16th after 6 PM IST)
  */
-async function sendDay2ReminderEmail(user, eventName, meetingLink) {
+async function sendDay2ReminderEmail(user, eventName) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
   const contentHtml = `
     <p style="font-size: 18px; font-weight: bold; color: #0D1117; margin-bottom: 20px;">Get Ready for Day 2!</p>
@@ -364,22 +353,14 @@ async function sendDay2ReminderEmail(user, eventName, meetingLink) {
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">Day 2 of your selected Cohort (${user.selectedCohort || 'June 2026'})</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">June 14, 2026</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Time</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">10:00 AM – 6:00 PM IST</td>
-        </tr>
-        <tr>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Platform</strong></td>
-          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">Online (Zoom)</td>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Time</strong></td>
+          <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">10:00 AM – 6:00 PM IST</td>
         </tr>
       </table>
     </div>
-
-    <p style="text-align: center; margin: 35px 0;">
-      <a href="${meetingLink}" style="display: inline-block; background-color: #0D1117; color: #FFFFFF !important; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; font-family: Arial, Helvetica, sans-serif; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Join Day 2 Zoom Session &rarr;</a>
-    </p>
   `;
 
   const html = getHtmlTemplate({ greeting, contentHtml });
@@ -431,8 +412,8 @@ async function sendZoomJoinLinkEmail(user, eventName, zoomJoinUrl) {
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${eventName}</td>
         </tr>
         <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Cohort Weekend</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${user.selectedCohort || 'Selected June 2026 Cohort'}</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">June 13 & 14, 2026</td>
         </tr>
         <tr>
           <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Session Link</strong></td>
@@ -456,6 +437,80 @@ async function sendZoomJoinLinkEmail(user, eventName, zoomJoinUrl) {
   });
 }
 
+/**
+ * Triggers Day 1 emails for all paid attendees of a cohort weekend.
+ */
+async function sendCohortDay1Reminders(cohortName, eventName) {
+  const User = require('../models/User');
+  const paidUsers = await User.find({
+    selectedCohort: cohortName,
+    registeredEvents: { $elemMatch: { eventName: eventName, paymentStatus: 'confirmed' } }
+  });
+  console.log(`[Email Utils] Triggering Day 1 reminders for cohort ${cohortName} to ${paidUsers.length} paid users.`);
+  let sent = 0;
+  for (const user of paidUsers) {
+    try {
+      await sendReminderEmail(user, eventName);
+      sent++;
+    } catch (err) {
+      console.error(`[Email Utils] Failed Day 1 for ${user.email}:`, err.message);
+    }
+  }
+  console.log(`[Email Utils] Day 1 emails sent: ${sent}/${paidUsers.length}`);
+  return { total: paidUsers.length, sent };
+}
+
+/**
+ * Triggers Day 2 emails for all paid attendees of a cohort weekend.
+ */
+async function sendCohortDay2Reminders(cohortName, eventName) {
+  const User = require('../models/User');
+  const paidUsers = await User.find({
+    selectedCohort: cohortName,
+    registeredEvents: { $elemMatch: { eventName: eventName, paymentStatus: 'confirmed' } }
+  });
+  console.log(`[Email Utils] Triggering Day 2 reminders for cohort ${cohortName} to ${paidUsers.length} paid users.`);
+  let sent = 0;
+  for (const user of paidUsers) {
+    try {
+      await sendDay2ReminderEmail(user, eventName);
+      sent++;
+    } catch (err) {
+      console.error(`[Email Utils] Failed Day 2 for ${user.email}:`, err.message);
+    }
+  }
+  console.log(`[Email Utils] Day 2 emails sent: ${sent}/${paidUsers.length}`);
+  return { total: paidUsers.length, sent };
+}
+
+/**
+ * Send payment rejection email (Nepal UPI)
+ */
+async function sendPaymentRejectionEmail(user, eventName, reason) {
+  const greeting = `Dear ${user.fullName.split(' ')[0]},`;
+  const contentHtml = `
+    <p style="font-size: 18px; color: #DC2626; font-weight: bold; margin-bottom: 20px;">Payment Proof Rejected</p>
+    <p>We reviewed your submitted payment proof for <strong>${eventName}</strong>, and unfortunately, it could not be verified.</p>
+    
+    <div style="background-color: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 8px; padding: 24px; margin: 30px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #991B1B;">
+      <strong>Reason for Rejection:</strong><br/>
+      ${reason || 'The transaction could not be found in our bank statement or the uploaded receipt was invalid.'}
+    </div>
+
+    <p>Please log in to your account and re-upload the correct payment proof or complete your payment.</p>
+    <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
+  `;
+
+  const html = getHtmlTemplate({ greeting, contentHtml });
+
+  await transporter.sendMail({
+    from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
+    to: user.email,
+    subject: `Action Required: Payment Verification Failed — Lead with AI`,
+    html,
+  });
+}
+
 module.exports = {
   sendRegistrationEmail,
   sendVerificationOtpEmail,
@@ -466,4 +521,7 @@ module.exports = {
   sendDay2ReminderEmail,
   sendProfileApprovedEmail,
   sendZoomJoinLinkEmail,
+  sendCohortDay1Reminders,
+  sendCohortDay2Reminders,
+  sendPaymentRejectionEmail,
 };

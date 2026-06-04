@@ -27,7 +27,7 @@ export function Home() {
     <main>
       <section className="hero-section">
         <div className="hero-content">
-          <div className="hero-tag">GLOBAL KNOWLEDGE TECHNOLOGIES · EVERY WEEKEND IN JUNE 2026 · 2-DAY PROFESSIONAL AI PROGRAM</div>
+          <div className="hero-tag">GLOBAL KNOWLEDGE TECHNOLOGIES · 2-DAY PROFESSIONAL AI PROGRAM</div>
           <h1 className="hero-title">Lead with AI: Adopt, Implement and Transform</h1>
           <p className="hero-sub">
             Stop experimenting with AI, start executing with it. In two intensive days, you'll move from passive curiosity to building real workflows, products, and creative assets that you can immediately put to use in your career, projects, or organisation.
@@ -41,47 +41,14 @@ export function Home() {
           <div style={{
             marginTop: '2rem',
             marginBottom: '2.5rem',
-            background: 'rgba(196, 149, 106, 0.08)',
-            border: '1px solid rgba(196, 149, 106, 0.20)',
-            borderRadius: '12px',
-            padding: '1.5rem',
-            maxWidth: '680px',
-            textAlign: 'center',
-            boxSizing: 'border-box',
-            marginLeft: 'auto',
-            marginRight: 'auto'
+            display: 'flex',
+            justifyContent: 'center'
           }}>
-            <div style={{
-              color: 'var(--color-sienna)',
-              fontWeight: 700,
-              fontSize: '0.85rem',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              marginBottom: '1rem'
-            }}>
-              Available June 2026 Cohorts (Choose during registration)
-            </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-              gap: '1rem',
-              color: 'var(--color-white)',
-              fontSize: '0.95rem'
-            }}>
-              <div style={{ padding: '0.75rem 0.5rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                <strong>June 6 & 7</strong>
-              </div>
-              <div style={{ padding: '0.75rem 0.5rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                <strong>June 13 & 14</strong>
-              </div>
-              <div style={{ padding: '0.75rem 0.5rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                <strong>June 20 & 21</strong>
-              </div>
-              <div style={{ padding: '0.75rem 0.5rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                <strong>June 27 & 28</strong>
-              </div>
+            <div style={{ padding: '0.75rem 2rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+              <strong style={{ fontSize: '1.2rem', color: 'var(--color-white)' }}>June 13 & 14, 2026</strong>
             </div>
           </div>
+
 
           <div className="hero-trust">
             <div className="hero-trust-item">

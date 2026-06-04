@@ -339,6 +339,7 @@ router.get('/users', adminAuth, async (req, res) => {
 
     const formatted = users.map(u => {
       const confirmed = u.registeredEvents && u.registeredEvents.find(e => e.paymentStatus === 'confirmed');
+      const eventEntry = u.registeredEvents && u.registeredEvents.find(e => e.eventName === 'Lead with AI: Adopt, Implement and Transform');
       return {
         id:           u._id,
         fullName:     u.fullName,
@@ -357,6 +358,8 @@ router.get('/users', adminAuth, async (req, res) => {
         // Working professional fields
         domain:       u.domain       || '-',
         organization: u.organization || '-',
+        // Country
+        country:      u.country      || 'India',
         // Payment
         isPaid:    !!confirmed,
         paymentId: confirmed ? (confirmed.razorpayPaymentId || '-') : '-',
@@ -365,6 +368,10 @@ router.get('/users', adminAuth, async (req, res) => {
         isProfileComplete: u.isProfileComplete,
         selectedCohort: u.selectedCohort,
         createdAt: u.createdAt,
+        // Nepal UPI proof details
+        paymentMethod:          eventEntry ? eventEntry.paymentMethod : 'razorpay',
+        nepalUpiTxnRef:         eventEntry ? eventEntry.nepalUpiTxnRef : null,
+        nepalUpiScreenshotPath: eventEntry ? eventEntry.nepalUpiScreenshotPath : null,
       };
     });
 
@@ -396,10 +403,7 @@ const createRegistrantSchema = Joi.object({
   userType: Joi.string().valid('student', 'working').optional(),
   referralCode: Joi.string().allow('', null).optional(),
   selectedCohort: Joi.string().valid(
-    'June 6 & 7, 2026',
-    'June 13 & 14, 2026',
-    'June 20 & 21, 2026',
-    'June 27 & 28, 2026'
+    'June 13 & 14, 2026'
   ).allow('', null).optional()
 });
 
@@ -525,17 +529,15 @@ const editUserSchema = Joi.object({
   organization: Joi.string().allow('', null).optional(),
   heardFrom:    Joi.string().optional(),
   referralCode: Joi.string().allow('', null).optional(),
+  country:      Joi.string().allow('', null).optional(),
   selectedCohort: Joi.string().valid(
-    'June 6 & 7, 2026',
-    'June 13 & 14, 2026',
-    'June 20 & 21, 2026',
-    'June 27 & 28, 2026'
+    'June 13 & 14, 2026'
   ).allow('', null).optional()
 });
 
 router.patch('/users/:id', adminAuth, validate(editUserSchema), async (req, res) => {
   try {
-    const allowedFields = ['fullName', 'phone', 'collegeName', 'course', 'year', 'domain', 'organization', 'heardFrom', 'selectedCohort'];
+    const allowedFields = ['fullName', 'phone', 'collegeName', 'course', 'year', 'domain', 'organization', 'heardFrom', 'selectedCohort', 'country'];
     const updates = {};
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
@@ -643,6 +645,15 @@ router.post('/users/:id/confirm-payment', adminAuth, validate(confirmPaymentSche
 
     // Find or create the event entry
     let eventEntry = user.registeredEvents.find(e => e.eventName === EVENT_NAME);
+    if (eventEntry && eventEntry.paymentMethod === 'nepal_upi') {
+      if (!eventEntry.nepalUpiTxnRef) {
+        return res.status(400).json({ error: 'No student-submitted transaction reference found to match.' });
+      }
+      if (eventEntry.nepalUpiTxnRef.trim().toLowerCase() !== razorpayPaymentId.trim().toLowerCase()) {
+        return res.status(400).json({ error: `The transaction ID entered (${razorpayPaymentId}) does not match the reference ID submitted by the student (${eventEntry.nepalUpiTxnRef}).` });
+      }
+    }
+
     if (eventEntry) {
       eventEntry.razorpayPaymentId = razorpayPaymentId;
       eventEntry.paymentStatus = 'confirmed';
@@ -692,6 +703,73 @@ router.post('/users/:id/confirm-payment', adminAuth, validate(confirmPaymentSche
   } catch (err) {
     console.error('POST /api/admin/users/:id/confirm-payment error:', err);
     res.status(500).json({ error: 'Failed to confirm payment' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/admin/users/:id/reject-payment
+// Manually reject a user's payment proof (Nepal UPI)
+// ─────────────────────────────────────────────
+const rejectPaymentSchema = Joi.object({
+  reason: Joi.string().required()
+});
+
+router.post('/users/:id/reject-payment', adminAuth, validate(rejectPaymentSchema), async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
+    let eventEntry = user.registeredEvents.find(e => e.eventName === EVENT_NAME);
+    if (!eventEntry) {
+      return res.status(404).json({ error: 'No registered event found for this user.' });
+    }
+
+    if (eventEntry.paymentStatus === 'confirmed') {
+      return res.status(400).json({ error: 'Cannot reject an already confirmed payment.' });
+    }
+
+    // Delete proof screenshot if it exists
+    if (eventEntry.nepalUpiScreenshotPath) {
+      const fs = require('fs').promises;
+      const path = require('path');
+      const proofPath = path.join(__dirname, '../../uploads', eventEntry.nepalUpiScreenshotPath);
+      await fs.unlink(proofPath).catch((e) => console.warn('Failed to delete rejected screenshot:', e.message));
+    }
+
+    // Reset Nepal Payment proof details
+    eventEntry.paymentMethod = 'razorpay';
+    eventEntry.nepalUpiTxnRef = undefined;
+    eventEntry.nepalUpiScreenshotPath = undefined;
+    eventEntry.paymentStatus = 'pending';
+
+    await user.save();
+
+    // Send payment rejection email (non-blocking)
+    const { sendPaymentRejectionEmail } = require('../utils/email');
+    sendPaymentRejectionEmail(user, EVENT_NAME, reason)
+      .catch((err) => console.error('Failed sending rejection email:', err));
+
+    res.locals.auditTarget = user.email;
+    res.locals.auditDetails = { user: user.fullName, action: 'Manual Payment Rejected', reason };
+
+    res.json({
+      message: `Payment proof rejected for "${user.fullName}". Notification sent.`,
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        userType: user.userType,
+        country: user.country,
+        registeredEvents: user.registeredEvents,
+      }
+    });
+
+  } catch (err) {
+    console.error('POST /api/admin/users/:id/reject-payment error:', err);
+    res.status(500).json({ error: 'Failed to reject payment' });
   }
 });
 
@@ -850,38 +928,53 @@ const sendBulkEmailSchema = Joi.object({
     is: 'custom',
     then: Joi.required(),
     otherwise: Joi.optional()
-  })
+  }),
+  selectedCohort: Joi.string().allow('', null).optional()
 });
 
 router.post('/send-email', adminAuth, validate(sendBulkEmailSchema), async (req, res) => {
   try {
-    const { subject, htmlContent, recipientType, customEmails } = req.body;
+    const { subject, htmlContent, recipientType, customEmails, selectedCohort } = req.body;
 
     let targetEmails = [];
+    const query = {};
+    if (selectedCohort) {
+      query.selectedCohort = selectedCohort;
+    }
 
     if (recipientType === 'all') {
-      const users = await User.find().select('email');
+      const users = await User.find(query).select('email');
       targetEmails = users.map(u => u.email);
     } else if (recipientType === 'paid') {
-      const users = await User.find().select('email registeredEvents');
+      const users = await User.find(query).select('email registeredEvents');
       targetEmails = users
         .filter(u => u.registeredEvents && u.registeredEvents.some(e => e.paymentStatus === 'confirmed'))
         .map(u => u.email);
     } else if (recipientType === 'unpaid') {
-      const users = await User.find().select('email registeredEvents isWaitlisted');
+      const users = await User.find(query).select('email registeredEvents isWaitlisted');
       targetEmails = users
         .filter(u => !u.isWaitlisted && !(u.registeredEvents && u.registeredEvents.some(e => e.paymentStatus === 'confirmed')))
         .map(u => u.email);
     } else if (recipientType === 'waitlisted') {
-      const users = await User.find({ isWaitlisted: true }).select('email');
+      const waitlistedQuery = { ...query, isWaitlisted: true };
+      const users = await User.find(waitlistedQuery).select('email');
       targetEmails = users.map(u => u.email);
     } else if (recipientType === 'first1000') {
-      const users = await User.find().sort({ createdAt: 1 }).limit(1000).select('email');
+      const users = await User.find(query).sort({ createdAt: 1 }).limit(1000).select('email');
       targetEmails = users.map(u => u.email);
     } else if (recipientType === 'custom') {
       if (!customEmails || !Array.isArray(customEmails) || customEmails.length === 0)
         return res.status(400).json({ error: 'Custom emails array is required' });
-      targetEmails = customEmails;
+      
+      if (selectedCohort) {
+        const users = await User.find({
+          email: { $in: customEmails.map(e => e.toLowerCase().trim()) },
+          selectedCohort
+        }).select('email');
+        targetEmails = users.map(u => u.email);
+      } else {
+        targetEmails = customEmails;
+      }
     } else {
       return res.status(400).json({ error: 'Invalid recipient type' });
     }
@@ -1145,5 +1238,55 @@ router.delete('/settings/referrals/:code', adminAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete referral code' });
   }
 });
+// ─────────────────────────────────────────────
+// POST /api/admin/settings/send-reminders
+// Trigger / Schedule reminders for upcoming cohort
+// ─────────────────────────────────────────────
+router.post('/settings/send-reminders', adminAuth, async (req, res) => {
+  try {
+    const settings = await Settings.getSingleton();
+
+    settings.activeReminderCohort = 'June 13 & 14, 2026';
+    await settings.save();
+
+    res.locals.auditDetails = {
+      cohort: 'June 13 & 14, 2026',
+      action: 'Reminder Schedule Activated'
+    };
+
+    return res.json({
+      message: 'Cohort reminders successfully scheduled for June 13 & 14, 2026. Day 1 email will be sent on June 12 at 10:00 AM IST and Day 2 email will be sent on June 13 at 6:30 PM IST.',
+      cohort: 'June 13 & 14, 2026',
+      activeReminderCohort: 'June 13 & 14, 2026'
+    });
+  } catch (err) {
+    console.error('POST /api/admin/settings/send-reminders error:', err);
+    res.status(500).json({ error: 'Failed to schedule reminders: ' + err.message });
+  }
+});
+
+// POST /api/admin/settings/cancel-reminders
+// Deactivate / cancel reminders for upcoming cohort
+router.post('/settings/cancel-reminders', adminAuth, async (req, res) => {
+  try {
+    const settings = await Settings.getSingleton();
+
+    settings.activeReminderCohort = null;
+    await settings.save();
+
+    res.locals.auditDetails = {
+      action: 'Reminder Schedule Cancelled'
+    };
+
+    return res.json({
+      message: 'Cohort reminders schedule successfully cancelled.',
+      activeReminderCohort: null
+    });
+  } catch (err) {
+    console.error('POST /api/admin/settings/cancel-reminders error:', err);
+    res.status(500).json({ error: 'Failed to cancel reminders: ' + err.message });
+  }
+});
 
 module.exports = router;
+

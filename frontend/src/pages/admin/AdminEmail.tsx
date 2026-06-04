@@ -9,6 +9,7 @@ export function AdminEmail() {
   const [status, setStatus] = useState({ type: '', message: '' });
   const [loading, setLoading] = useState(false);
 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus({ type: '', message: '' });
@@ -71,6 +72,8 @@ export function AdminEmail() {
               <option value="custom">Custom Email List</option>
             </select>
           </div>
+          
+
 
           {recipientType === 'custom' && (
             <div className="form-group">

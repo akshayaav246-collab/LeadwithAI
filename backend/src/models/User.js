@@ -5,6 +5,9 @@ const registeredEventSchema = new mongoose.Schema({
   eventName: { type: String, required: true },
   razorpayOrderId: { type: String },
   razorpayPaymentId: { type: String },
+  paymentMethod: { type: String, enum: ['razorpay', 'nepal_upi'], default: 'razorpay' },
+  nepalUpiTxnRef: { type: String },
+  nepalUpiScreenshotPath: { type: String },
   paymentStatus: {
     type: String,
     enum: ['pending', 'confirmed', 'failed'],
@@ -28,6 +31,7 @@ const userSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    country: { type: String, default: 'India', trim: true },
     phone: { type: String, trim: true },
     userType: { type: String, enum: ['student', 'working'] },
 

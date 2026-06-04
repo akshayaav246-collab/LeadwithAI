@@ -288,11 +288,9 @@ const registerSchema = Joi.object({
   organization: Joi.string().allow('', null),
   heardFrom: Joi.string().required(),
   referralCode: Joi.string().allow('', null),
+  country: Joi.string().valid('India', 'Nepal').default('India').optional(),
   selectedCohort: Joi.string().valid(
-    'June 6 & 7, 2026',
-    'June 13 & 14, 2026',
-    'June 20 & 21, 2026',
-    'June 27 & 28, 2026'
+    'June 13 & 14, 2026'
   ).required()
 });
 
@@ -311,6 +309,7 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       heardFrom,
       referralCode,
       selectedCohort,
+      country,
     } = req.body;
 
     // Validate required fields
@@ -329,6 +328,13 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
       return res.status(409).json({ error: 'User already exists.' });
+    }
+
+    // Cohort availability validation
+    const { getAvailableCohorts } = require('../utils/cohorts');
+    const available = await getAvailableCohorts();
+    if (!available.includes(selectedCohort)) {
+      return res.status(400).json({ error: `Selected date (${selectedCohort}) is no longer available.` });
     }
 
     // Waitlist Logic: Use the dynamic registrationCap from Settings
@@ -354,6 +360,7 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       referralCode: mappedReferral,
       selectedCohort,
       isWaitlisted,
+      country: country || 'India',
       registeredEvents: [{
         eventName: 'Lead with AI: Adopt, Implement and Transform',
         paymentStatus: 'pending'
@@ -396,6 +403,7 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
         heardFrom: user.heardFrom,
         selectedCohort: user.selectedCohort,
         isWaitlisted: user.isWaitlisted,
+        country: user.country,
         registeredEvents: user.registeredEvents,
       },
     });
@@ -523,6 +531,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         isFeedbackSubmitted: user.isFeedbackSubmitted,
         feedback: user.feedback,
         isProfileComplete: user.isProfileComplete,
+        country: user.country,
         createdAt: user.createdAt,
       },
     });
@@ -556,6 +565,7 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
       heardFrom,
       heardFromOther,
       selectedCohort,
+      country,
     } = req.body;
 
     // Validate required fields
@@ -565,20 +575,28 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
     }
 
     const validCohorts = [
-      'June 6 & 7, 2026',
-      'June 13 & 14, 2026',
-      'June 20 & 21, 2026',
-      'June 27 & 28, 2026'
+      'June 13 & 14, 2026'
     ];
     if (!validCohorts.includes(selectedCohort)) {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(400).json({ error: 'Invalid cohort selected.' });
     }
 
-    const phoneRegex = /^(?:\+91[-\s]?)?[6-9]\d{9}$/;
-    if (!phoneRegex.test(phone.trim())) {
+    // Cohort availability validation
+    const { getAvailableCohorts } = require('../utils/cohorts');
+    const available = await getAvailableCohorts();
+    const isSameCohort = user.selectedCohort === selectedCohort;
+    if (!isSameCohort && !available.includes(selectedCohort)) {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
-      return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number.' });
+      return res.status(400).json({ error: `Selected date (${selectedCohort}) is no longer available.` });
+    }
+
+    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
+    const cleanedPhone = phone.replace(/[^\d+]/g, '');
+    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
+    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'Please enter a valid phone number (e.g. +91 98765 43210).' });
     }
 
     // Enforce lock on userType if it was set by admin
@@ -622,6 +640,9 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
     user.userType = userType;
     user.heardFrom = finalHeardFrom;
     user.selectedCohort = selectedCohort;
+    if (country) {
+      user.country = country;
+    }
 
     if (userType === 'student') {
       user.collegeName = collegeName.trim();
@@ -660,6 +681,7 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
         selectedCohort: user.selectedCohort,
         isAdminCreated: user.isAdminCreated,
         isWaitlisted: user.isWaitlisted,
+        country: user.country,
         registeredEvents: user.registeredEvents,
         isProfileComplete: user.isProfileComplete,
       }
@@ -670,6 +692,68 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
       await fs.unlink(req.file.path).catch(() => {});
     }
     res.status(500).json({ error: 'Failed to complete profile.' });
+  }
+});
+
+// POST /api/auth/change-cohort (protected)
+router.post('/change-cohort', authMiddleware, async (req, res) => {
+  try {
+    const validCohorts = [
+      'June 13 & 14, 2026'
+    ];
+    if (!validCohorts.includes(cohort)) {
+      return res.status(400).json({ error: 'Invalid cohort selected.' });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
+    const eventEntry = user.registeredEvents.find(e => e.eventName === EVENT_NAME);
+
+    // Update cohort
+    user.selectedCohort = cohort;
+
+    // Automatically re-register for Zoom webinar if they are already confirmed for the event
+    if (eventEntry && eventEntry.paymentStatus === 'confirmed') {
+      try {
+        const { registerForWebinar } = require('../utils/zoom');
+        const [firstName, ...lastNameParts] = user.fullName.split(' ');
+        const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '), cohort);
+        eventEntry.zoomJoinUrl = joinUrl;
+        eventEntry.zoomRegistrationStatus = 'success';
+      } catch (zoomErr) {
+        console.error('Zoom re-registration failed during cohort update:', zoomErr);
+        eventEntry.zoomRegistrationStatus = 'failed';
+      }
+    }
+
+    await user.save();
+
+    return res.json({
+      message: 'Cohort updated successfully.',
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        userType: user.userType,
+        collegeName: user.collegeName,
+        course: user.course,
+        year: user.year,
+        domain: user.domain,
+        organization: user.organization,
+        heardFrom: user.heardFrom,
+        selectedCohort: user.selectedCohort,
+        isWaitlisted: user.isWaitlisted,
+        country: user.country,
+        registeredEvents: user.registeredEvents,
+        isProfileComplete: user.isProfileComplete,
+      }
+    });
+  } catch (err) {
+    console.error('Change cohort error:', err);
+    res.status(500).json({ error: 'Failed to update cohort date.' });
   }
 });
 

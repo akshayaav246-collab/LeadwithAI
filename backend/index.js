@@ -106,8 +106,13 @@ app.get('/api/public/settings', async (req, res) => {
   try {
     const Settings = require('./src/models/Settings');
     const settings = await Settings.findOne();
-    res.json(settings || { feedbackEnabled: false });
+    const { getAvailableCohorts } = require('./src/utils/cohorts');
+    const availableCohorts = await getAvailableCohorts();
+    const responseData = settings ? settings.toObject() : { feedbackEnabled: false };
+    responseData.availableCohorts = availableCohorts;
+    res.json(responseData);
   } catch (err) {
+    console.error('Public settings route error:', err);
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
@@ -116,6 +121,20 @@ app.get('/api/public/settings', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Serve static frontend assets
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+app.use(express.static(frontendDistPath));
+
+// Fallback to index.html for SPA routing on client-side routes
+app.get(['/login', '/profile', '/admin'], (req, res, next) => {
+  res.sendFile(path.join(frontendDistPath, 'index.html'), (err) => {
+    if (err) {
+      next(); // Pass to 404 handler if index.html is missing
+    }
+  });
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
@@ -140,10 +159,7 @@ function getCohortNameForTomorrow() {
   const d = parseInt(parts.find(p => p.type === 'day').value);
 
   if (y === 2026 && m === 6) {
-    if (d === 6) return 'June 6 & 7, 2026';
     if (d === 13) return 'June 13 & 14, 2026';
-    if (d === 20) return 'June 20 & 21, 2026';
-    if (d === 27) return 'June 27 & 28, 2026';
   }
   return null;
 }
@@ -163,70 +179,61 @@ function getCohortNameForToday() {
   const d = parseInt(parts.find(p => p.type === 'day').value);
 
   if (y === 2026 && m === 6) {
-    if (d === 6) return 'June 6 & 7, 2026';
     if (d === 13) return 'June 13 & 14, 2026';
-    if (d === 20) return 'June 20 & 21, 2026';
-    if (d === 27) return 'June 27 & 28, 2026';
   }
   return null;
 }
 
 // --- Reminder Email Cron Jobs ---------------
-// Runs daily at 9:00 AM IST (03:30 UTC)
-// Sends "starts TOMORROW" reminder to all paid participants registered for the upcoming Saturday cohort
+// Runs daily at 10:00 AM IST
+// Sends "starts TOMORROW" reminder to all paid participants registered for the upcoming Saturday cohort if activated by admin
 function scheduleReminderEmails() {
-  cron.schedule('30 3 * * *', async () => {
+  const Settings = require('./src/models/Settings');
+  const { sendCohortDay1Reminders, sendCohortDay2Reminders } = require('./src/utils/email');
+
+  cron.schedule('0 10 * * *', async () => {
     try {
       const cohort = getCohortNameForTomorrow();
       if (!cohort) {
         console.log(`[Cron Day1] Tomorrow is not a cohort Saturday. Skipping.`);
         return;
       }
-      console.log(`[Cron Day1] Sending Day 1 reminder emails for cohort: ${cohort}...`);
-      const paidUsers = await User.find({
-        selectedCohort: cohort,
-        registeredEvents: { $elemMatch: { eventName: EVENT_NAME, paymentStatus: 'confirmed' } }
-      });
-      let sent = 0;
-      for (const user of paidUsers) {
-        try {
-          await sendReminderEmail(user, EVENT_NAME, MEETING_LINK);
-          sent++;
-        } catch (err) {
-          console.error(`[Cron Day1] Failed for ${user.email}:`, err.message);
-        }
+
+      const settings = await Settings.getSingleton();
+      if (!settings.activeReminderCohort || settings.activeReminderCohort !== cohort) {
+        console.log(`[Cron Day1] Cohort ${cohort} is not active for reminders. Active: ${settings.activeReminderCohort}. Skipping.`);
+        return;
       }
-      console.log(`[Cron Day1] Sent: ${sent}/${paidUsers.length}`);
+
+      await sendCohortDay1Reminders(cohort, EVENT_NAME);
     } catch (err) {
       console.error('[Cron Day1] Job error:', err.message);
     }
   }, { timezone: 'Asia/Kolkata' });
-  console.log('✓ Day 1 reminder cron scheduled (Daily at 9:00 AM IST)');
+  console.log('✓ Day 1 reminder cron scheduled (Daily at 10:00 AM IST)');
 
-  // Runs daily at 6:30 PM IST (13:00 UTC)
-  // Sends "get ready for Day 2" email after Day 1 ends to paid participants of today's cohort
-  cron.schedule('0 13 * * *', async () => {
+  // Runs daily at 6:30 PM IST
+  // Sends "get ready for Day 2" email after Day 1 ends to paid participants of today's cohort if activated by admin
+  cron.schedule('30 18 * * *', async () => {
     try {
       const cohort = getCohortNameForToday();
       if (!cohort) {
         console.log(`[Cron Day2] Today is not a cohort Saturday. Skipping.`);
         return;
       }
-      console.log(`[Cron Day2] Sending Day 2 reminder emails for cohort: ${cohort}...`);
-      const paidUsers = await User.find({
-        selectedCohort: cohort,
-        registeredEvents: { $elemMatch: { eventName: EVENT_NAME, paymentStatus: 'confirmed' } }
-      });
-      let sent = 0;
-      for (const user of paidUsers) {
-        try {
-          await sendDay2ReminderEmail(user, EVENT_NAME, MEETING_LINK);
-          sent++;
-        } catch (err) {
-          console.error(`[Cron Day2] Failed for ${user.email}:`, err.message);
-        }
+
+      const settings = await Settings.getSingleton();
+      if (!settings.activeReminderCohort || settings.activeReminderCohort !== cohort) {
+        console.log(`[Cron Day2] Cohort ${cohort} is not active for reminders. Active: ${settings.activeReminderCohort}. Skipping.`);
+        return;
       }
-      console.log(`[Cron Day2] Sent: ${sent}/${paidUsers.length}`);
+
+      await sendCohortDay2Reminders(cohort, EVENT_NAME);
+
+      // Clear the active cohort as both Day 1 and Day 2 are completed
+      settings.activeReminderCohort = null;
+      await settings.save();
+      console.log(`[Cron Day2] Cleared activeReminderCohort from Settings after Day 2 reminders.`);
     } catch (err) {
       console.error('[Cron Day2] Job error:', err.message);
     }

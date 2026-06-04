@@ -8,10 +8,11 @@ const referralCodeSchema = new mongoose.Schema({
 
 const settingsSchema = new mongoose.Schema(
   {
-    feedbackEnabled:   { type: Boolean, default: false },
-    isMaintenanceMode: { type: Boolean, default: false },
-    registrationCap:   { type: Number,  default: 1000 },
-    referralCodes:     { type: [referralCodeSchema], default: [] },
+    feedbackEnabled:      { type: Boolean, default: false },
+    isMaintenanceMode:    { type: Boolean, default: false },
+    registrationCap:      { type: Number,  default: 1000 },
+    referralCodes:        { type: [referralCodeSchema], default: [] },
+    activeReminderCohort: { type: String,  default: null },
   },
   { timestamps: true }
 );
