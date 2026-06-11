@@ -953,6 +953,16 @@ export function Register() {
                                     disabled={!isEmailVerified}
                                     onChange={async (e: ChangeEvent<HTMLInputElement>) => {
                                       const f = e.target.files?.[0] || null;
+
+                                      // Check file size before anything else (5MB limit)
+                                      // This runs client-side so it works even when Nginx
+                                      // rejects the request before Express sees it on the server
+                                      if (f && f.size > 5 * 1024 * 1024) {
+                                        toast.error('File too large. Please upload a PDF under 5MB.');
+                                        e.target.value = '';
+                                        return;
+                                      }
+
                                       setIdFile(f);
                                       if (f) clearError('idCard');
                                       setIdVerdict(null);

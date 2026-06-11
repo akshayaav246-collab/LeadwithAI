@@ -194,37 +194,54 @@ Return ONLY raw JSON, no markdown, no explanation outside the JSON. The JSON sch
 
     const REJECTION_MESSAGE = 'The uploaded ID could not be verified as a valid educational institution ID. Please upload a clear image of an original physical ID card.';
 
+    // Safe fallback response — always returns valid JSON so browser never sees ERR_FAILED
+    const REVIEW_RESPONSE = {
+      is_id_card: false,
+      is_valid_college: false,
+      college: null,
+      verdict: 'REVIEW',
+      rejection_reason: null,
+      source: 'gemini',
+    };
+
     try {
-      const response = await ai.models.generateContent({
+      // Race Gemini against a 20-second timeout.
+      // If Gemini hangs, the timeout wins and we skip validation silently.
+      const geminiTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('GEMINI_TIMEOUT')), 20000)
+      );
+
+      const geminiCall = ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [
           prompt,
           { inlineData: { data: base64Image, mimeType: req.file.mimetype } },
         ],
       });
+
+      const response = await Promise.race([geminiCall, geminiTimeout]);
       let rawText = response.text.trim().replace(/^```json\s*/i, '').replace(/```$/, '').trim();
       geminiResult = JSON.parse(rawText);
     } catch (geminiErr) {
-      console.warn('Gemini ID scan failed:', geminiErr.message);
-      const isTraffic = /429|exhausted|quota|limit|traffic|503|504|unavailable/i.test(geminiErr.message || '');
+      const msg = geminiErr.message || '';
+      console.warn('Gemini ID scan failed/timed out:', msg);
+
+      const isTraffic = /429|exhausted|quota|limit|traffic|503|504|unavailable/i.test(msg);
+      const isTimeout = msg === 'GEMINI_TIMEOUT';
+
       if (isTraffic) {
         return res.json({
-          is_id_card: false,
-          is_valid_college: false,
-          college: null,
+          ...REVIEW_RESPONSE,
           verdict: 'TRAFFIC_ERROR',
           rejection_reason: 'Gemini server is experiencing high traffic. Please try again.',
-          source: 'gemini',
         });
       }
-      return res.json({
-        is_id_card: false,
-        is_valid_college: false,
-        college: null,
-        verdict: 'REVIEW',
-        rejection_reason: REJECTION_MESSAGE,
-        source: 'gemini',
-      });
+
+      // Timeout or any other Gemini error → silently skip, let user proceed
+      if (isTimeout) {
+        console.warn('Gemini timed out after 20s — returning REVIEW to avoid ERR_FAILED');
+      }
+      return res.json(REVIEW_RESPONSE);
     }
 
     // ── STEP 2: Backend Logic Validation ───────────────────────────────────
@@ -266,8 +283,16 @@ Return ONLY raw JSON, no markdown, no explanation outside the JSON. The JSON sch
     });
 
   } catch (err) {
-    console.error('Parse ID error:', err);
-    res.status(500).json({ error: 'Failed to process ID card image.' });
+    // Outer catch — should never reach here now, but if it does return REVIEW not 500
+    console.error('Parse ID unexpected error:', err);
+    return res.json({
+      is_id_card: false,
+      is_valid_college: false,
+      college: null,
+      verdict: 'REVIEW',
+      rejection_reason: null,
+      source: 'gemini',
+    });
   } finally {
     try { await fs.unlink(filePath); } catch (e) { /* ignore */ }
   }

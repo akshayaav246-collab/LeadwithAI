@@ -1,10 +1,13 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+// Logger must be required first — overrides console.error/warn/log globally
+const logger = require('./src/utils/logger');
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
+const morgan = require('morgan');
 const authRoutes = require('./src/routes/auth');
 const paymentRoutes = require('./src/routes/payment');
 const adminRoutes = require('./src/routes/admin');
@@ -16,11 +19,11 @@ const PORT = process.env.PORT || 4002;
 const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
 const MEETING_LINK = process.env.ZOOM_LINK || 'https://zoom.us/j/00000000000';
 // --- Middleware ------------------------------
-// Request Logging
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
-  next();
-});
+// Request Logging (Morgan → Winston)
+app.use(morgan('combined', {
+  stream: { write: (msg) => logger.info(msg.trim()) },
+  skip: (req) => req.path === '/api/health', // skip noisy health checks
+}));
 app.use(cors({
   origin: "*",
   credentials: true,
