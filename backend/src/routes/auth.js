@@ -230,15 +230,8 @@ Return ONLY raw JSON, no markdown, no explanation outside the JSON. The JSON sch
       const isTimeout = msg === 'GEMINI_TIMEOUT';
 
       if (isTraffic) {
-        return res.json({
-          ...REVIEW_RESPONSE,
-          verdict: 'TRAFFIC_ERROR',
-          rejection_reason: 'Gemini server is experiencing high traffic. Please try again.',
-        });
-      }
-
-      // Timeout or any other Gemini error → silently skip, let user proceed
-      if (isTimeout) {
+        console.warn('Gemini high traffic detected — returning REVIEW to bypass validation silently');
+      } else if (isTimeout) {
         console.warn('Gemini timed out after 20s — returning REVIEW to avoid ERR_FAILED');
       }
       return res.json(REVIEW_RESPONSE);

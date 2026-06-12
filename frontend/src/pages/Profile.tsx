@@ -130,9 +130,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
 
       const res = await api.completeProfile(token, formData);
 
-      if (selectedUserType === 'student' && collegeName) {
-        api.addCollege(collegeName).catch(() => {});
-      }
+
 
       toast.success(res.message || 'Profile completed successfully.');
       updateUser(res.user);

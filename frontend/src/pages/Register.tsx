@@ -168,13 +168,12 @@ export function Register() {
     setIdRejectionReason('');
     try {
       const parsed = await api.parseIdCard(file, email || undefined);
-      setIdVerdict(parsed.verdict);
-      if (parsed.verdict === 'APPROVED') {
+      const finalVerdict = parsed.verdict === 'TRAFFIC_ERROR' ? 'REVIEW' : parsed.verdict;
+      setIdVerdict(finalVerdict);
+      if (finalVerdict === 'APPROVED') {
         setIdRejectionReason('');
-      } else if (parsed.verdict === 'REJECTED') {
+      } else if (finalVerdict === 'REJECTED') {
         setIdRejectionReason(parsed.rejection_reason || 'The ID card is not found to be valid.');
-      } else if (parsed.verdict === 'TRAFFIC_ERROR') {
-        setIdRejectionReason(parsed.rejection_reason || 'Gemini server is experiencing high traffic. Please try again.');
       } else {
         setIdRejectionReason('');
       }
@@ -367,8 +366,6 @@ export function Register() {
         if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
           // LLM validation result only blocks non-institutional users
           newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
-        } else if (!isInstitutionalEmail && idVerdict === 'TRAFFIC_ERROR') {
-          newErrors.idCard = idRejectionReason || 'Gemini server is experiencing high traffic. Please try again.';
         } else if (!isInstitutionalEmail && isScanningId) {
           newErrors.idCard = 'Please wait — your ID card is being validated.';
         }
@@ -425,10 +422,7 @@ export function Register() {
 
       const { token, user } = await api.registerUser(formData);
       
-      // Auto-add new college to dropdown list in background
-      if (userType === 'student' && collegeName) {
-        api.addCollege(collegeName).catch(() => {});
-      }
+
 
       login(token, user);
       setRegToken(token);
@@ -978,38 +972,9 @@ export function Register() {
                                   {idFile ? (
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                       <span className="upload-filename" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        {idVerdict === 'TRAFFIC_ERROR' ? (
-                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                        ) : (
-                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                                        )}
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                                         {idFile.name}
                                       </span>
-                                      {idVerdict === 'TRAFFIC_ERROR' && (
-                                        <button
-                                          type="button"
-                                          style={{
-                                            background: '#fef3c7',
-                                            color: '#d97706',
-                                            border: '1px solid #fcd34d',
-                                            borderRadius: '4px',
-                                            padding: '2px 8px',
-                                            fontSize: '12px',
-                                            fontWeight: 'bold',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                          }}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (idFile) scanIdCard(idFile);
-                                          }}
-                                        >
-                                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                                          Reload / Retry
-                                        </button>
-                                      )}
                                     </div>
                                   ) : (
                                     <span className="upload-placeholder">
@@ -1026,14 +991,6 @@ export function Register() {
                                       <div className="id-verdict-line">
                                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                         <span>The ID is found to be valid.</span>
-                                      </div>
-                                    )}
-                                    {idVerdict === 'TRAFFIC_ERROR' && (
-                                      <div className="id-rejected-block">
-                                        <div className="id-verdict-line" style={{ color: '#d97706' }}>
-                                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                          <span>Gemini server is experiencing high traffic. Please try again.</span>
-                                        </div>
                                       </div>
                                     )}
                                     {idVerdict === 'REJECTED' && (
