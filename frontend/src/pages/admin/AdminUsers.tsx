@@ -119,6 +119,7 @@ export function AdminUsers() {
   const [filterReferral, setFilterReferral] = useState('all');
   const [filterHeardFrom, setFilterHeardFrom] = useState('all');
   const [filterCohort, setFilterCohort] = useState('all');
+  const [filterFeedback, setFilterFeedback] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   
   const [referralsList, setReferralsList] = useState<any[]>([]);
@@ -185,7 +186,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort]);
+  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, filterFeedback]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -200,6 +201,7 @@ export function AdminUsers() {
         filterReferral,
         filterHeardFrom,
         filterCohort,
+        filterFeedback,
         sortOrder
       });
       setUsers(data.data || []);
@@ -215,7 +217,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
-  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, adminToken]);
+  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, filterFeedback, adminToken]);
 
   const handleExportCSV = async () => {
     try {
@@ -227,6 +229,7 @@ export function AdminUsers() {
         filterReferral,
         filterHeardFrom,
         filterCohort,
+        filterFeedback,
         exportCsv: 'true',
         sortOrder
       });
@@ -241,7 +244,7 @@ export function AdminUsers() {
         'College', 'Course', 'Year',
         'Domain', 'Organization',
         'Waitlisted', 'Active', 'Heard From', 'Referral Code',
-        'Payment Status', 'Payment ID', 'Profile Status', 'Registered On'
+        'Payment Status', 'Payment ID', 'Profile Status', 'Feedback Submitted', 'Registered On'
       ];
       const rows = exportUsers.map((u: any) => [
         `"${u.fullName}"`, `"${u.email}"`, `"${u.phone}"`, `"${u.userType}"`,
@@ -252,6 +255,7 @@ export function AdminUsers() {
         u.isPaid ? 'Paid' : 'Unpaid',
         `"${u.paymentId || '-'}"`,
         u.isProfileComplete ? 'Complete' : 'Partially Filled',
+        u.isFeedbackSubmitted ? 'Yes' : 'No',
         `"${new Date(u.createdAt).toLocaleString()}"`,
       ]);
       const csv = [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
@@ -482,11 +486,7 @@ export function AdminUsers() {
           <option value="newspaper">Newspaper</option>
           <option value="others">Others</option>
         </select>
-        <select value={filterWaitlist} onChange={e => setFilterWaitlist(e.target.value)} className="admin-select">
-          <option value="all">All Cohorts</option>
-          <option value="regular">First 1000</option>
-          <option value="waitlisted">Waitlisted</option>
-        </select>
+
         <select value={filterReferral} onChange={e => setFilterReferral(e.target.value)} className="admin-select">
           <option value="all">All Referrals</option>
           {referralsList.map(r => (
@@ -496,6 +496,11 @@ export function AdminUsers() {
         <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)} className="admin-select">
           <option value="all">All Dates</option>
           <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
+        </select>
+        <select value={filterFeedback} onChange={e => setFilterFeedback(e.target.value)} className="admin-select">
+          <option value="all">All Feedback Status</option>
+          <option value="completed">Feedback Completed</option>
+          <option value="pending">Feedback Pending</option>
         </select>
 
       </div>
@@ -518,6 +523,7 @@ export function AdminUsers() {
                 <th style={{ textAlign: 'center' }}>Referral</th>
                 <th style={{ textAlign: 'center' }}>Payment</th>
                 <th style={{ textAlign: 'center' }}>Heard From</th>
+                <th style={{ textAlign: 'center' }}>Feedback</th>
                 <th style={{ textAlign: 'center' }}>Preferred Date</th>
               </tr>
             </thead>
@@ -552,12 +558,21 @@ export function AdminUsers() {
                     <td className="admin-supporting-info" style={{ textAlign: 'center' }}>
                       {user.heardFrom || '-'}
                     </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`admin-badge ${user.isFeedbackSubmitted ? 'success' : 'secondary'}`} style={{
+                        background: user.isFeedbackSubmitted ? 'rgba(34,197,94,0.08)' : 'rgba(100,116,139,0.08)',
+                        color: user.isFeedbackSubmitted ? '#16a34a' : '#64748b',
+                        border: `1px solid ${user.isFeedbackSubmitted ? 'rgba(34,197,94,0.2)' : 'rgba(100,116,139,0.2)'}`,
+                      }}>
+                        {user.isFeedbackSubmitted ? 'Completed' : 'Pending'}
+                      </span>
+                    </td>
                     <td className="admin-supporting-info" style={{ textAlign: 'center' }}>{user.selectedCohort || '-'}</td>
                   </tr>
 
                   {expandedId === user.id && (
                     <tr>
-                      <td colSpan={10} style={{ background: '#F0F4F8', padding: '1.2rem 2rem' }}>
+                      <td colSpan={11} style={{ background: '#F0F4F8', padding: '1.2rem 2rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: user.userType === 'student' && user.idCardPath ? '1fr 1fr 180px' : '1fr 1fr', gap: '1.5rem' }}>
                           
                           {/* Profile completion check */}

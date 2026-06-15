@@ -260,7 +260,8 @@ router.get('/users', adminAuth, async (req, res) => {
       sortOrder = 'desc',
       filterProfile = 'all',
       filterHeardFrom = 'all',
-      filterCohort = 'all'
+      filterCohort = 'all',
+      filterFeedback = 'all'
     } = req.query;
 
     const query = {};
@@ -322,6 +323,13 @@ router.get('/users', adminAuth, async (req, res) => {
       query.selectedCohort = filterCohort;
     }
 
+    // Filter Feedback Status
+    if (filterFeedback === 'completed') {
+      query.isFeedbackSubmitted = true;
+    } else if (filterFeedback === 'pending') {
+      query.isFeedbackSubmitted = { $ne: true };
+    }
+
     const isExport = exportCsv === 'true';
     const sortDir = sortOrder === 'asc' ? 1 : -1;
     let usersQuery = User.find(query).sort({ createdAt: sortDir }).select('-otpHash -otpExpiry');
@@ -366,6 +374,7 @@ router.get('/users', adminAuth, async (req, res) => {
         zoomStatus: confirmed ? (confirmed.zoomRegistrationStatus || 'pending') : '-',
         emailStatus: confirmed ? (confirmed.emailConfirmationStatus || 'pending') : '-',
         isProfileComplete: u.isProfileComplete,
+        isFeedbackSubmitted: u.isFeedbackSubmitted || false,
         selectedCohort: u.selectedCohort,
         createdAt: u.createdAt,
         // Nepal UPI proof details

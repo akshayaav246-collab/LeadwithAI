@@ -1006,16 +1006,9 @@ export function Profile() {
                   <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.88rem', color: 'var(--color-stone)' }}>
                     Thank you for your valuable feedback!
                   </p>
-                  <Suspense fallback={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 0', color: 'var(--color-stone)', fontSize: '0.88rem' }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin-slow 2s linear infinite', color: 'var(--color-sienna)' }}>
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                      </svg>
-                      Preparing Certificate Button...
-                    </div>
-                  }>
-                    <DownloadCertificateButton fullName={user.fullName} userId={user.id || (user as any)._id} />
-                  </Suspense>
+                  <p style={{ margin: '0', fontSize: '0.88rem', color: 'var(--color-sienna)', fontWeight: 'bold' }}>
+                    The certificate will be sent to your email shortly.
+                  </p>
                 </div>
               ) : (
                 !feedbackEnabled ? (
