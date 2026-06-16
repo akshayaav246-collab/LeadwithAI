@@ -69,14 +69,6 @@ export function VerifyCertificate() {
               <span style={{ fontSize: '0.85rem', color: 'var(--color-stone)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Event</span>
               <div style={{ fontSize: '1.1rem', fontWeight: 600, color: '#152446', marginTop: '0.2rem' }}>{data.eventName}</div>
             </div>
-            {data.issueDate && (
-              <div>
-                <span style={{ fontSize: '0.85rem', color: 'var(--color-stone)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</span>
-                <div style={{ fontSize: '1.1rem', fontWeight: 600, color: '#152446', marginTop: '0.2rem' }}>
-                  {new Date(data.issueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 

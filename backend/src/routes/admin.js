@@ -261,7 +261,8 @@ router.get('/users', adminAuth, async (req, res) => {
       filterProfile = 'all',
       filterHeardFrom = 'all',
       filterCohort = 'all',
-      filterFeedback = 'all'
+      filterFeedback = 'all',
+      filterCertSent = 'all'
     } = req.query;
 
     const query = {};
@@ -330,6 +331,13 @@ router.get('/users', adminAuth, async (req, res) => {
       query.isFeedbackSubmitted = { $ne: true };
     }
 
+    // Filter Certificate Sent Status
+    if (filterCertSent === 'sent') {
+      query.isCertificateSent = true;
+    } else if (filterCertSent === 'not_sent') {
+      query.isCertificateSent = { $ne: true };
+    }
+
     const isExport = exportCsv === 'true';
     const sortDir = sortOrder === 'asc' ? 1 : -1;
     let usersQuery = User.find(query).sort({ createdAt: sortDir }).select('-otpHash -otpExpiry');
@@ -381,6 +389,7 @@ router.get('/users', adminAuth, async (req, res) => {
         paymentMethod:          eventEntry ? eventEntry.paymentMethod : 'razorpay',
         nepalUpiTxnRef:         eventEntry ? eventEntry.nepalUpiTxnRef : null,
         nepalUpiScreenshotPath: eventEntry ? eventEntry.nepalUpiScreenshotPath : null,
+        isCertificateSent:      u.isCertificateSent || false,
       };
     });
 
@@ -515,6 +524,7 @@ router.get('/users/:id', adminAuth, async (req, res) => {
       zoomStatus:       confirmed ? (confirmed.zoomRegistrationStatus || 'pending') : '-',
       emailStatus:      confirmed ? (confirmed.emailConfirmationStatus || 'pending') : '-',
       isProfileComplete: user.isProfileComplete,
+      isCertificateSent: user.isCertificateSent || false,
       registeredEvents: user.registeredEvents,
       createdAt:        user.createdAt,
     });
@@ -1294,6 +1304,122 @@ router.post('/settings/cancel-reminders', adminAuth, async (req, res) => {
   } catch (err) {
     console.error('POST /api/admin/settings/cancel-reminders error:', err);
     res.status(500).json({ error: 'Failed to cancel reminders: ' + err.message });
+  }
+});
+// ─────────────────────────────────────────────
+// POST /api/admin/send-certificates
+// Generate and send certificates to users (individual or bulk)
+// ─────────────────────────────────────────────
+router.post('/send-certificates', adminAuth, async (req, res) => {
+  try {
+    const { userIds, filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, filterCohort, filterFeedback, search } = req.body;
+    const { generateCertificate } = require('../utils/certificate');
+    const { sendCertificateEmail } = require('../utils/email');
+
+    let targetUsers = [];
+
+    if (userIds && Array.isArray(userIds) && userIds.length > 0) {
+      // Send to specific selected users
+      const mongoose = require('mongoose');
+      const validIds = userIds
+        .filter(id => id && id !== 'undefined' && mongoose.Types.ObjectId.isValid(id))
+        .map(id => new mongoose.Types.ObjectId(id));
+
+      if (validIds.length > 0) {
+        targetUsers = await User.find({ _id: { $in: validIds } });
+      }
+    } else {
+      // Send in bulk based on filters
+      const query = {};
+
+      if (search) {
+        query.$or = [
+          { fullName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { collegeName: { $regex: search, $options: 'i' } },
+          { organization: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      if (filterType && filterType !== 'all') query.userType = filterType;
+
+      if (filterWaitlist === 'waitlisted') query.isWaitlisted = true;
+      else if (filterWaitlist === 'regular') query.isWaitlisted = { $ne: true };
+
+      if (filterReferral && filterReferral !== 'all') query.referralCode = filterReferral;
+
+      if (filterPaid === 'paid') {
+        query['registeredEvents'] = { $elemMatch: { paymentStatus: 'confirmed' } };
+      } else if (filterPaid === 'unpaid') {
+        query['registeredEvents'] = { $not: { $elemMatch: { paymentStatus: 'confirmed' } } };
+      }
+
+      if (filterHeardFrom === 'social media') {
+        query.heardFrom = { $regex: '^social\\s*media$', $options: 'i' };
+      } else if (filterHeardFrom === 'newspaper') {
+        query.heardFrom = { $regex: '^newspaper$', $options: 'i' };
+      } else if (filterHeardFrom === 'others') {
+        query.$and = [
+          { heardFrom: { $exists: true } },
+          { heardFrom: { $ne: '' } },
+          { heardFrom: { $ne: '-' } },
+          { heardFrom: { $nin: [/social\s*media/i, /newspaper/i] } }
+        ];
+      }
+
+      if (filterCohort && filterCohort !== 'all') {
+        query.selectedCohort = filterCohort;
+      }
+
+      if (filterFeedback === 'completed') {
+        query.isFeedbackSubmitted = true;
+      } else if (filterFeedback === 'pending') {
+        query.isFeedbackSubmitted = { $ne: true };
+      }
+
+      // ONLY send to users who haven't received their certificate yet!
+      query.isCertificateSent = { $ne: true };
+
+      targetUsers = await User.find(query);
+    }
+
+    if (targetUsers.length === 0) {
+      return res.status(200).json({ 
+        message: 'No new certificates to send (all matching/eligible users have already been sent certificates).',
+        count: 0 
+      });
+    }
+
+    // Process asynchronously in background
+    res.json({ 
+      message: `Certificate generation and email delivery initiated for ${targetUsers.length} users.`,
+      count: targetUsers.length 
+    });
+
+    // Run background processing
+    (async () => {
+      for (const user of targetUsers) {
+        try {
+          // Generate certificate image
+          const { buffer } = await generateCertificate(user.fullName, user._id.toString());
+          
+          // Save path to user document and mark as sent
+          user.certificatePath = `/uploads/certificates/${user._id.toString()}.jpg`;
+          user.isCertificateSent = true;
+          await user.save();
+
+          // Send Email
+          await sendCertificateEmail(user, buffer);
+          console.log(`Certificate successfully sent to ${user.email}`);
+        } catch (singleErr) {
+          console.error(`Failed to generate/send certificate for ${user.email}:`, singleErr);
+        }
+      }
+    })().catch(console.error);
+
+  } catch (err) {
+    console.error('Send certificates route error:', err);
+    res.status(500).json({ error: 'Failed to initiate certificate sending.' });
   }
 });
 

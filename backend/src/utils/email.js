@@ -282,19 +282,13 @@ END:VCALENDAR`;
   });
 }
 
-/**
- * Send custom bulk email from admin
- */
 async function sendCustomBulkEmail(emails, subject, htmlContent) {
-  const greeting = `Hello,`;
-  const html = getHtmlTemplate({ greeting, contentHtml: htmlContent });
-
-  // Send as BCC to protect user privacy
+  // Send simply without any HTML template wrap
   await transporter.sendMail({
     from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
     bcc: emails,
     subject: subject,
-    html,
+    html: htmlContent,
   });
 }
 
@@ -511,6 +505,36 @@ async function sendPaymentRejectionEmail(user, eventName, reason) {
   });
 }
 
+async function sendCertificateEmail(user, certificateBuffer) {
+  const text = `Dear Participant,
+
+Thank you for being a part of the Lead with AI workshop. Attached is your certificate of completion.
+
+We appreciate your participation and enthusiasm throughout the sessions. Wishing you continued success in your learning journey, and we hope to see you at future events.
+
+Warm regards,
+Team Global Knowledge Technologies.`;
+
+  const html = `<p>Dear Participant,</p>
+<p>Thank you for being a part of the Lead with AI workshop. Attached is your certificate of completion.</p>
+<p>We appreciate your participation and enthusiasm throughout the sessions. Wishing you continued success in your learning journey, and we hope to see you at future events.</p>
+<p>Warm regards,<br/>Team Global Knowledge Technologies.</p>`;
+
+  await transporter.sendMail({
+    from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
+    to: user.email,
+    subject: `Certificate – Lead with AI Workshop`,
+    text,
+    html,
+    attachments: [
+      {
+        filename: `${user.fullName.replace(/\s+/g, '_')}_Certificate.jpg`,
+        content: certificateBuffer
+      }
+    ]
+  });
+}
+
 module.exports = {
   sendRegistrationEmail,
   sendVerificationOtpEmail,
@@ -524,4 +548,5 @@ module.exports = {
   sendCohortDay1Reminders,
   sendCohortDay2Reminders,
   sendPaymentRejectionEmail,
+  sendCertificateEmail,
 };

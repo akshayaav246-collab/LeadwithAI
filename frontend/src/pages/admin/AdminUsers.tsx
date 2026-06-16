@@ -10,7 +10,8 @@ import {
   rejectNepalPayment,
   getAdminSettings,
   createAdminUser,
-  registerAllZoomAttendees
+  registerAllZoomAttendees,
+  sendCertificates
 } from '../../lib/api';
 import { CertificateGenerator } from '../../components/admin/CertificateGenerator';
 import { toast } from 'sonner';
@@ -120,7 +121,10 @@ export function AdminUsers() {
   const [filterHeardFrom, setFilterHeardFrom] = useState('all');
   const [filterCohort, setFilterCohort] = useState('all');
   const [filterFeedback, setFilterFeedback] = useState('all');
+  const [filterCertSent, setFilterCertSent] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [isSendingCert, setIsSendingCert] = useState<string | null>(null);
+  const [isBulkSendingCert, setIsBulkSendingCert] = useState(false);
   
   const [referralsList, setReferralsList] = useState<any[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -186,7 +190,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, filterFeedback]);
+  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, filterFeedback, filterCertSent]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -202,6 +206,7 @@ export function AdminUsers() {
         filterHeardFrom,
         filterCohort,
         filterFeedback,
+        filterCertSent,
         sortOrder
       });
       setUsers(data.data || []);
@@ -217,7 +222,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
-  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, filterFeedback, adminToken]);
+  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, filterFeedback, filterCertSent, adminToken]);
 
   const handleExportCSV = async () => {
     try {
@@ -230,6 +235,7 @@ export function AdminUsers() {
         filterHeardFrom,
         filterCohort,
         filterFeedback,
+        filterCertSent,
         exportCsv: 'true',
         sortOrder
       });
@@ -244,7 +250,7 @@ export function AdminUsers() {
         'College', 'Course', 'Year',
         'Domain', 'Organization',
         'Waitlisted', 'Active', 'Heard From', 'Referral Code',
-        'Payment Status', 'Payment ID', 'Profile Status', 'Feedback Submitted', 'Registered On'
+        'Payment Status', 'Payment ID', 'Profile Status', 'Feedback Submitted', 'Certificate Sent', 'Registered On'
       ];
       const rows = exportUsers.map((u: any) => [
         `"${u.fullName}"`, `"${u.email}"`, `"${u.phone}"`, `"${u.userType}"`,
@@ -256,6 +262,7 @@ export function AdminUsers() {
         `"${u.paymentId || '-'}"`,
         u.isProfileComplete ? 'Complete' : 'Partially Filled',
         u.isFeedbackSubmitted ? 'Yes' : 'No',
+        u.isCertificateSent ? 'Yes' : 'No',
         `"${new Date(u.createdAt).toLocaleString()}"`,
       ]);
       const csv = [headers.join(','), ...rows.map((r: any) => r.join(','))].join('\n');
@@ -283,6 +290,49 @@ export function AdminUsers() {
       setUsers(users.map(u => u.id === userId ? { ...u, [type === 'zoom' ? 'zoomStatus' : 'emailStatus']: 'success' } : u));
     } catch (err: any) {
       toast.error(`Retry failed: ${err.message}`);
+    }
+  };
+
+  const handleSendCertificateSingle = async (userId: string) => {
+    setIsSendingCert(userId);
+    try {
+      await sendCertificates(adminToken, { userIds: [userId] });
+      toast.success('Certificate sending initiated successfully!');
+      setTimeout(() => {
+        fetchUsers();
+      }, 1500);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send certificate.');
+    } finally {
+      setIsSendingCert(null);
+    }
+  };
+
+  const handleSendCertificatesBulk = async () => {
+    const confirmMsg = `Are you sure you want to generate and email certificates to all ${total} filtered registrants?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsBulkSendingCert(true);
+    try {
+      const res = await sendCertificates(adminToken, {
+        search: debouncedSearchTerm,
+        filterPaid,
+        filterType,
+        filterWaitlist,
+        filterReferral,
+        filterHeardFrom,
+        filterCohort,
+        filterFeedback,
+        filterCertSent
+      });
+      toast.success(res.message || 'Bulk certificate sending initiated successfully!');
+      setTimeout(() => {
+        fetchUsers();
+      }, 1500);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send certificates in bulk.');
+    } finally {
+      setIsBulkSendingCert(false);
     }
   };
 
@@ -334,7 +384,7 @@ export function AdminUsers() {
     e.preventDefault();
     if (!editingUser) return;
     try {
-      await editAdminUser(adminToken, editingUser.id, editForm);
+      await editAdminUser(adminToken, editingUser.id || editingUser._id, editForm);
       toast.success('User details updated successfully.');
       setEditingUser(null);
       fetchUsers();
@@ -347,7 +397,7 @@ export function AdminUsers() {
     e.preventDefault();
     if (!paymentConfirmUser || !razorpayPaymentId.trim()) return;
     try {
-      const res = await manualConfirmPayment(adminToken, paymentConfirmUser.id, razorpayPaymentId.trim());
+      const res = await manualConfirmPayment(adminToken, paymentConfirmUser.id || paymentConfirmUser._id, razorpayPaymentId.trim());
       toast.success(res.message);
       setPaymentConfirmUser(null);
       setRazorpayPaymentId('');
@@ -362,7 +412,7 @@ export function AdminUsers() {
     if (!paymentRejectUser || !rejectionReason.trim()) return;
     setIsRejecting(true);
     try {
-      await rejectNepalPayment(adminToken, paymentRejectUser.id, rejectionReason.trim());
+      await rejectNepalPayment(adminToken, paymentRejectUser.id || paymentRejectUser._id, rejectionReason.trim());
       toast.success('Payment proof rejected successfully.');
       setPaymentRejectUser(null);
       setRejectionReason('');
@@ -439,6 +489,14 @@ export function AdminUsers() {
           <button className="btn-primary" onClick={() => setIsAddModalOpen(true)} style={{ backgroundColor: '#16a34a', borderColor: '#16a34a' }}>
             Add Registrant
           </button>
+          <button 
+            className="btn-primary" 
+            onClick={handleSendCertificatesBulk}
+            disabled={isBulkSendingCert}
+            style={{ backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', opacity: isBulkSendingCert ? 0.7 : 1 }}
+          >
+            {isBulkSendingCert ? "Sending..." : "Send Certificates (Filtered)"}
+          </button>
           <button className="btn-primary" onClick={handleExportCSV}>
             Export CSV
           </button>
@@ -502,6 +560,11 @@ export function AdminUsers() {
           <option value="completed">Feedback Completed</option>
           <option value="pending">Feedback Pending</option>
         </select>
+        <select value={filterCertSent} onChange={e => setFilterCertSent(e.target.value)} className="admin-select">
+          <option value="all">All Cert Status</option>
+          <option value="sent">Certificate Sent</option>
+          <option value="not_sent">Certificate Not Sent</option>
+        </select>
 
       </div>
 
@@ -524,13 +587,14 @@ export function AdminUsers() {
                 <th style={{ textAlign: 'center' }}>Payment</th>
                 <th style={{ textAlign: 'center' }}>Heard From</th>
                 <th style={{ textAlign: 'center' }}>Feedback</th>
+                <th style={{ textAlign: 'center' }}>Cert Sent</th>
                 <th style={{ textAlign: 'center' }}>Preferred Date</th>
               </tr>
             </thead>
             <tbody>
               {users.map((user: any, index: number) => (
-                <React.Fragment key={user.id}>
-                  <tr style={{ cursor: 'pointer', opacity: user.isActive ? 1 : 0.55 }} onClick={() => toggleRow(user.id)}>
+                <React.Fragment key={user.id || user._id || `user-row-${index}`}>
+                  <tr style={{ cursor: 'pointer', opacity: user.isActive ? 1 : 0.55 }} onClick={() => toggleRow(user.id || user._id)}>
                     <td className="admin-supporting-info" style={{ textAlign: 'center', fontWeight: 600 }}>
                       {(page - 1) * limit + index + 1}
                     </td>
@@ -567,12 +631,21 @@ export function AdminUsers() {
                         {user.isFeedbackSubmitted ? 'Completed' : 'Pending'}
                       </span>
                     </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`admin-badge ${user.isCertificateSent ? 'success' : 'secondary'}`} style={{
+                        background: user.isCertificateSent ? 'rgba(139,92,246,0.08)' : 'rgba(100,116,139,0.08)',
+                        color: user.isCertificateSent ? '#7c3aed' : '#64748b',
+                        border: `1px solid ${user.isCertificateSent ? 'rgba(139,92,246,0.2)' : 'rgba(100,116,139,0.2)'}`,
+                      }}>
+                        {user.isCertificateSent ? 'Yes' : 'No'}
+                      </span>
+                    </td>
                     <td className="admin-supporting-info" style={{ textAlign: 'center' }}>{user.selectedCohort || '-'}</td>
                   </tr>
 
-                  {expandedId === user.id && (
+                  {expandedId === (user.id || user._id) && (
                     <tr>
-                      <td colSpan={11} style={{ background: '#F0F4F8', padding: '1.2rem 2rem' }}>
+                      <td colSpan={12} style={{ background: '#F0F4F8', padding: '1.2rem 2rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: user.userType === 'student' && user.idCardPath ? '1fr 1fr 180px' : '1fr 1fr', gap: '1.5rem' }}>
                           
                           {/* Profile completion check */}
@@ -638,7 +711,7 @@ export function AdminUsers() {
                                 {user.isActive ? 'Deactivate' : 'Activate'}
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleToggleWaitlistStatus(user.id); }}
+                                onClick={(e) => { e.stopPropagation(); handleToggleWaitlistStatus(user.id || user._id); }}
                                 style={{
                                   padding: '0.4rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer', borderRadius: 6,
                                   background: '#fef3c7', border: '1px solid #fde68a', color: '#b45309'
@@ -646,6 +719,16 @@ export function AdminUsers() {
                               >
                                 {user.isWaitlisted ? 'Remove from Waitlist' : 'Add to Waitlist'}
                               </button>
+                              {user.isPaid && (
+                                <button
+                                  className="btn-primary"
+                                  onClick={(e) => { e.stopPropagation(); handleSendCertificateSingle(user.id || user._id); }}
+                                  disabled={isSendingCert === (user.id || user._id)}
+                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', opacity: isSendingCert === (user.id || user._id) ? 0.7 : 1 }}
+                                >
+                                  {isSendingCert === (user.id || user._id) ? 'Sending...' : 'Send Certificate'}
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -678,6 +761,13 @@ export function AdminUsers() {
                               } />
                               
                               <DetailRow label="Country" value={user.country || 'India'} />
+                              {user.certificatePath && (
+                                <DetailRow label="Certificate" value={
+                                  <a href={`${API_BASE}${user.certificatePath}`} target="_blank" rel="noopener noreferrer" style={{ color: '#8B5CF6', fontWeight: 600, textDecoration: 'underline' }}>
+                                    View Certificate (JPG)
+                                  </a>
+                                } />
+                              )}
                               
                               {user.paymentMethod === 'nepal_upi' && (
                                 <>
@@ -723,7 +813,7 @@ export function AdminUsers() {
                                       {user.zoomStatus}
                                     </span>
                                     {user.zoomStatus === 'failed' && (
-                                      <button onClick={() => handleRetry(user.id, 'zoom')} style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '0.2rem 0.5rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #dc2626', background: '#fff', color: '#dc2626' }}>Retry</button>
+                                      <button onClick={() => handleRetry(user.id || user._id, 'zoom')} style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '0.2rem 0.5rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #dc2626', background: '#fff', color: '#dc2626' }}>Retry</button>
                                     )}
                                   </div>
                                   <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.88rem', padding: '0.3rem 0', borderBottom: '1px solid rgba(59, 139, 212, 0.15)', alignItems: 'center' }}>
@@ -732,7 +822,7 @@ export function AdminUsers() {
                                       {user.emailStatus}
                                     </span>
                                     {user.emailStatus === 'failed' && (
-                                      <button onClick={() => handleRetry(user.id, 'email')} style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '0.2rem 0.5rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #dc2626', background: '#fff', color: '#dc2626' }}>Retry</button>
+                                      <button onClick={() => handleRetry(user.id || user._id, 'email')} style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '0.2rem 0.5rem', cursor: 'pointer', borderRadius: '4px', border: '1px solid #dc2626', background: '#fff', color: '#dc2626' }}>Retry</button>
                                     )}
                                   </div>
                                 </>
@@ -769,8 +859,8 @@ export function AdminUsers() {
                 </React.Fragment>
               ))}
               {users.length === 0 && (
-                <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '2rem', color: '#8C7B6B' }}>
+                <tr key="no-users-row">
+                  <td colSpan={12} style={{ textAlign: 'center', padding: '2rem', color: '#8C7B6B' }}>
                     No users found matching the selected criteria.
                   </td>
                 </tr>

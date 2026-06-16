@@ -28,6 +28,7 @@ export interface AuthUser {
   registeredEvents: RegisteredEvent[];
   country?: 'India' | 'Nepal';
   selectedCohort?: string;
+  isFeedbackSubmitted?: boolean;
 }
 
 interface AuthContextValue {

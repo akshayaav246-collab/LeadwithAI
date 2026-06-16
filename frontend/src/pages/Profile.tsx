@@ -16,6 +16,8 @@ const DOMAIN_OPTIONS = [
   "Retail & E-commerce",
 ];
 
+
+
 const DownloadCertificateButton = lazy(() =>
   import('@/components/DownloadCertificateButton').then(m => ({ default: m.DownloadCertificateButton }))
 );
@@ -1000,15 +1002,17 @@ export function Profile() {
                 <h2>Certificate</h2>
               </div>
               
-              {(user as any).isFeedbackSubmitted ? (
+              {user.isFeedbackSubmitted ? (
                 <div style={{ padding: '1.25rem 1.5rem 1.75rem 1.5rem' }}>
                   <h3 style={{ margin: '0 0 0.25rem 0', color: 'var(--color-umber)', fontSize: '1rem' }}>Feedback Completed</h3>
                   <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.88rem', color: 'var(--color-stone)' }}>
-                    Thank you for your valuable feedback!
+                    Thank you for your valuable feedback! You can now download your certificate of completion below.
                   </p>
-                  <p style={{ margin: '0', fontSize: '0.88rem', color: 'var(--color-sienna)', fontWeight: 'bold' }}>
-                    The certificate will be sent to your email shortly.
-                  </p>
+                  <div style={{ maxWidth: '320px' }}>
+                    <Suspense fallback={<div>Loading certificate generator...</div>}>
+                      <DownloadCertificateButton fullName={user.fullName} userId={user.id} />
+                    </Suspense>
+                  </div>
                 </div>
               ) : (
                 !feedbackEnabled ? (

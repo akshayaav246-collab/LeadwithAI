@@ -64,6 +64,8 @@ const userSchema = new mongoose.Schema(
       text:    { type: String, default: '' }
     }],
     isFeedbackSubmitted: { type: Boolean, default: false },
+    certificatePath:     { type: String },
+    isCertificateSent:   { type: Boolean, default: false },
 
     // Events booked
     registeredEvents: [registeredEventSchema],

@@ -6,7 +6,7 @@ const fallbackBase = isProductionHost
   : `${window.location.protocol}//${window.location.hostname}:4000`;
 const resolvedBase = envBase || fallbackBase;
 
-const BASE_URL = resolvedBase.replace(/\/$/, '');
+export const BASE_URL = resolvedBase.replace(/\/$/, '');
 
 async function request<T>(
   path: string,
@@ -295,4 +295,22 @@ export function submitNepalProof(token: string, txnRef: string) {
 
 export function rejectNepalPayment(token: string, userId: string, reason: string) {
   return request<{ message: string; user: any }>(`/api/admin/users/${userId}/reject-payment`, { method: 'POST', body: JSON.stringify({ reason }) }, token);
+}
+
+export function sendCertificates(token: string, payload: {
+  userIds?: string[];
+  filterPaid?: string;
+  filterType?: string;
+  filterWaitlist?: string;
+  filterReferral?: string;
+  filterHeardFrom?: string;
+  filterCohort?: string;
+  filterFeedback?: string;
+  filterCertSent?: string;
+  search?: string;
+}) {
+  return request<{ message: string; count: number }>('/api/admin/send-certificates', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }, token);
 }

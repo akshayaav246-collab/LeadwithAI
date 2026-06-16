@@ -1,0 +1,9 @@
+- [x] Backend: Update name color to `#0a0d3d` and calibrate name & QR coordinates in `backend/src/utils/certificate.js`
+- [x] Frontend: Remove calibration UI and outlines from `CertificateGenerator.tsx` and custom cert generator components
+- [x] Frontend: Rewrite client `DownloadCertificateButton.tsx` to use the exact matching coordinates, color, and font without masking or signatures
+- [x] Backend: Send certificate email as a normal email without HTML templates in `backend/src/utils/email.js`
+- [x] Frontend: Remove issue date display from the verified certificate screen in `frontend/src/pages/VerifyCertificate.tsx`
+- [x] Frontend & Backend: Implement dedicated custom manual certificate generator with UUID registration via raw MongoDB collection queries
+- [x] Backend: Remove HTML branding wrap template from custom bulk email sender
+- [x] Backend: Fix standard user certificate lookup 404 (Not Found) issue (e.g. Chetana's lookup error) by dynamically casting ObjectId strings
+- [x] Verification: Run typecheck and syntax checks successfully
