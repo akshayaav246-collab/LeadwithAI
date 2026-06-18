@@ -1,4 +1,5 @@
 import { useEffect, useState, lazy, Suspense, useRef, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'wouter';
 import { useAuth, type RegisteredEvent } from '@/context/AuthContext';
 import * as api from '@/lib/api';
@@ -28,27 +29,45 @@ interface ProfileCompletionFormProps {
   updateUser: (user: any) => void;
   logout: () => void;
   availableCohorts: string[];
+  salespersons: string[];
 }
 
-function ProfileCompletionForm({ user, token, updateUser, logout, availableCohorts }: ProfileCompletionFormProps) {
-  const [phone, setPhone] = useState('');
+function ProfileCompletionForm({ user, token, updateUser, logout, availableCohorts, salespersons }: ProfileCompletionFormProps) {
+  const [phone, setPhone] = useState(user.phone || '');
   const [selectedUserType, setSelectedUserType] = useState<'student' | 'working'>(
     user.userType || 'student'
   );
   const [country, setCountry] = useState(user.country || 'India');
-  const [collegeName, setCollegeName] = useState('');
-  const [course, setCourse] = useState('');
-  const [year, setYear] = useState('');
+  const [collegeName, setCollegeName] = useState(user.collegeName || '');
+  const [course, setCourse] = useState(user.course || '');
+  const [year, setYear] = useState(user.year || '');
   const [idFile, setIdFile] = useState<File | null>(null);
   const [isScanningId, setIsScanningId] = useState(false);
   const [idVerdict, setIdVerdict] = useState<'APPROVED' | 'REJECTED' | 'REVIEW' | 'TRAFFIC_ERROR' | null>(null);
   const [idRejectionReason, setIdRejectionReason] = useState('');
 
-  const [domain, setDomain] = useState('');
-  const [organization, setOrganization] = useState('');
+  const [domain, setDomain] = useState(user.domain || '');
+  const [organization, setOrganization] = useState(user.organization || '');
 
-  const [heardFrom, setHeardFrom] = useState('');
-  const [heardFromOther, setHeardFromOther] = useState('');
+  // Pre-fill heardFrom logic
+  const getHeardFromInitial = () => {
+    if (!user.heardFrom) return '';
+    if (user.heardFrom.startsWith('GKT Employee') || user.heardFrom === 'Referral' || user.salesperson || (user.referralCode && user.referralCode !== '-')) return 'GKT Employee';
+    const mainOptions = ['Social Media', 'Newspaper', 'GKT Employee'];
+    if (mainOptions.includes(user.heardFrom)) return user.heardFrom;
+    return 'Others';
+  };
+  const getHeardFromOtherInitial = () => {
+    if (!user.heardFrom) return '';
+    if (user.heardFrom.startsWith('GKT Employee') || user.heardFrom === 'Referral' || user.salesperson || (user.referralCode && user.referralCode !== '-')) return '';
+    const mainOptions = ['Social Media', 'Newspaper', 'GKT Employee'];
+    if (mainOptions.includes(user.heardFrom)) return '';
+    return user.heardFrom;
+  };
+
+  const [heardFrom, setHeardFrom] = useState(getHeardFromInitial());
+  const [heardFromOther, setHeardFromOther] = useState(getHeardFromOtherInitial());
+  const [salesperson, setSalesperson] = useState(user.salesperson || (user.referralCode && user.referralCode !== '-' ? user.referralCode : ''));
   const [selectedCohort, setSelectedCohort] = useState(user.selectedCohort || 'June 13 & 14, 2026');
 
   const [isSaving, setIsSaving] = useState(false);
@@ -76,7 +95,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
     if (selectedUserType === 'student') {
       if (!idFile && !user.idCardPath) {
         newErrors.idCard = 'Please upload your College ID Card.';
-      } else if (country !== 'Nepal') {
+      } else if (country !== 'Nepal' && !user.groupLeaderId) {
         if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
           newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
         } else if (!isInstitutionalEmail && isScanningId) {
@@ -88,12 +107,17 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
       if (!year) newErrors.year = 'Please select your year.';
     } else if (selectedUserType === 'working') {
       if (!domain.trim()) newErrors.domain = 'Please select your domain.';
+      if (!organization.trim()) newErrors.organization = 'Please enter your organization/company.';
     }
 
-    if (!heardFrom) {
-      newErrors.heardFrom = 'Please let us know how you heard about us.';
-    } else if (heardFrom === 'Others' && !heardFromOther.trim()) {
-      newErrors.heardFromOther = 'Please specify how you heard about us.';
+    if (!user.groupLeaderId) {
+      if (!heardFrom) {
+        newErrors.heardFrom = 'Please let us know how you heard about us.';
+      } else if (heardFrom === 'Others' && !heardFromOther.trim()) {
+        newErrors.heardFromOther = 'Please specify how you heard about us.';
+      } else if (heardFrom === 'GKT Employee' && !salesperson) {
+        newErrors.salesperson = 'Please select your referral.';
+      }
     }
 
     if (!selectedCohort) {
@@ -123,12 +147,15 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
         }
       } else {
         formData.append('domain', domain.trim());
-        if (organization.trim()) {
-          formData.append('organization', organization.trim());
-        }
+        formData.append('organization', organization.trim());
       }
 
-      formData.append('heardFrom', heardFrom === 'Others' ? heardFromOther.trim() : heardFrom);
+      if (!user.groupLeaderId) {
+        formData.append('heardFrom', heardFrom === 'Others' ? heardFromOther.trim() : heardFrom);
+        if (heardFrom === 'GKT Employee' && salesperson) {
+          formData.append('salesperson', salesperson);
+        }
+      }
 
       const res = await api.completeProfile(token, formData);
 
@@ -295,7 +322,8 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
                         setIdVerdict(null);
                         setIdRejectionReason('');
 
-                        if (f && !isInstitutionalEmail && !user.isAdminCreated && country !== 'Nepal') {
+                        const isGroupMember = !!user.groupLeaderId;
+                        if (f && !isInstitutionalEmail && !user.isAdminCreated && country !== 'Nepal' && !isGroupMember) {
                           setIsScanningId(true);
                           try {
                             const parsed = await api.parseIdCard(f, user.email || undefined);
@@ -325,7 +353,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
                     ) : (
                       <span className="upload-placeholder">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        PDF only (max. 5MB)
+                        {user.idCardPath ? 'ID Card uploaded (Click to change)' : 'PDF only (max. 5MB)'}
                       </span>
                     )}
                   </div>
@@ -421,13 +449,14 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
                   </select>
                 </div>
                 <div className="register-field">
-                  <label htmlFor="comp-org">Organization / Company</label>
+                  <label htmlFor="comp-org">Organization / Company *</label>
                   <input
                     id="comp-org"
                     type="text"
                     value={organization}
                     onChange={(e) => setOrganization(e.target.value)}
                     placeholder="e.g. TCS, Infosys, etc."
+                    required
                   />
                 </div>
               </div>
@@ -437,34 +466,60 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
 
 
           {/* How did you hear about us? */}
-          <div className="register-field" style={{ marginTop: '1.25rem' }}>
-            <label htmlFor="comp-heardFrom">How did you hear about us? *</label>
-            <select
-              id="comp-heardFrom"
-              value={heardFrom}
-              onChange={(e) => setHeardFrom(e.target.value)}
-              className="register-select"
-              required
-            >
-              <option value="">Select an option</option>
-              <option value="Social Media">Social Media</option>
-              <option value="Newspaper">Newspaper</option>
-              <option value="Others">Others</option>
-            </select>
-          </div>
+          {!user.groupLeaderId && (
+            <>
+              <div className="register-field" style={{ marginTop: '1.25rem' }}>
+                <label htmlFor="comp-heardFrom">How did you hear about us? *</label>
+                <select
+                  id="comp-heardFrom"
+                  value={heardFrom}
+                  onChange={(e) => setHeardFrom(e.target.value)}
+                  className="register-select"
+                  required
+                >
+                  <option value="">Select an option</option>
+                  <option value="Social Media">Social Media</option>
+                  <option value="Newspaper">Newspaper</option>
+                  <option value="GKT Employee">GKT Employee</option>
+                  <option value="Others">Others</option>
+                </select>
+              </div>
 
-          {heardFrom === 'Others' && (
-            <div className="register-field" style={{ marginTop: '1rem' }}>
-              <label htmlFor="comp-heardFromOther">Please specify *</label>
-              <input
-                id="comp-heardFromOther"
-                type="text"
-                value={heardFromOther}
-                onChange={(e) => setHeardFromOther(e.target.value)}
-                placeholder="e.g. Friend, Professor, etc."
-                required
-              />
-            </div>
+              {heardFrom === 'GKT Employee' && (
+                <div className="register-field" style={{ marginTop: '1rem' }}>
+                  <label htmlFor="comp-salesperson">Referral *</label>
+                  <select
+                    id="comp-salesperson"
+                    value={salesperson}
+                    onChange={(e) => setSalesperson(e.target.value)}
+                    className="register-select"
+                    required
+                  >
+                    <option value="">Select referral</option>
+                    {salespersons.map(sp => (
+                      <option key={sp} value={sp}>{sp}</option>
+                    ))}
+                    {salesperson && !salespersons.includes(salesperson) && (
+                      <option value={salesperson}>{salesperson}</option>
+                    )}
+                  </select>
+                </div>
+              )}
+
+              {heardFrom === 'Others' && (
+                <div className="register-field" style={{ marginTop: '1rem' }}>
+                  <label htmlFor="comp-heardFromOther">Please specify *</label>
+                  <input
+                    id="comp-heardFromOther"
+                    type="text"
+                    value={heardFromOther}
+                    onChange={(e) => setHeardFromOther(e.target.value)}
+                    placeholder="e.g. Friend, Professor, etc."
+                    required
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {/* Submit and Logout Buttons */}
@@ -536,31 +591,74 @@ export function Profile() {
   ]);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [availableCohorts, setAvailableCohorts] = useState<string[]>([]);
+  const [activeCohort, setActiveCohort] = useState('');
+  const [salespersons, setSalespersons] = useState<string[]>([]);
+  const [feedbackEnabledCohorts, setFeedbackEnabledCohorts] = useState<string[]>([]);
+  const [allowProfileGroupAdditions, setAllowProfileGroupAdditions] = useState(false);
 
-  // Nepal payment proof state in Profile page
-  const [profileNepalTxnRef, setProfileNepalTxnRef] = useState('');
-  const [profileNepalScreenshot, setProfileNepalScreenshot] = useState<File | null>(null);
-  const [isProfileSubmittingNepalProof, setIsProfileSubmittingNepalProof] = useState(false);
+  // Group Member form states
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [memberFullName, setMemberFullName] = useState('');
+  const [memberEmail, setMemberEmail] = useState('');
+  const [memberPhone, setMemberPhone] = useState('');
+  const [memberCollegeName, setMemberCollegeName] = useState('');
+  const [memberCourse, setMemberCourse] = useState('');
+  const [memberYear, setMemberYear] = useState('');
+  const [memberDomain, setMemberDomain] = useState('');
+  const [memberOrg, setMemberOrg] = useState('');
+  const [memberIdFile, setMemberIdFile] = useState<File | null>(null);
+  const memberFileInputRef = useRef<HTMLInputElement>(null);
+  const [isAddingMember, setIsAddingMember] = useState(false);
 
-  // Invalid Cohort change state
-  const [newCohortSelection, setNewCohortSelection] = useState('June 13 & 14, 2026');
   const [isUpdatingCohort, setIsUpdatingCohort] = useState(false);
+
+
+
+  const closeAddMemberModal = () => {
+    setShowAddMemberModal(false);
+    setMemberFullName('');
+    setMemberEmail('');
+    setMemberPhone('');
+    setMemberCollegeName('');
+    setMemberCourse('');
+    setMemberYear('');
+    setMemberDomain('');
+    setMemberOrg('');
+    setMemberIdFile(null);
+  };
+
+
 
   useEffect(() => {
     if (!token) {
       navigate('/register');
       return;
     }
-    // Refresh user data and settings from server
     Promise.all([
       api.getMe(token),
       api.getPublicSettings()
     ])
       .then(([userData, settings]) => {
         updateUser(userData.user);
-        setFeedbackEnabled(settings.feedbackEnabled);
-        if (settings && settings.availableCohorts) {
-          setAvailableCohorts(settings.availableCohorts);
+        if (settings) {
+          if (settings.feedbackEnabledCohorts) {
+            setFeedbackEnabledCohorts(settings.feedbackEnabledCohorts);
+          }
+          if (settings.availableCohorts) {
+            setAvailableCohorts(settings.availableCohorts);
+          }
+          if ((settings as any).activeCohort) {
+            setActiveCohort((settings as any).activeCohort);
+          }
+          if ((settings as any).allowProfileGroupAdditions !== undefined) {
+            setAllowProfileGroupAdditions(!!(settings as any).allowProfileGroupAdditions);
+          }
+          if (settings.referralCodes) {
+            const activeReferrals = settings.referralCodes
+              .filter((rc: any) => rc.isActive)
+              .map((rc: any) => rc.label);
+            setSalespersons(activeReferrals);
+          }
         }
       })
       .catch(() => {
@@ -570,6 +668,37 @@ export function Profile() {
       })
       .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    if (user && user.selectedCohort && feedbackEnabledCohorts.length > 0) {
+      setFeedbackEnabled(feedbackEnabledCohorts.includes(user.selectedCohort));
+    } else {
+      setFeedbackEnabled(false);
+    }
+  }, [user?.selectedCohort, feedbackEnabledCohorts]);
+
+  const isUpcomingCohort = user && user.selectedCohort !== 'June 13 & 14, 2026';
+
+  useEffect(() => {
+    if (user) {
+      if (user.selectedCohort && user.selectedCohort !== 'June 13 & 14, 2026') {
+        setFeedbackData([
+          { session: '1. Overall, how would you rate this workshop?', rating: '', text: '' },
+          { session: '2. What was the most valuable takeaway of this workshop for you?', rating: '', text: '' },
+          { session: '3. Was there any topic, activity, or information that you expected but was not covered?', rating: '', text: '' },
+          { session: '4. Please share a testimonial or a few words about your experience', rating: '', text: '' },
+          { session: '5. What topics would you like us to cover in future workshops?', rating: '', text: '' }
+        ]);
+      } else {
+        setFeedbackData([
+          { session: 'Session 1: Getting Started with Generative AI', rating: '', text: '' },
+          { session: 'Session 2: Building Personalised AI Agents', rating: '', text: '' },
+          { session: 'Session 3: Building Products Using AI', rating: '', text: '' },
+          { session: 'Session 4: Visual Storytelling & Content Creation', rating: '', text: '' }
+        ]);
+      }
+    }
+  }, [user?.selectedCohort]);
 
   useEffect(() => {
     if (payError) {
@@ -624,6 +753,7 @@ export function Profile() {
               updateUser={updateUser}
               logout={logout}
               availableCohorts={availableCohorts}
+              salespersons={salespersons}
             />
           </div>
         </section>
@@ -631,28 +761,11 @@ export function Profile() {
     );
   }
 
-  const handleProfileNepalProofSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!token) return;
-    if (!profileNepalTxnRef.trim()) {
-      toast.error('Please enter the Transaction Reference ID (UTR).');
-      return;
-    }
-    setIsProfileSubmittingNepalProof(true);
-    try {
-      const res = await api.submitNepalProof(token, profileNepalTxnRef.trim());
-      updateUser(res.user);
-      toast.success('Payment details submitted successfully!');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to submit payment details.');
-    } finally {
-      setIsProfileSubmittingNepalProof(false);
-    }
-  };
 
 
-  const confirmedEvents = user.registeredEvents?.filter((e) => e.paymentStatus === 'confirmed') ?? [];
-  const pendingEvents = user.registeredEvents?.filter((e) => e.paymentStatus !== 'confirmed') ?? [];
+
+  const costPerPerson = user.userType === 'student' ? 499 : 999;
+  const leaderConfirmed = user.registeredEvents?.some((e: any) => e.eventName === 'Lead with AI: Adopt, Implement and Transform' && e.paymentStatus === 'confirmed');
 
   // Deduplicate events based on eventName (keep the one with 'confirmed' status if there are multiple)
   const uniqueEventsMap = new Map<string, RegisteredEvent>();
@@ -718,14 +831,47 @@ export function Profile() {
     }
   }
 
+  const validateFeedback = () => {
+    if (!isUpcomingCohort) {
+      return !feedbackData.some(f => !f.rating);
+    } else {
+      if (!feedbackData[0]?.rating) return false;
+      if (!feedbackData[1]?.text.trim()) return false;
+      if (!feedbackData[3]?.text.trim()) return false;
+      return true;
+    }
+  };
+
   async function handleFeedbackSubmit() {
-    if (feedbackData.some(f => !f.rating)) {
-      toast.error('Please select a rating for all 4 sessions.');
-      return;
+    if (!isUpcomingCohort) {
+      if (feedbackData.some(f => !f.rating)) {
+        toast.error('Please select a rating for all 4 sessions.');
+        return;
+      }
+    } else {
+      if (!feedbackData[0]?.rating) {
+        toast.error('Please select a rating for Question 1.');
+        return;
+      }
+      if (!feedbackData[1]?.text.trim()) {
+        toast.error('Please answer Question 2 (Most valuable takeaway).');
+        return;
+      }
+      if (!feedbackData[3]?.text.trim()) {
+        toast.error('Please answer Question 4 (Testimonial).');
+        return;
+      }
     }
     setIsSubmittingFeedback(true);
     try {
-      await api.submitFeedback(token!, feedbackData);
+      const cleanedFeedback = feedbackData.map((f, idx) => {
+        if (isUpcomingCohort && idx > 0) {
+          return { session: f.session, rating: '', text: f.text.trim() };
+        }
+        return { session: f.session, rating: f.rating, text: f.text.trim() };
+      });
+
+      await api.submitFeedback(token!, cleanedFeedback);
       const { user: freshUser } = await api.getMe(token!);
       updateUser(freshUser);
       setIsFeedbackModalOpen(false);
@@ -735,6 +881,64 @@ export function Profile() {
       setIsSubmittingFeedback(false);
     }
   }
+
+  const handleAddMember = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!memberFullName.trim() || !memberEmail.trim() || !memberPhone.trim()) {
+      toast.error('Please fill in all required fields.');
+      return;
+    }
+    
+    // Validation for phone
+    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(memberPhone);
+    const cleanedPhone = memberPhone.replace(/[^\d+]/g, '');
+    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
+    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
+      toast.error('Please enter a valid phone number.');
+      return;
+    }
+
+    const payload = new FormData();
+    payload.append('fullName', memberFullName.trim());
+    payload.append('email', memberEmail.toLowerCase().trim());
+    payload.append('phone', memberPhone.trim());
+
+    if (user.userType === 'student') {
+      if (!memberCollegeName.trim() || !memberCourse.trim() || !memberYear) {
+        toast.error('Please complete all student details.');
+        return;
+      }
+      if (!memberIdFile) {
+        toast.error('Please upload student ID card.');
+        return;
+      }
+      payload.append('collegeName', memberCollegeName.trim());
+      payload.append('course', memberCourse.trim());
+      payload.append('year', memberYear);
+      payload.append('idCard', memberIdFile);
+    } else {
+      if (!memberOrg.trim()) {
+        toast.error('Organization is required.');
+        return;
+      }
+      payload.append('domain', memberDomain || 'General');
+      payload.append('organization', memberOrg.trim());
+    }
+
+    setIsAddingMember(true);
+    try {
+      const res = await api.addGroupMember(token!, payload);
+      toast.success(res.message || 'Colleague/Friend added successfully.');
+      // Refresh user details to get updated groupMembers
+      const userData = await api.getMe(token!);
+      updateUser(userData.user);
+      closeAddMemberModal();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add colleague/friend.');
+    } finally {
+      setIsAddingMember(false);
+    }
+  };
 
   return (
     <main>
@@ -864,31 +1068,31 @@ export function Profile() {
                         </p>
                       )}
                     </div>
-                    <div className="ticket-card-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                    <div className="ticket-card-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.6rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         {(() => {
-                          const isNepalVerificationPending = user.country === 'Nepal' && evt.paymentStatus === 'pending' && evt.nepalUpiTxnRef;
+                          const isNepalVerificationPending = user.country === 'Nepal' && evt.paymentMethod === 'nepal_upi' && evt.nepalUpiTxnRef && evt.paymentStatus !== 'confirmed';
                           return (
                             <span
-                              className={`ticket-badge ${isNepalVerificationPending ? '' : `badge-${(user as any).isWaitlisted ? 'waitlisted' : evt.paymentStatus}`}`}
+                              className={`ticket-badge badge-${
+                                (user as any).isWaitlisted 
+                                  ? 'waitlisted' 
+                                  : isNepalVerificationPending
+                                    ? 'verification-pending'
+                                    : evt.paymentStatus
+                              }`}
                               style={{ 
                                 display: 'inline-flex', 
                                 alignItems: 'center', 
                                 gap: '4px', 
                                 background: (user as any).isWaitlisted 
                                   ? 'rgba(107, 114, 128, 0.1)' 
-                                  : isNepalVerificationPending 
-                                  ? 'rgba(245, 158, 11, 0.1)' 
                                   : undefined, 
                                 color: (user as any).isWaitlisted 
                                   ? '#4b5563' 
-                                  : isNepalVerificationPending 
-                                  ? '#b45309' 
                                   : undefined, 
                                 border: (user as any).isWaitlisted 
                                   ? '1px solid rgba(107, 114, 128, 0.2)' 
-                                  : isNepalVerificationPending 
-                                  ? '1px solid rgba(245, 158, 11, 0.25)' 
                                   : undefined 
                               }}
                             >
@@ -899,7 +1103,7 @@ export function Profile() {
                               ) : (user as any).isWaitlisted ? (
                                 <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Waitlisted</>
                               ) : isNepalVerificationPending ? (
-                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Verification Pending</>
+                                <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Verification Pending</>
                               ) : (
                                 <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Payment Pending</>
                               )}
@@ -907,80 +1111,27 @@ export function Profile() {
                           );
                         })()}
                       </div>
-                      {user.country === 'Nepal' && evt.paymentStatus === 'pending' && evt.nepalUpiTxnRef && (
-                        <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 500 }}>
-                          Txn ID: <strong>{evt.nepalUpiTxnRef}</strong>
-                        </span>
-                      )}
                     </div>
                     {evt.paymentStatus === 'pending' && !(user as any).isWaitlisted && (
-                      user.country === 'Nepal' ? (
-                        !evt.nepalUpiTxnRef ? (
-                            <form onSubmit={handleProfileNepalProofSubmit} style={{ marginTop: '1rem', width: '100%', textAlign: 'left', background: '#fcfbf9', border: '1px solid #e7dfd5', borderRadius: '8px', padding: '1rem' }}>
-                              <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem', color: 'var(--color-espresso)' }}>Complete Nepal UPI Payment</h4>
-                              <p style={{ margin: '0 0 1rem 0', fontSize: '0.8rem', color: 'var(--color-stone)' }}>Please scan the QR code and pay <strong>{user.userType === 'student' ? '₹499' : '₹999'}</strong>, then enter the UTR code below.</p>
-                              
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0.5rem 0 1rem 0' }}>
-                                <img 
-                                  src={publicAsset("Qr_code_Nepal.png")} 
-                                  alt="UPI QR" 
-                                  style={{ maxWidth: '180px', border: '1px solid #ccc', borderRadius: '6px' }} 
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    const parent = e.currentTarget.parentElement;
-                                    if (parent) {
-                                      const placeholder = parent.querySelector('.qr-placeholder');
-                                      if (!placeholder) {
-                                        const newPlaceholder = document.createElement('div');
-                                        newPlaceholder.className = 'qr-placeholder';
-                                        newPlaceholder.style.width = '180px';
-                                        newPlaceholder.style.height = '180px';
-                                        newPlaceholder.style.display = 'flex';
-                                        newPlaceholder.style.alignItems = 'center';
-                                        newPlaceholder.style.justifyContent = 'center';
-                                        newPlaceholder.style.border = '2px dashed #CBD5E1';
-                                        newPlaceholder.style.borderRadius = '6px';
-                                        newPlaceholder.style.background = '#F8FAFC';
-                                        newPlaceholder.style.color = '#64748B';
-                                        newPlaceholder.style.fontSize = '0.75rem';
-                                        newPlaceholder.style.fontWeight = '500';
-                                        newPlaceholder.style.textAlign = 'center';
-                                        newPlaceholder.style.padding = '0.5rem';
-                                        newPlaceholder.innerText = 'QR Code Image (Qr_code_Nepal.png) not found.';
-                                        parent.insertBefore(newPlaceholder, parent.firstChild);
-                                      }
-                                    }
-                                  }}
-                                />
-                              </div>
-
-                              <div className="register-field" style={{ marginBottom: '1rem' }}>
-                                <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Transaction ID (UTR) *</label>
-                                <input
-                                  type="text"
-                                  value={profileNepalTxnRef}
-                                  onChange={(e) => setProfileNepalTxnRef(e.target.value)}
-                                  placeholder="Enter UTR reference ID"
-                                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem', width: '100%', boxSizing: 'border-box' }}
-                                  required
-                                />
-                              </div>
-
-                              <button
-                                type="submit"
-                                className="btn-primary"
-                                style={{ width: '100%', padding: '0.5rem', fontSize: '0.85rem' }}
-                                disabled={isProfileSubmittingNepalProof}
-                              >
-                                {isProfileSubmittingNepalProof ? 'Submitting...' : 'Submit Payment Details'}
-                              </button>
-                            </form>
-
-                          ) : null
-                        ) : (
-                          <button className="btn-primary" onClick={handlePayNow} style={{ marginTop: '0.5rem', fontSize: '0.85rem', padding: '0.5rem 1rem', display: 'inline-block' }}>Complete Payment →</button>
-                        )
-                      )}
+                      <div style={{ marginTop: '1rem', background: '#fcfbf9', border: '1px solid #e7dfd5', borderRadius: '8px', padding: '1rem', width: '100%', textAlign: 'left' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem', color: 'var(--color-espresso)', fontWeight: 600, marginBottom: '0.75rem' }}>
+                          <span>Registration Amount:</span>
+                          <span>₹{costPerPerson}</span>
+                        </div>
+                        <button 
+                          className="btn-primary" 
+                          onClick={handlePayNow} 
+                          style={{ width: '100%', padding: '0.6rem', fontSize: '0.9rem', display: 'block' }}
+                        >
+                          Pay ₹{costPerPerson} Now →
+                        </button>
+                        {user.country === 'Nepal' && (
+                          <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.75rem', color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '6px', padding: '0.6rem', textAlign: 'center', lineHeight: '1.4' }}>
+                            <strong>Note for Nepal users:</strong> Standard payment is through the Razorpay gateway (requires international cards). If you do not have an international card or cannot complete the payment online, please reach out to the admins to complete your registration manually.
+                          </p>
+                        )}
+                      </div>
+                    )}
                       {(user as any).isWaitlisted && evt.paymentStatus !== 'confirmed' && (
                         <p style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: 'var(--color-stone)', background: '#f9fafb', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                           You have been successfully registered! Updates for the upcoming session will be sent soon by email.
@@ -991,6 +1142,41 @@ export function Profile() {
               </div>
             )}
           </div>
+
+          {/* ── Group Registration Card ── */}
+          {!user.groupLeaderId && user.groupMembers && user.groupMembers.length > 0 && (
+            <div className="profile-card">
+              <div className="profile-card-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <h2>Group Registration</h2>
+              </div>
+              <div style={{ padding: '1.25rem 1.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {user.groupMembers.map((m: any, idx: number) => {
+                    const paid = m.registeredEvents?.some((e: any) => e.paymentStatus === 'confirmed');
+                    return (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#fcfbf9', border: '1px solid #e7dfd5', borderRadius: '8px' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--color-espresso)', fontSize: '0.95rem' }}>{m.fullName}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--color-stone)' }}>{m.email} | {m.phone}</div>
+                          {m.userType === 'student' ? (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-sienna)', marginTop: '2px' }}>{m.collegeName} ({m.course})</div>
+                          ) : (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-sienna)', marginTop: '2px' }}>{m.organization}</div>
+                          )}
+                        </div>
+                        <span className={`ticket-badge badge-${paid ? 'confirmed' : 'pending'}`}>
+                          {paid ? 'Paid' : 'Pending'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── Certificate & Feedback Card ── */}
           {uniqueEvents.some(e => e.paymentStatus === 'confirmed') && (
@@ -1043,7 +1229,7 @@ export function Profile() {
         </div>
       </section>
 
-      {isFeedbackModalOpen && (
+      {isFeedbackModalOpen && createPortal(
         <div className="modal-overlay" onClick={() => setIsFeedbackModalOpen(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -1054,97 +1240,101 @@ export function Profile() {
             </div>
             <div className="modal-body feedback-form-container">
               <p style={{ marginBottom: '1rem', color: 'var(--color-stone)', fontSize: '0.95rem' }}>
-                Share your feedback for all 4 sessions to unlock your certificate.
+                {isUpcomingCohort 
+                  ? 'Please fill in the workshop feedback form to unlock your certificate.'
+                  : 'Share your feedback for all 4 sessions to unlock your certificate.'}
               </p>
-              {feedbackData.map((fb, idx) => (
-                <div key={idx} style={{ marginBottom: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.4rem' }}>
-                    <label style={{ display: 'block', fontWeight: 600, color: 'var(--color-umber)', fontSize: '0.93rem' }}>
-                      {fb.session} <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <span style={{ fontSize: '0.72rem', color: fb.text.length > 280 ? '#ef4444' : 'var(--color-stone)' }}>
-                      {fb.text.length}/300
-                    </span>
-                  </div>
+              {feedbackData.map((fb, idx) => {
+                const isRatingQuestion = !isUpcomingCohort || idx === 0;
+                const isRequired = !isUpcomingCohort || idx === 0 || idx === 1 || idx === 3;
+                
+                return (
+                  <div key={idx} style={{ marginBottom: '1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.4rem' }}>
+                      <label style={{ display: 'block', fontWeight: 600, color: 'var(--color-umber)', fontSize: '0.93rem' }}>
+                        {fb.session} {isRequired && <span style={{ color: '#ef4444' }}>*</span>}
+                      </label>
+                      {!isRatingQuestion && (
+                        <span style={{ fontSize: '0.72rem', color: fb.text.length > 280 ? '#ef4444' : 'var(--color-stone)' }}>
+                          {fb.text.length}/300
+                        </span>
+                      )}
+                    </div>
 
-                  {/* Rating Selector (Clickable pills acting as radio buttons) */}
-                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                    {['Excellent', 'Good', 'Average', 'Poor'].map((r) => {
-                      const isActive = fb.rating === r;
-                      return (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => {
-                            const newData = [...feedbackData];
-                            newData[idx].rating = r;
-                            setFeedbackData(newData);
-                          }}
-                          style={{
-                            flex: 1,
-                            minWidth: '70px',
-                            padding: '0.45rem 0.5rem',
-                            borderRadius: '6px',
-                            border: `1.5px solid ${isActive ? 'var(--color-sienna)' : '#d1d5db'}`,
-                            background: isActive ? 'var(--color-sienna)' : '#ffffff',
-                            color: isActive ? '#ffffff' : '#374151',
-                            fontSize: '0.82rem',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            textAlign: 'center',
-                          }}
-                        >
-                          {r}
-                        </button>
-                      );
-                    })}
+                    {isRatingQuestion ? (
+                      <div className="rating-container" style={{ display: 'flex', gap: '0.5rem' }}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            className={`rating-star ${Number(fb.rating) >= star ? 'active' : ''}`}
+                            onClick={() => {
+                              const newData = [...feedbackData];
+                              newData[idx].rating = String(star);
+                              setFeedbackData(newData);
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '1.6rem',
+                              color: Number(fb.rating) >= star ? '#eab308' : '#e2e8f0',
+                              transition: 'color 0.15s ease',
+                              padding: '2px'
+                            }}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <textarea
+                        rows={3}
+                        maxLength={300}
+                        style={{
+                          width: '100%',
+                          padding: '0.5rem 0.75rem',
+                          borderRadius: '6px',
+                          border: '1.5px solid #d1d5db',
+                          background: '#ffffff',
+                          color: '#111827',
+                          fontFamily: 'inherit',
+                          fontSize: '0.88rem',
+                          outline: 'none',
+                          resize: 'none',
+                          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)',
+                          transition: 'border-color 0.2s',
+                          lineHeight: '1.4',
+                        }}
+                        value={fb.text}
+                        onChange={e => {
+                          const newData = [...feedbackData];
+                          newData[idx].text = e.target.value;
+                          setFeedbackData(newData);
+                        }}
+                        placeholder={isUpcomingCohort && idx > 0 ? "Type your answer here..." : "Additional remarks (optional)..."}
+                        onFocus={e => (e.target.style.borderColor = 'var(--color-sienna)')}
+                        onBlur={e => (e.target.style.borderColor = '#d1d5db')}
+                      />
+                    )}
                   </div>
-
-                  <textarea
-                    rows={1.5}
-                    maxLength={300}
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem 0.75rem',
-                      borderRadius: '6px',
-                      border: '1.5px solid #d1d5db',
-                      background: '#ffffff',
-                      color: '#111827',
-                      fontFamily: 'inherit',
-                      fontSize: '0.88rem',
-                      outline: 'none',
-                      resize: 'none',
-                      boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)',
-                      transition: 'border-color 0.2s',
-                      lineHeight: '1.4',
-                    }}
-                    value={fb.text}
-                    onChange={e => {
-                      const newData = [...feedbackData];
-                      newData[idx].text = e.target.value;
-                      setFeedbackData(newData);
-                    }}
-                    placeholder="Additional remarks (optional)..."
-                    onFocus={e => (e.target.style.borderColor = 'var(--color-sienna)')}
-                    onBlur={e => (e.target.style.borderColor = '#d1d5db')}
-                  />
-                </div>
-              ))}
+                );
+              })}
               <button 
                 className="btn-primary" 
                 onClick={handleFeedbackSubmit} 
-                disabled={isSubmittingFeedback || feedbackData.some(f => !f.rating)}
-                style={{ width: '100%', padding: '0.7rem', marginTop: '0.5rem', opacity: feedbackData.some(f => !f.rating) ? 0.6 : 1 }}
+                disabled={isSubmittingFeedback || !validateFeedback()}
+                style={{ width: '100%', padding: '0.7rem', marginTop: '0.5rem', opacity: !validateFeedback() ? 0.6 : 1 }}
               >
                 {isSubmittingFeedback ? 'Submitting...' : 'Submit Feedback & Unlock Certificate'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {payError && (
+      {payError && createPortal(
         <div className="modal-overlay" onClick={() => setPayError('')}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', borderRadius: '12px' }}>
             <div className="modal-header" style={{ borderBottom: 'none' }}>
@@ -1184,10 +1374,11 @@ export function Profile() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      {/* ── Invalid Cohort Modal (Update to June 13 & 14, 2026) ── */}
-      {user.selectedCohort !== 'June 13 & 14, 2026' && (
+      {/* ── Invalid Cohort Modal (Update to activeCohort) ── */}
+      {!leaderConfirmed && user.selectedCohort && activeCohort && user.selectedCohort !== activeCohort && !availableCohorts.includes(user.selectedCohort) && createPortal(
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001, padding: '1rem' }}>
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2D9CC', padding: '2.5rem', width: '100%', maxWidth: '480px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)', textAlign: 'center' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '50%', background: '#FFFBEB', border: '1px solid #FDE68A', marginBottom: '1.25rem' }}>
@@ -1195,10 +1386,10 @@ export function Profile() {
             </div>
             <h3 style={{ marginBottom: '0.75rem', color: '#2A1F14', fontSize: '1.25rem', fontWeight: 700 }}>Event Date Update</h3>
             <p style={{ fontSize: '0.88rem', color: '#64748B', marginBottom: '1.5rem', lineHeight: '1.5' }}>
-              Please note that the <strong>Lead with AI</strong> professional program is scheduled to run on <strong>June 13th & June 14th, 2026</strong>.
+              Please note that the <strong>Lead with AI</strong> professional program is scheduled to run on <strong>{activeCohort}</strong>.
             </p>
             <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginBottom: '1.5rem', lineHeight: '1.5' }}>
-              Click below to update your date selection to June 13 & 14, 2026 and continue.
+              Click below to update your date selection to {activeCohort} and continue.
             </p>
             <button 
               type="button" 
@@ -1206,9 +1397,9 @@ export function Profile() {
                 if (isUpdatingCohort) return;
                 setIsUpdatingCohort(true);
                 try {
-                  const res = await api.changeCohort(token!, 'June 13 & 14, 2026');
+                  const res = await api.changeCohort(token!, activeCohort);
                   updateUser(res.user);
-                  toast.success('Your cohort date was successfully updated to June 13 & 14, 2026!');
+                  toast.success(`Your cohort date was successfully updated to ${activeCohort}!`);
                 } catch (err: any) {
                   toast.error(err.message || 'Failed to update cohort date.');
                 } finally {
@@ -1222,7 +1413,174 @@ export function Profile() {
               {isUpdatingCohort ? 'Updating...' : 'Update Date & Continue'}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Add Group Member Modal ── */}
+      {showAddMemberModal && createPortal(
+        <div className="modal-overlay" onClick={closeAddMemberModal}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <h2>Add Colleague/Friend</h2>
+              <button className="modal-close" onClick={closeAddMemberModal}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            <div className="modal-body feedback-form-container" style={{ padding: '1.5rem' }}>
+              <p style={{ marginBottom: '1.25rem', color: 'var(--color-stone)', fontSize: '0.88rem' }}>
+                Add a participant to your group. They must be a <strong>{user.userType === 'student' ? 'Student' : 'Working Professional'}</strong>.
+              </p>
+              <form onSubmit={handleAddMember} className="register-form" noValidate>
+                <div className="register-field">
+                  <label>Full Name *</label>
+                  <input
+                    type="text"
+                    value={memberFullName}
+                    onChange={e => setMemberFullName(e.target.value)}
+                    placeholder="Enter full name"
+                    required
+                  />
+                </div>
+
+                <div className="register-field">
+                  <label>Email Address *</label>
+                  <input
+                    type="email"
+                    value={memberEmail}
+                    onChange={e => setMemberEmail(e.target.value)}
+                    placeholder="Enter email address"
+                    required
+                  />
+                </div>
+
+                <div className="register-field">
+                  <label>Phone Number *</label>
+                  <input
+                    type="text"
+                    value={memberPhone}
+                    onChange={e => setMemberPhone(e.target.value.replace(/[^\d+\s()-]/g, ''))}
+                    placeholder="+91 98765 43210"
+                    maxLength={25}
+                    required
+                  />
+                </div>
+
+                {user.userType === 'student' ? (
+                  <>
+                    <div className="register-field">
+                      <label>College Name *</label>
+                      <input
+                        type="text"
+                        value={memberCollegeName}
+                        onChange={e => setMemberCollegeName(e.target.value)}
+                        placeholder="e.g. PSG College of Technology"
+                        required
+                      />
+                    </div>
+                    <div className="register-grid-2">
+                      <div className="register-field">
+                        <label>Course *</label>
+                        <input
+                          type="text"
+                          value={memberCourse}
+                          onChange={e => setMemberCourse(e.target.value)}
+                          placeholder="e.g. B.Tech CSE"
+                          required
+                        />
+                      </div>
+                      <div className="register-field">
+                        <label>Year of Study *</label>
+                        <select
+                          value={memberYear}
+                          onChange={e => setMemberYear(e.target.value)}
+                          className="register-select"
+                          required
+                        >
+                          <option value="">Select year</option>
+                          <option value="1st Year">1st Year</option>
+                          <option value="2nd Year">2nd Year</option>
+                          <option value="3rd Year">3rd Year</option>
+                          <option value="4th Year">4th Year</option>
+                          <option value="5th Year">5th Year</option>
+                          <option value="Postgraduate">Postgraduate</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="register-field">
+                      <label htmlFor="member-idcard">College ID Card * (PDF only)</label>
+                      <div
+                        className={`register-upload ${memberIdFile ? 'has-file' : ''}`}
+                        onClick={() => memberFileInputRef.current?.click()}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60px', cursor: 'pointer', border: '2px dashed var(--color-stone-light)', borderRadius: '8px', padding: '0.75rem' }}
+                      >
+                        <input
+                          ref={memberFileInputRef}
+                          id="member-idcard"
+                          type="file"
+                          accept=".pdf"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            setMemberIdFile(f);
+                          }}
+                        />
+                        {memberIdFile ? (
+                          <span className="upload-filename" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#166534', fontWeight: 500 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            {memberIdFile.name}
+                          </span>
+                        ) : (
+                          <span className="upload-placeholder" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-stone)' }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            PDF only (max. 5MB)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="register-field">
+                      <label>Domain *</label>
+                      <select
+                        value={memberDomain}
+                        onChange={e => setMemberDomain(e.target.value)}
+                        className="register-select"
+                        required
+                      >
+                        <option value="">Select domain</option>
+                        {DOMAIN_OPTIONS.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="register-field">
+                      <label>Organization / Company *</label>
+                      <input
+                        type="text"
+                        value={memberOrg}
+                        onChange={e => setMemberOrg(e.target.value)}
+                        placeholder="e.g. TCS, Infosys, etc."
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  style={{ width: '100%', padding: '0.7rem', marginTop: '1rem' }}
+                  disabled={isAddingMember}
+                >
+                  {isAddingMember ? 'Saving...' : 'Save Colleague/Friend'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </main>
   );

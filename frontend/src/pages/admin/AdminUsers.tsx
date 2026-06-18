@@ -11,10 +11,43 @@ import {
   getAdminSettings,
   createAdminUser,
   registerAllZoomAttendees,
-  sendCertificates
+  bulkRegister
 } from '../../lib/api';
 import { CertificateGenerator } from '../../components/admin/CertificateGenerator';
 import { toast } from 'sonner';
+import Papa from 'papaparse';
+
+function isCohortCompleted(cohortStr: string) {
+  if (!cohortStr) return false;
+  const match = cohortStr.match(/([A-Za-z]+)\s+(\d+)\s*(?:&\s*(\d+))?,\s*(\d{4})/);
+  if (match) {
+    const monthStr = match[1];
+    const day2 = match[3] ? parseInt(match[3], 10) : parseInt(match[2], 10);
+    const year = parseInt(match[4], 10);
+    
+    const months: Record<string, number> = {
+      january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+      july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+      jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    };
+    const month = months[monthStr.toLowerCase()] !== undefined ? months[monthStr.toLowerCase()] : 5;
+    
+    // Create Date for the end of the cohort day (6:00 PM IST -> 12:30 UTC)
+    const cohortEndDate = new Date(Date.UTC(year, month, day2, 12, 30, 0));
+    return new Date() > cohortEndDate;
+  }
+  return false;
+}
+
+const DOMAIN_OPTIONS = [
+  "Information Technology (IT)",
+  "Manufacturing",
+  "Automobile / Automotive",
+  "Healthcare",
+  "Finance & Banking",
+  "Education",
+  "Retail & E-commerce",
+];
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/$/, '');
 
@@ -117,16 +150,18 @@ export function AdminUsers() {
   const [filterPaid, setFilterPaid] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterWaitlist, setFilterWaitlist] = useState('all');
-  const [filterReferral, setFilterReferral] = useState('all');
-  const [filterHeardFrom, setFilterHeardFrom] = useState('all');
+  const [filterSources, setFilterSources] = useState<string[]>([]);  // multi-checkbox
   const [filterCohort, setFilterCohort] = useState('all');
   const [filterFeedback, setFilterFeedback] = useState('all');
   const [filterCertSent, setFilterCertSent] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   const [isSendingCert, setIsSendingCert] = useState<string | null>(null);
   const [isBulkSendingCert, setIsBulkSendingCert] = useState(false);
+  const [isSourceDropdownOpen, setIsSourceDropdownOpen] = useState(false);
   
   const [referralsList, setReferralsList] = useState<any[]>([]);
+  const [cohortsList, setCohortsList] = useState<string[]>([]);
+  const [salespersonsList, setSalespersonsList] = useState<string[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [certificateUser, setCertificateUser] = useState<any>(null);
 
@@ -141,10 +176,13 @@ export function AdminUsers() {
     domain: '',
     organization: '',
     heardFrom: '',
+    heardFromOther: '',
+    referralName: '',
     referralCode: '',
     selectedCohort: '',
     country: ''
   });
+  const [editIdCardFile, setEditIdCardFile] = useState<File | null>(null);
 
   // Manual Payment Confirmation State
   const [paymentConfirmUser, setPaymentConfirmUser] = useState<any>(null);
@@ -163,22 +201,49 @@ export function AdminUsers() {
   const [addForm, setAddForm] = useState({
     fullName: '',
     email: '',
-    userType: '', // '', 'student', or 'working'
-    referralCode: ''
+    phone: '',
+    userType: 'student', // 'student' or 'working'
+    collegeName: '',
+    course: '',
+    year: '',
+    domain: '',
+    organization: '',
+    heardFrom: '',
+    heardFromOther: '',
+    referralName: '',   // GKT Employee referral name
+    referralCode: '',
+    selectedCohort: '',
+    paymentStatus: 'pending',
+    customPaymentAmount: ''
   });
+  const [addIdCardFile, setAddIdCardFile] = useState<File | null>(null);
+
+  // Bulk Registration States
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<any>(null);
 
   const [isZoomRegistering, setIsZoomRegistering] = useState(false);
 
   const adminToken = localStorage.getItem('adminToken') || '';
 
-  // Load referral codes list from settings
+  // Load settings on mount
   useEffect(() => {
     getAdminSettings(adminToken)
       .then(settings => {
         setReferralsList(settings.referralCodes || []);
+        const cohorts = settings.cohorts || [];
+        const activeCohort = settings.activeCohort || (cohorts.length > 0 ? cohorts[0] : 'June 27 & 28, 2026');
+        setCohortsList(cohorts);
+        setSalespersonsList(settings.salespersons || []);
+        setAddForm(prev => ({ ...prev, selectedCohort: activeCohort }));
+        // Default user management list to active cohort
+        setFilterCohort(activeCohort);
       })
       .catch(console.error);
   }, [adminToken]);
+
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -190,7 +255,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, filterFeedback, filterCertSent]);
+  }, [filterPaid, filterType, filterWaitlist, filterSources, sortOrder, filterCohort, filterFeedback, filterCertSent]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -202,8 +267,7 @@ export function AdminUsers() {
         filterPaid,
         filterType,
         filterWaitlist,
-        filterReferral,
-        filterHeardFrom,
+        filterSource: filterSources.length > 0 ? filterSources.join(',') : 'all',
         filterCohort,
         filterFeedback,
         filterCertSent,
@@ -222,7 +286,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
-  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterReferral, filterHeardFrom, sortOrder, filterCohort, filterFeedback, filterCertSent, adminToken]);
+  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterSources, sortOrder, filterCohort, filterFeedback, filterCertSent, adminToken]);
 
   const handleExportCSV = async () => {
     try {
@@ -231,8 +295,7 @@ export function AdminUsers() {
         filterPaid,
         filterType,
         filterWaitlist,
-        filterReferral,
-        filterHeardFrom,
+        filterSource: filterSources.length > 0 ? filterSources.join(',') : 'all',
         filterCohort,
         filterFeedback,
         filterCertSent,
@@ -293,48 +356,6 @@ export function AdminUsers() {
     }
   };
 
-  const handleSendCertificateSingle = async (userId: string) => {
-    setIsSendingCert(userId);
-    try {
-      await sendCertificates(adminToken, { userIds: [userId] });
-      toast.success('Certificate sending initiated successfully!');
-      setTimeout(() => {
-        fetchUsers();
-      }, 1500);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to send certificate.');
-    } finally {
-      setIsSendingCert(null);
-    }
-  };
-
-  const handleSendCertificatesBulk = async () => {
-    const confirmMsg = `Are you sure you want to generate and email certificates to all ${total} filtered registrants?`;
-    if (!window.confirm(confirmMsg)) return;
-
-    setIsBulkSendingCert(true);
-    try {
-      const res = await sendCertificates(adminToken, {
-        search: debouncedSearchTerm,
-        filterPaid,
-        filterType,
-        filterWaitlist,
-        filterReferral,
-        filterHeardFrom,
-        filterCohort,
-        filterFeedback,
-        filterCertSent
-      });
-      toast.success(res.message || 'Bulk certificate sending initiated successfully!');
-      setTimeout(() => {
-        fetchUsers();
-      }, 1500);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to send certificates in bulk.');
-    } finally {
-      setIsBulkSendingCert(false);
-    }
-  };
 
   const handleToggleStatusConfirm = async () => {
     if (!statusConfirmUser) return;
@@ -364,6 +385,17 @@ export function AdminUsers() {
     );
     const resolvedCode = matchingReferral ? matchingReferral.code : '';
 
+    const mainOptions = ['Social Media', 'Newspaper', 'GKT Employee'];
+    let parsedHeardFrom = user.heardFrom === '-' ? '' : (user.heardFrom || '');
+    let parsedHeardFromOther = '';
+    
+    if (parsedHeardFrom.startsWith('GKT Employee') || parsedHeardFrom === 'Referral' || user.salesperson || (user.referralCode && user.referralCode !== '-')) {
+      parsedHeardFrom = 'GKT Employee';
+    } else if (parsedHeardFrom && !mainOptions.includes(parsedHeardFrom)) {
+      parsedHeardFromOther = parsedHeardFrom;
+      parsedHeardFrom = 'Others';
+    }
+
     setEditingUser(user);
     setEditForm({
       fullName: user.fullName || '',
@@ -373,20 +405,50 @@ export function AdminUsers() {
       year: user.year === '-' ? '' : user.year,
       domain: user.domain === '-' ? '' : user.domain,
       organization: user.organization === '-' ? '' : user.organization,
-      heardFrom: user.heardFrom === '-' ? '' : user.heardFrom,
+      heardFrom: parsedHeardFrom,
+      heardFromOther: parsedHeardFromOther,
+      referralName: user.salesperson || (user.referralCode && user.referralCode !== '-' ? user.referralCode : ''),
       referralCode: resolvedCode,
       selectedCohort: user.selectedCohort || '',
       country: user.country || 'India'
     });
+    setEditIdCardFile(null);
   };
 
   const handleSaveUserEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
     try {
-      await editAdminUser(adminToken, editingUser.id || editingUser._id, editForm);
+      const fd = new FormData();
+      fd.append('fullName', editForm.fullName.trim());
+      fd.append('phone', editForm.phone.trim());
+      fd.append('country', editForm.country);
+      fd.append('selectedCohort', editForm.selectedCohort);
+
+      if (editingUser.userType === 'student') {
+        fd.append('collegeName', editForm.collegeName.trim());
+        fd.append('course', editForm.course.trim());
+        fd.append('year', editForm.year.trim());
+        if (editIdCardFile) {
+          fd.append('idCard', editIdCardFile);
+        }
+      } else {
+        fd.append('domain', editForm.domain.trim());
+        fd.append('organization', editForm.organization.trim());
+      }
+
+      fd.append('heardFrom', editForm.heardFrom);
+      if (editForm.heardFrom === 'Others') {
+        fd.append('heardFromOther', editForm.heardFromOther.trim());
+      }
+      if (editForm.heardFrom === 'GKT Employee') {
+        fd.append('referralName', editForm.referralName);
+      }
+
+      await editAdminUser(adminToken, editingUser.id || editingUser._id, fd);
       toast.success('User details updated successfully.');
       setEditingUser(null);
+      setEditIdCardFile(null);
       fetchUsers();
     } catch (err: any) {
       toast.error(`Failed to update user: ${err.message}`);
@@ -426,29 +488,175 @@ export function AdminUsers() {
 
   const handleAddRegistrantSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addForm.fullName.trim() || !addForm.email.trim()) {
-      toast.error('Please enter name and email.');
+    if (!addForm.fullName.trim() || !addForm.email.trim() || !addForm.selectedCohort) {
+      toast.error('Please fill in all required fields (Name, Email, Selected Date).');
       return;
     }
     try {
-      const payload: any = {
-        fullName: addForm.fullName.trim(),
-        email: addForm.email.trim().toLowerCase()
-      };
-      if (addForm.userType) {
-        payload.userType = addForm.userType;
+      const fd = new FormData();
+      fd.append('fullName', addForm.fullName.trim());
+      fd.append('email', addForm.email.trim().toLowerCase());
+      fd.append('selectedCohort', addForm.selectedCohort);
+      fd.append('paymentStatus', addForm.paymentStatus);
+      if (addForm.userType) fd.append('userType', addForm.userType);
+      if (addForm.phone.trim()) fd.append('phone', addForm.phone.trim());
+      if (addForm.heardFrom) fd.append('heardFrom', addForm.heardFrom);
+      if (addForm.heardFrom === 'Others' && addForm.heardFromOther.trim()) fd.append('heardFromOther', addForm.heardFromOther.trim());
+      if (addForm.heardFrom === 'GKT Employee' && addForm.referralName) fd.append('referralName', addForm.referralName);
+      if (addForm.referralCode) fd.append('referralCode', addForm.referralCode);
+
+      if (addForm.customPaymentAmount.trim() !== '') {
+        const amt = parseFloat(addForm.customPaymentAmount);
+        if (isNaN(amt) || amt < 0) {
+          toast.error('Please enter a valid payment amount.');
+          return;
+        }
+        fd.append('customPaymentAmount', String(amt));
       }
-      if (addForm.referralCode) {
-        payload.referralCode = addForm.referralCode;
+
+      if (addForm.userType === 'student') {
+        if (addForm.collegeName.trim()) fd.append('collegeName', addForm.collegeName.trim());
+        if (addForm.course.trim()) fd.append('course', addForm.course.trim());
+        if (addForm.year.trim()) fd.append('year', addForm.year.trim());
+        if (addIdCardFile) fd.append('idCard', addIdCardFile);
+      } else if (addForm.userType === 'working') {
+        if (addForm.domain.trim()) fd.append('domain', addForm.domain.trim());
+        if (addForm.organization.trim()) fd.append('organization', addForm.organization.trim());
       }
-      await createAdminUser(adminToken, payload);
+
+      await createAdminUser(adminToken, fd);
       toast.success('Registrant created successfully!');
       setIsAddModalOpen(false);
-      setAddForm({ fullName: '', email: '', userType: '', referralCode: '' });
+      
+      setAddForm({
+        fullName: '',
+        email: '',
+        phone: '',
+        userType: 'student',
+        collegeName: '',
+        course: '',
+        year: '',
+        domain: '',
+        organization: '',
+        heardFrom: '',
+        heardFromOther: '',
+        referralName: '',
+        referralCode: '',
+        selectedCohort: cohortsList[0] || 'June 13 & 14, 2026',
+        paymentStatus: 'pending',
+        customPaymentAmount: ''
+      });
+      setAddIdCardFile(null);
       fetchUsers();
     } catch (err: any) {
       toast.error(err.message || 'Failed to create registrant.');
     }
+  };
+
+  const downloadCSVTemplate = () => {
+    const headers = [
+      'fullName',
+      'email',
+      'phone',
+      'userType',
+      'collegeName',
+      'course',
+      'year',
+      'domain',
+      'organization',
+      'heardFrom',
+      'referralCode'
+    ];
+    const sampleRows = [
+      ['John Doe', 'johndoe@example.com', '9876543210', 'student', 'ABC College', 'B.Tech', '3rd Year', '', '', 'Social Media', ''],
+      ['Jane Smith', 'janesmith@example.com', '9876543211', 'working', '', '', '', 'Software Engineering', 'XYZ Corp', 'Others', '']
+    ];
+    const csvContent = [
+      headers.join(','),
+      ...sampleRows.map(r => r.map(val => `"${val.replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'registrant_bulk_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleBulkUploadCSV = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!csvFile) {
+      toast.error('Please select a CSV file.');
+      return;
+    }
+    setBulkUploading(true);
+    setBulkResult(null);
+
+    Papa.parse(csvFile, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const parsedUsers = results.data.map((row: any) => {
+          const keys = Object.keys(row);
+          const getVal = (possibleKeys: string[]) => {
+            const key = keys.find(k => possibleKeys.includes(k.toLowerCase().trim()));
+            return key ? (row[key] || '').toString().trim() : '';
+          };
+
+          const fullName = getVal(['fullname', 'name', 'full name']);
+          const email = getVal(['email', 'email address']);
+          const phone = getVal(['phone', 'phone number', 'phoneno', 'mobile', 'mobile number']);
+          const userTypeVal = getVal(['usertype', 'type', 'user type']).toLowerCase();
+          
+          let userType = '';
+          if (userTypeVal.includes('student')) {
+            userType = 'student';
+          } else if (userTypeVal.includes('working') || userTypeVal.includes('professional')) {
+            userType = 'working';
+          }
+
+          return {
+            fullName,
+            email,
+            phone,
+            userType,
+            collegeName: getVal(['collegename', 'college', 'college name']) || undefined,
+            course: getVal(['course', 'branch', 'stream']) || undefined,
+            year: getVal(['year', 'semester', 'year of study']) || undefined,
+            domain: getVal(['domain', 'area of interest', 'specialization']) || undefined,
+            organization: getVal(['organization', 'company', 'org']) || undefined,
+            heardFrom: getVal(['heardfrom', 'heard from', 'source']) || undefined,
+            referralCode: getVal(['referralcode', 'referral code', 'salesperson']) || undefined,
+          };
+        });
+
+        // Simple validation
+        const invalid = parsedUsers.filter((u: any) => !u.fullName || !u.email || !u.phone || !u.userType);
+        if (invalid.length > 0) {
+          toast.error(`Invalid rows found: ${invalid.length} row(s) missing mandatory fields (Name, Email, Phone, or UserType).`);
+          setBulkUploading(false);
+          return;
+        }
+
+        try {
+          const res = await bulkRegister(adminToken, parsedUsers);
+          setBulkResult(res);
+          toast.success(res.message || 'Bulk upload complete!');
+          fetchUsers();
+        } catch (err: any) {
+          toast.error(err.message || 'Bulk upload failed.');
+        } finally {
+          setBulkUploading(false);
+        }
+      },
+      error: (error) => {
+        toast.error('Failed to parse CSV: ' + error.message);
+        setBulkUploading(false);
+      }
+    });
   };
 
   const handleRegisterAllZoom = async () => {
@@ -477,7 +685,7 @@ export function AdminUsers() {
     <div className="admin-page">
       <div className="admin-page-header">
         <h2 className="admin-page-title">User Management</h2>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button
             className="btn-primary"
             onClick={handleRegisterAllZoom}
@@ -489,14 +697,10 @@ export function AdminUsers() {
           <button className="btn-primary" onClick={() => setIsAddModalOpen(true)} style={{ backgroundColor: '#16a34a', borderColor: '#16a34a' }}>
             Add Registrant
           </button>
-          <button 
-            className="btn-primary" 
-            onClick={handleSendCertificatesBulk}
-            disabled={isBulkSendingCert}
-            style={{ backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', opacity: isBulkSendingCert ? 0.7 : 1 }}
-          >
-            {isBulkSendingCert ? "Sending..." : "Send Certificates (Filtered)"}
+          <button className="btn-primary" onClick={() => setIsBulkModalOpen(true)} style={{ backgroundColor: '#0284c7', borderColor: '#0284c7' }}>
+            Bulk Upload CSV
           </button>
+
           <button className="btn-primary" onClick={handleExportCSV}>
             Export CSV
           </button>
@@ -538,32 +742,144 @@ export function AdminUsers() {
           <option value="student">Students</option>
           <option value="working">Professionals</option>
         </select>
-        <select value={filterHeardFrom} onChange={e => setFilterHeardFrom(e.target.value)} className="admin-select">
-          <option value="all">All Sources</option>
-          <option value="social media">Social Media</option>
-          <option value="newspaper">Newspaper</option>
-          <option value="others">Others</option>
-        </select>
-
-        <select value={filterReferral} onChange={e => setFilterReferral(e.target.value)} className="admin-select">
-          <option value="all">All Referrals</option>
-          {referralsList.map(r => (
-            <option key={r.code} value={r.label}>{r.label}</option>
-          ))}
-        </select>
+        {/* Source Dropdown with Checkboxes */}
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          <button
+            type="button"
+            onClick={() => setIsSourceDropdownOpen(!isSourceDropdownOpen)}
+            className="admin-select"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              minWidth: '180px',
+              textAlign: 'left',
+              cursor: 'pointer',
+              background: '#fff',
+              border: '1px solid #cbd5e1',
+              borderRadius: '6px',
+              padding: '0.5rem 0.8rem',
+              fontSize: '0.875rem',
+              height: '100%'
+            }}
+          >
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+              {filterSources.length === 0
+                ? "All Sources"
+                : filterSources.length === 1
+                ? (filterSources[0] === 'social media' ? 'Social Media' : filterSources[0] === 'newspaper' ? 'Newspaper' : filterSources[0] === 'others' ? 'Others' : filterSources[0])
+                : `${filterSources.length} Selected`}
+            </span>
+            <span style={{ marginLeft: 'auto', fontSize: '0.65rem', color: '#64748b' }}>▼</span>
+          </button>
+          
+          {isSourceDropdownOpen && (
+            <>
+              <div
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 999
+                }}
+                onClick={() => setIsSourceDropdownOpen(false)}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  zIndex: 1000,
+                  minWidth: '220px',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  background: '#fff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+                  padding: '0.5rem',
+                  marginTop: '4px'
+                }}
+              >
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0.4rem 0.5rem',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    borderBottom: '1px solid #f1f5f9',
+                    marginBottom: '0.25rem',
+                    color: '#0f172a'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={filterSources.length === 0}
+                    onChange={() => setFilterSources([])}
+                    style={{ marginRight: '0.5rem' }}
+                  />
+                  All Sources
+                </label>
+                
+                {[
+                  { label: 'Social Media', value: 'social media' },
+                  { label: 'Newspaper', value: 'newspaper' },
+                  ...referralsList.map(r => ({ label: r.label, value: r.label })),
+                  { label: 'Others', value: 'others' }
+                ].map(opt => {
+                  const isChecked = filterSources.includes(opt.value);
+                  return (
+                    <label
+                      key={opt.value}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0.4rem 0.5rem',
+                        cursor: 'pointer',
+                        fontSize: '0.875rem',
+                        userSelect: 'none',
+                        color: '#0f172a'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          if (isChecked) {
+                            setFilterSources(filterSources.filter(s => s !== opt.value));
+                          } else {
+                            setFilterSources([...filterSources, opt.value]);
+                          }
+                        }}
+                        style={{ marginRight: '0.5rem' }}
+                      />
+                      {opt.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
         <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)} className="admin-select">
           <option value="all">All Dates</option>
-          <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
+          {cohortsList.map(c => {
+            const completed = isCohortCompleted(c);
+            return (
+              <option key={c} value={c}>
+                {c} {completed ? ' (Completed)' : ''}
+              </option>
+            );
+          })}
         </select>
         <select value={filterFeedback} onChange={e => setFilterFeedback(e.target.value)} className="admin-select">
           <option value="all">All Feedback Status</option>
           <option value="completed">Feedback Completed</option>
           <option value="pending">Feedback Pending</option>
-        </select>
-        <select value={filterCertSent} onChange={e => setFilterCertSent(e.target.value)} className="admin-select">
-          <option value="all">All Cert Status</option>
-          <option value="sent">Certificate Sent</option>
-          <option value="not_sent">Certificate Not Sent</option>
         </select>
 
       </div>
@@ -580,15 +896,13 @@ export function AdminUsers() {
                 <th style={{ textAlign: 'center', width: '50px' }}>S.No.</th>
                 <th>Name</th>
                 <th>Email</th>
-                <th style={{ textAlign: 'center' }}>Phone</th>
+                <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Phone</th>
                 <th style={{ textAlign: 'center' }}>Type</th>
                 <th>College / Organization</th>
-                <th style={{ textAlign: 'center' }}>Referral</th>
                 <th style={{ textAlign: 'center' }}>Payment</th>
                 <th style={{ textAlign: 'center' }}>Heard From</th>
                 <th style={{ textAlign: 'center' }}>Feedback</th>
-                <th style={{ textAlign: 'center' }}>Cert Sent</th>
-                <th style={{ textAlign: 'center' }}>Preferred Date</th>
+                <th style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>Date</th>
               </tr>
             </thead>
             <tbody>
@@ -600,7 +914,7 @@ export function AdminUsers() {
                     </td>
                     <td className="admin-row-name">{user.fullName}</td>
                     <td className="admin-supporting-info">{user.email}</td>
-                    <td className="admin-supporting-info" style={{ textAlign: 'center' }}>{user.phone}</td>
+                    <td className="admin-supporting-info" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{user.phone}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className="admin-badge" style={{
                         background: user.userType === 'student' ? 'rgba(59,139,212,0.08)' : 'rgba(71,85,105,0.08)',
@@ -613,14 +927,15 @@ export function AdminUsers() {
                     <td className="admin-supporting-info">
                       {user.userType === 'student' ? user.collegeName : user.organization}
                     </td>
-                    <td className="admin-supporting-info" style={{ textAlign: 'center' }}>{formatReferral(user.referralCode)}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span className={`admin-badge ${user.isPaid ? 'success' : 'warning'}`}>
                         {user.isPaid ? 'Paid' : 'Pending'}
                       </span>
                     </td>
                     <td className="admin-supporting-info" style={{ textAlign: 'center' }}>
-                      {user.heardFrom || '-'}
+                      {(!user.referralCode || user.referralCode === '-')
+                        ? (user.heardFrom && user.heardFrom !== '-' ? user.heardFrom : '-')
+                        : user.referralCode}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span className={`admin-badge ${user.isFeedbackSubmitted ? 'success' : 'secondary'}`} style={{
@@ -631,21 +946,12 @@ export function AdminUsers() {
                         {user.isFeedbackSubmitted ? 'Completed' : 'Pending'}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={`admin-badge ${user.isCertificateSent ? 'success' : 'secondary'}`} style={{
-                        background: user.isCertificateSent ? 'rgba(139,92,246,0.08)' : 'rgba(100,116,139,0.08)',
-                        color: user.isCertificateSent ? '#7c3aed' : '#64748b',
-                        border: `1px solid ${user.isCertificateSent ? 'rgba(139,92,246,0.2)' : 'rgba(100,116,139,0.2)'}`,
-                      }}>
-                        {user.isCertificateSent ? 'Yes' : 'No'}
-                      </span>
-                    </td>
-                    <td className="admin-supporting-info" style={{ textAlign: 'center' }}>{user.selectedCohort || '-'}</td>
+                    <td className="admin-supporting-info" style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{user.selectedCohort || '-'}</td>
                   </tr>
 
                   {expandedId === (user.id || user._id) && (
                     <tr>
-                      <td colSpan={12} style={{ background: '#F0F4F8', padding: '1.2rem 2rem' }}>
+                      <td colSpan={10} style={{ background: '#F0F4F8', padding: '1.2rem 2rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: user.userType === 'student' && user.idCardPath ? '1fr 1fr 180px' : '1fr 1fr', gap: '1.5rem' }}>
                           
                           {/* Profile completion check */}
@@ -687,7 +993,14 @@ export function AdminUsers() {
                             <DetailRow label="Phone" value={user.phone} />
                             <DetailRow label="User Type" value={user.userType === 'student' ? 'Student' : 'Working Professional'} />
                             <DetailRow label="Registered On" value={new Date(user.createdAt).toLocaleString()} />
-                            <DetailRow label="Heard From" value={user.heardFrom} />
+                            <DetailRow 
+                              label="Heard From" 
+                              value={
+                                (user.heardFrom === 'Referral' || (user.heardFrom && user.heardFrom.startsWith('GKT Employee')) || user.salesperson)
+                                  ? `GKT Employee${user.salesperson ? ` - ${user.salesperson}` : ''}`
+                                  : user.heardFrom
+                              } 
+                            />
                             <DetailRow label="Selected Date" value={user.selectedCohort || '-'} />
                             
                             {/* Controls Panel */}
@@ -719,16 +1032,7 @@ export function AdminUsers() {
                               >
                                 {user.isWaitlisted ? 'Remove from Waitlist' : 'Add to Waitlist'}
                               </button>
-                              {user.isPaid && (
-                                <button
-                                  className="btn-primary"
-                                  onClick={(e) => { e.stopPropagation(); handleSendCertificateSingle(user.id || user._id); }}
-                                  disabled={isSendingCert === (user.id || user._id)}
-                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: '#8B5CF6', borderColor: '#8B5CF6', opacity: isSendingCert === (user.id || user._id) ? 0.7 : 1 }}
-                                >
-                                  {isSendingCert === (user.id || user._id) ? 'Sending...' : 'Send Certificate'}
-                                </button>
-                              )}
+
                             </div>
                           </div>
 
@@ -951,17 +1255,30 @@ export function AdminUsers() {
                       style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
                     />
                   </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>College ID Card (PDF)</label>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={e => setEditIdCardFile(e.target.files?.[0] || null)}
+                      style={{ padding: '0.4rem', fontSize: '0.85rem' }}
+                    />
+                  </div>
                 </>
               ) : (
                 <>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                     <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Domain</label>
-                    <input
-                      type="text"
+                    <select
                       value={editForm.domain}
                       onChange={e => setEditForm({ ...editForm, domain: e.target.value })}
-                      style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
-                    />
+                      style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                    >
+                      <option value="">Select domain</option>
+                      {DOMAIN_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                     <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Organization</label>
@@ -977,13 +1294,56 @@ export function AdminUsers() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>How did you hear about this?</label>
-                <input
-                  type="text"
+                <select
                   value={editForm.heardFrom}
-                  onChange={e => setEditForm({ ...editForm, heardFrom: e.target.value })}
-                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
-                />
+                  onChange={e => setEditForm({ ...editForm, heardFrom: e.target.value, heardFromOther: '', referralName: '' })}
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                >
+                  <option value="">Select an option</option>
+                  <option value="Social Media">Social Media</option>
+                  <option value="Newspaper">Newspaper</option>
+                  <option value="GKT Employee">GKT Employee</option>
+                  <option value="Others">Others</option>
+                </select>
               </div>
+
+              {editForm.heardFrom === 'Others' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Please Specify *</label>
+                  <input
+                    type="text"
+                    value={editForm.heardFromOther}
+                    onChange={e => setEditForm({ ...editForm, heardFromOther: e.target.value })}
+                    placeholder="e.g. Friend, Professor, etc."
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                    required
+                  />
+                </div>
+              )}
+
+              {editForm.heardFrom === 'GKT Employee' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Referral *</label>
+                  <select
+                    value={editForm.referralName}
+                    onChange={e => setEditForm({ ...editForm, referralName: e.target.value })}
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                    required
+                  >
+                    <option value="">Select referral</option>
+                    {referralsList.map((r: any) => (
+                      <option key={r.code} value={r.label}>
+                        {r.label}
+                      </option>
+                    ))}
+                    {editForm.referralName && !referralsList.some((r: any) => r.label === editForm.referralName) && (
+                      <option value={editForm.referralName}>
+                        {editForm.referralName}
+                      </option>
+                    )}
+                  </select>
+                </div>
+              )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Country</label>
@@ -1007,26 +1367,20 @@ export function AdminUsers() {
                   style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
                   required
                 >
-                  <option value="June 13 & 14, 2026">June 13 & 14, 2026</option>
+                  <option value="">Select Date</option>
+                  {cohortsList.map(c => {
+                    const completed = isCohortCompleted(c);
+                    return (
+                      <option key={c} value={c}>
+                        {c} {completed ? ' (Completed)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', gridColumn: 'span 2' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Referral Code</label>
-                <select
-                  value={editForm.referralCode}
-                  onChange={e => setEditForm({ ...editForm, referralCode: e.target.value })}
-                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
-                >
-                  <option value="">None</option>
-                  {referralsList.map((r: any) => (
-                    <option key={r.code} value={r.code}>
-                      {r.label}{r.isActive === false ? ' (Inactive)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+
 
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', gridColumn: 'span 2', justifyContent: 'flex-end' }}>
                 <button
@@ -1159,72 +1513,348 @@ export function AdminUsers() {
       {/* ── Add Registrant Modal ── */}
       {isAddModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2D9CC', padding: '2rem', width: '90%', maxWidth: '450px' }}>
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2D9CC', padding: '2rem', width: '95%', maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginBottom: '0.5rem', color: '#3B2F2F' }}>Add New Registrant</h3>
-            <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginBottom: '1.2rem' }}>
-              Create an account with minimal details. The registrant can complete their profile on first login.
+            <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginBottom: '1.5rem' }}>
+              Create an account manually. Enter details, assign preferred date, set custom payment amount, and track salespeople.
             </p>
             <form onSubmit={handleAddRegistrantSubmit}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Full Name *</label>
-                <input
-                  type="text"
-                  value={addForm.fullName}
-                  onChange={e => setAddForm({ ...addForm, fullName: e.target.value })}
-                  placeholder="e.g. Rahul Sharma"
-                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
-                  required
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Email Address *</label>
-                <input
-                  type="email"
-                  value={addForm.email}
-                  onChange={e => setAddForm({ ...addForm, email: e.target.value })}
-                  placeholder="e.g. rahul@gmail.com"
-                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
-                  required
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1.5rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Account Type</label>
-                <select
-                  value={addForm.userType}
-                  onChange={e => setAddForm({ ...addForm, userType: e.target.value })}
-                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
-                >
-                  <option value="">Let Registrant Decide</option>
-                  <option value="student">Student</option>
-                  <option value="working">Working Professional / Others</option>
-                </select>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1.5rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Referral Code</label>
-                <select
-                  value={addForm.referralCode}
-                  onChange={e => setAddForm({ ...addForm, referralCode: e.target.value })}
-                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
-                >
-                  <option value="">None</option>
-                  {referralsList.filter((r: any) => r.isActive !== false).map((r: any) => (
-                    <option key={r.code} value={r.code}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Full Name *</label>
+                  <input
+                    type="text"
+                    value={addForm.fullName}
+                    onChange={e => setAddForm({ ...addForm, fullName: e.target.value })}
+                    placeholder="e.g. Rahul Sharma"
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Email Address *</label>
+                  <input
+                    type="email"
+                    value={addForm.email}
+                    onChange={e => setAddForm({ ...addForm, email: e.target.value })}
+                    placeholder="e.g. rahul@gmail.com"
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Phone Number</label>
+                  <input
+                    type="text"
+                    value={addForm.phone}
+                    onChange={e => setAddForm({ ...addForm, phone: e.target.value })}
+                    placeholder="e.g. 9876543210"
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Account Type *</label>
+                  <select
+                    value={addForm.userType}
+                    onChange={e => setAddForm({ ...addForm, userType: e.target.value })}
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                    required
+                  >
+                    <option value="student">Student</option>
+                    <option value="working">Working Professional / Others</option>
+                  </select>
+                </div>
+
+                {addForm.userType === 'student' ? (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>College Name</label>
+                      <input
+                        type="text"
+                        value={addForm.collegeName}
+                        onChange={e => setAddForm({ ...addForm, collegeName: e.target.value })}
+                        placeholder="e.g. IIT Madras"
+                        style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Course</label>
+                      <input
+                        type="text"
+                        value={addForm.course}
+                        onChange={e => setAddForm({ ...addForm, course: e.target.value })}
+                        placeholder="e.g. B.Tech Computer Science"
+                        style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Year of Study</label>
+                      <input
+                        type="text"
+                        value={addForm.year}
+                        onChange={e => setAddForm({ ...addForm, year: e.target.value })}
+                        placeholder="e.g. 3rd Year"
+                        style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>College ID Card (PDF)</label>
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        onChange={e => setAddIdCardFile(e.target.files?.[0] || null)}
+                        style={{ padding: '0.4rem', fontSize: '0.85rem' }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Domain / Industry</label>
+                      <select
+                        value={addForm.domain}
+                        onChange={e => setAddForm({ ...addForm, domain: e.target.value })}
+                        style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                      >
+                        <option value="">Select domain</option>
+                        {DOMAIN_OPTIONS.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Organization</label>
+                      <input
+                        type="text"
+                        value={addForm.organization}
+                        onChange={e => setAddForm({ ...addForm, organization: e.target.value })}
+                        placeholder="e.g. Google Inc"
+                        style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Selected Date (Cohort) *</label>
+                  <select
+                    value={addForm.selectedCohort}
+                    onChange={e => setAddForm({ ...addForm, selectedCohort: e.target.value })}
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                    required
+                  >
+                    <option value="">Select Cohort</option>
+                    {cohortsList.map(c => {
+                      const completed = isCohortCompleted(c);
+                      return (
+                        <option key={c} value={c}>
+                          {c} {completed ? ' (Completed)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Heard From</label>
+                  <select
+                    value={addForm.heardFrom}
+                    onChange={e => setAddForm({ ...addForm, heardFrom: e.target.value, heardFromOther: '', referralName: '' })}
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                  >
+                    <option value="">Select an option</option>
+                    <option value="Social Media">Social Media</option>
+                    <option value="Newspaper">Newspaper</option>
+                    <option value="GKT Employee">GKT Employee</option>
+                    <option value="Others">Others</option>
+                  </select>
+                </div>
+
+                {addForm.heardFrom === 'Others' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Please Specify *</label>
+                    <input
+                      type="text"
+                      value={addForm.heardFromOther}
+                      onChange={e => setAddForm({ ...addForm, heardFromOther: e.target.value })}
+                      placeholder="e.g. Friend, Professor, etc."
+                      style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                      required
+                    />
+                  </div>
+                )}
+
+                {addForm.heardFrom === 'GKT Employee' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Referral *</label>
+                    <select
+                      value={addForm.referralName}
+                      onChange={e => setAddForm({ ...addForm, referralName: e.target.value })}
+                      style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                      required
+                    >
+                      <option value="">Select referral</option>
+                      {referralsList.filter((r: any) => r.isActive !== false).map((r: any) => (
+                        <option key={r.code} value={r.label}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Payment Status</label>
+                  <select
+                    value={addForm.paymentStatus}
+                    onChange={e => setAddForm({ ...addForm, paymentStatus: e.target.value })}
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed (Paid)</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Custom Payment Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={addForm.customPaymentAmount}
+                    onChange={e => setAddForm({ ...addForm, customPaymentAmount: e.target.value })}
+                    placeholder="Default Event Price"
+                    min="0"
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
+                  />
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
-                  onClick={() => { setIsAddModalOpen(false); setAddForm({ fullName: '', email: '', userType: '', referralCode: '' }); }}
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setAddForm({
+                      fullName: '',
+                      email: '',
+                      phone: '',
+                      userType: 'student',
+                      collegeName: '',
+                      course: '',
+                      year: '',
+                      domain: '',
+                      organization: '',
+                      heardFrom: '',
+                      heardFromOther: '',
+                      referralName: '',
+                      referralCode: '',
+                      selectedCohort: cohortsList[0] || 'June 13 & 14, 2026',
+                      paymentStatus: 'pending',
+                      customPaymentAmount: ''
+                    });
+                    setAddIdCardFile(null);
+                  }}
                   style={{ padding: '0.5rem 1rem', border: '1px solid #C8BDB0', borderRadius: 6, background: '#F4EFEA', cursor: 'pointer', color: '#3B2F2F', fontWeight: 600 }}
                 >
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1.5rem', backgroundColor: '#16a34a', borderColor: '#16a34a' }}>
                   Create Registrant
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Upload CSV Modal ── */}
+      {isBulkModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2D9CC', padding: '2rem', width: '90%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginBottom: '0.5rem', color: '#3B2F2F' }}>Bulk Registration (CSV)</h3>
+            <p style={{ fontSize: '0.82rem', color: '#8C7B6B', marginBottom: '1.2rem', lineHeight: '1.4' }}>
+              Upload a CSV file containing multiple registrants. New registrants will automatically be assigned to the current Active Cohort.
+            </p>
+            
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={downloadCSVTemplate}
+              style={{
+                backgroundColor: '#475569',
+                borderColor: '#475569',
+                marginBottom: '1.2rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontSize: '0.85rem',
+                padding: '0.45rem 1rem',
+                width: '100%',
+                justifyContent: 'center'
+              }}
+            >
+              📥 Download CSV Template
+            </button>
+            
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '0.8rem', marginBottom: '1.2rem', fontSize: '0.78rem', color: '#475569' }}>
+              <strong style={{ color: '#0f172a' }}>Expected CSV Column Headers:</strong>
+              <div style={{ fontFamily: 'monospace', marginTop: '0.4rem', background: '#fff', padding: '0.4rem', border: '1px solid #cbd5e1', borderRadius: 4, overflowX: 'auto' }}>
+                fullName,email,phone,userType,collegeName,course,year,domain,organization,heardFrom,referralCode
+              </div>
+              <ul style={{ paddingLeft: '1.2rem', marginTop: '0.4rem', marginBlockEnd: 0 }}>
+                <li><code style={{ background: '#e2e8f0', padding: '1px 3px', borderRadius: 2 }}>userType</code> must be <code style={{ color: '#0369a1' }}>student</code> or <code style={{ color: '#0369a1' }}>working</code>.</li>
+                <li><code style={{ background: '#e2e8f0', padding: '1px 3px', borderRadius: 2 }}>fullName</code>, <code style={{ background: '#e2e8f0', padding: '1px 3px', borderRadius: 2 }}>email</code>, <code style={{ background: '#e2e8f0', padding: '1px 3px', borderRadius: 2 }}>phone</code> and <code style={{ background: '#e2e8f0', padding: '1px 3px', borderRadius: 2 }}>userType</code> are strictly required.</li>
+              </ul>
+            </div>
+
+            <form onSubmit={handleBulkUploadCSV}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1.5rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Select CSV File *</label>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={e => setCsvFile(e.target.files ? e.target.files[0] : null)}
+                  style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fcfaf8' }}
+                  required
+                />
+              </div>
+
+              {bulkResult && (
+                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: '0.85rem' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', color: '#166534', fontWeight: 700 }}>Upload Status</h4>
+                  <p style={{ margin: '0 0 0.25rem 0' }}>Success: <strong style={{ color: '#16a34a' }}>{bulkResult.successCount}</strong></p>
+                  <p style={{ margin: '0 0 0.5rem 0' }}>Failed: <strong style={{ color: '#dc2626' }}>{bulkResult.failCount}</strong></p>
+                  {bulkResult.errors && bulkResult.errors.length > 0 && (
+                    <div style={{ maxHeight: 120, overflowY: 'auto', fontSize: '0.75rem', color: '#b91c1c', background: '#fef2f2', padding: '0.5rem', borderRadius: 4, border: '1px solid #fca5a5' }}>
+                      {bulkResult.errors.map((e: any, i: number) => (
+                        <div key={i}><strong>{e.email}</strong>: {e.error}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsBulkModalOpen(false);
+                    setCsvFile(null);
+                    setBulkResult(null);
+                  }}
+                  style={{ padding: '0.5rem 1rem', border: '1px solid #C8BDB0', borderRadius: 6, background: '#F4EFEA', cursor: 'pointer', color: '#3B2F2F', fontWeight: 600 }}
+                  disabled={bulkUploading}
+                >
+                  Close
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  style={{ padding: '0.5rem 1.5rem', backgroundColor: '#0284c7', borderColor: '#0284c7' }} 
+                  disabled={bulkUploading || !csvFile}
+                >
+                  {bulkUploading ? 'Uploading...' : 'Parse & Upload'}
                 </button>
               </div>
             </form>

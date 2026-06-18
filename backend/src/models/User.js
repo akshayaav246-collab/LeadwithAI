@@ -51,16 +51,18 @@ const userSchema = new mongoose.Schema(
 
     // Registration metadata
     heardFrom: { type: String },
+    salesperson: { type: String, default: null },
+    groupLeaderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     isWaitlisted: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     referralCode: { type: String, default: null },
     selectedCohort: { type: String, default: null },
     isAdminCreated: { type: Boolean, default: false },
 
-    // Feedback for the 4 sessions
+    // Feedback for the sessions/questions
     feedback: [{
       session: { type: String, required: true },
-      rating:  { type: String, enum: ['Excellent', 'Good', 'Average', 'Poor'], required: true },
+      rating:  { type: String, default: '' },
       text:    { type: String, default: '' }
     }],
     isFeedbackSubmitted: { type: Boolean, default: false },
@@ -91,7 +93,14 @@ userSchema.methods.verifyOtp = async function (otpPlain) {
 };
 
 userSchema.virtual('isProfileComplete').get(function () {
-  return !!(this.phone && this.phone.trim());
+  if (!this.phone || !this.phone.trim() || !this.userType) return false;
+  if (this.userType === 'student') {
+    return !!(this.collegeName && this.course && this.year && this.idCardPath);
+  }
+  if (this.userType === 'working') {
+    return !!(this.domain && this.organization);
+  }
+  return false;
 });
 
 module.exports = mongoose.model('User', userSchema, process.env.COLLECTION_NAME || 'users');

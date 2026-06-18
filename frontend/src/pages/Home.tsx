@@ -44,8 +44,9 @@ export function Home() {
             display: 'flex',
             justifyContent: 'center'
           }}>
-            <div style={{ padding: '0.75rem 2rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-              <strong style={{ fontSize: '1.2rem', color: 'var(--color-white)' }}>June 13 & 14, 2026</strong>
+            <div style={{ padding: '0.75rem 2rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '0.25rem' }}>
+              <strong style={{ fontSize: '1.2rem', color: 'var(--color-white)' }}>June 27 &amp; 28, 2026</strong>
+              <span style={{ fontSize: '0.72rem', letterSpacing: '0.06em', fontWeight: 700, color: 'var(--color-sienna)', textTransform: 'uppercase' }}>Online</span>
             </div>
           </div>
 
@@ -170,7 +171,7 @@ export function Home() {
 
                 {/* Certificate visual */}
                 <div className="who-cert-frame" style={{ padding: 0 }}>
-                  <img src={publicAsset("Certificate.png")} alt="Certificate of Completion" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                  <img src={publicAsset("Certificate2.png")} alt="Certificate of Completion" style={{ width: '100%', height: 'auto', display: 'block' }} />
                 </div>
               </div>
             </div>

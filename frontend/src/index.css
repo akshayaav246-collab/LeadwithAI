@@ -2524,10 +2524,10 @@ footer span {
   text-align: center;
 }
 .reg-toggle-btn.active {
-  border-color: var(--color-sienna);
-  background: var(--color-white);
-  color: var(--color-sienna-dark);
-  box-shadow: 0 0 0 3px rgba(59,139,212,0.15);
+  border-color: var(--color-sienna-dark);
+  background: var(--color-amber-deep);
+  color: var(--color-white);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.3);
 }
 .reg-toggle-btn:hover:not(.active) {
   border-color: var(--color-sienna);
@@ -3052,6 +3052,11 @@ footer {
   background: rgba(59,139,212,0.12);
   color: var(--color-sienna-dark);
   border: 1px solid rgba(59,139,212,0.25);
+}
+.badge-verification-pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
 }
 .badge-failed {
   background: rgba(180,52,52,0.08);

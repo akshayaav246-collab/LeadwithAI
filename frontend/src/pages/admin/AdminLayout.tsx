@@ -9,6 +9,7 @@ const AdminEmail = lazy(() => import('./AdminEmail').then(m => ({ default: m.Adm
 const AdminAuditLogs = lazy(() => import('./AdminAuditLogs').then(m => ({ default: m.AdminAuditLogs })));
 const AdminSettings = lazy(() => import('./AdminSettings').then(m => ({ default: m.AdminSettings })));
 const AdminFeedback = lazy(() => import('./AdminFeedback').then(m => ({ default: m.AdminFeedback })));
+const AdminReport = lazy(() => import('./AdminReport').then(m => ({ default: m.AdminReport })));
 
 export function AdminLayout() {
   const [location, setLocation] = useLocation();
@@ -111,6 +112,7 @@ export function AdminLayout() {
             <Route path="/admin/email"      component={AdminEmail}      />
             <Route path="/admin/audit-logs" component={AdminAuditLogs}  />
             <Route path="/admin/settings"   component={AdminSettings}   />
+            <Route path="/admin/report"     component={AdminReport}     />
           </Switch>
         </Suspense>
       </main>

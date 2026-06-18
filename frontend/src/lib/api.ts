@@ -64,8 +64,23 @@ export function changeCohort(token: string, cohort: string) {
   return request<{ message: string; user: any }>('/api/auth/change-cohort', { method: 'POST', body: JSON.stringify({ cohort }) }, token);
 }
 
-export function createAdminUser(token: string, payload: { fullName: string; email: string; userType?: string; referralCode?: string; selectedCohort?: string }) {
-  return request<{ message: string; user: any }>('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) }, token);
+export function addGroupMember(token: string, memberData: FormData) {
+  return request<{ message: string; member: any }>('/api/auth/add-group-member', {
+    method: 'POST',
+    body: memberData
+  }, token);
+}
+
+export function createAdminUser(token: string, payload: any) {
+  const body = payload instanceof FormData ? payload : JSON.stringify(payload);
+  return request<{ message: string; user: any }>('/api/admin/users', { method: 'POST', body }, token);
+}
+
+export function bulkRegister(token: string, users: any[]) {
+  return request<{ message: string; successCount: number; failCount: number; errors: any[] }>('/api/admin/bulk-register', {
+    method: 'POST',
+    body: JSON.stringify({ users })
+  }, token);
 }
 
 // ─── Payment API ─────────────────────────────
@@ -95,7 +110,21 @@ export function addCollege(college: string) {
 }
 
 export function getPublicSettings() {
-  return request<{ feedbackEnabled: boolean; isMaintenanceMode: boolean; availableCohorts?: string[] }>('/api/public/settings');
+  return request<{
+    feedbackEnabled: boolean;
+    feedbackEnabledCohorts?: string[];
+    isMaintenanceMode: boolean;
+    allowProfileGroupAdditions?: boolean;
+    availableCohorts?: string[];
+    cohorts?: string[];
+    activeCohort?: string;
+    salespersons?: string[];
+    referralCodes?: Array<{ code: string; label: string; isActive: boolean }>;
+  }>('/api/public/settings');
+}
+
+export function checkEmailExists(email: string) {
+  return request<{ exists: boolean }>(`/api/auth/check-email?email=${encodeURIComponent(email)}`);
 }
 
 // ─── Admin Auth ───────────────────────────────────────────────
@@ -106,15 +135,31 @@ export function adminLogin(credentials: any) {
 
 // ─── Admin Stats ──────────────────────────────────────────────
 
-export function getAdminStats(token: string) {
+export function getAdminStats(token: string, cohort?: string, source?: string) {
+  const params = [];
+  if (cohort) params.push(`cohort=${encodeURIComponent(cohort)}`);
+  if (source) params.push(`source=${encodeURIComponent(source)}`);
+  const queryStr = params.length > 0 ? `?${params.join('&')}` : '';
   return request<{
     totalUsers: number;
     paidUsers: number;
     unpaidUsers: number;
     totalRevenue: number;
-    referralBreakdown: Record<string, { total: number; students: number; professionals: number }>;
+    studentCount: number;
+    professionalCount: number;
+    paidStudentCount?: number;
+    paidProfessionalCount?: number;
+    waitlistCount: number;
+    referralBreakdown: Record<string, { total: number; students: number; professionals: number; revenue: number }>;
     recentRegistrations: any[];
-  }>('/api/admin/stats', {}, token);
+    heardFromSocialMedia?: number;
+    heardFromNewspaper?: number;
+    heardFromOthers?: number;
+    salespersonReport?: Record<string, { registrations: number; revenue: number }>;
+    collegeReport?: Record<string, { registrations: number; revenue: number }>;
+    organizationReport?: Record<string, { registrations: number; revenue: number }>;
+    countryReport?: Record<string, { registrations: number; revenue: number }>;
+  }>(`/api/admin/stats${queryStr}`, {}, token);
 }
 
 // ─── Admin Users ──────────────────────────────────────────────
@@ -128,8 +173,9 @@ export function getAdminUsers(token: string, params?: Record<string, string | nu
   return request<any>(`/api/admin/users${queryStr}`, {}, token);
 }
 
-export function editAdminUser(token: string, userId: string, updates: Record<string, string>) {
-  return request<{ message: string; user: any }>(`/api/admin/users/${userId}`, { method: 'PATCH', body: JSON.stringify(updates) }, token);
+export function editAdminUser(token: string, userId: string, payload: any) {
+  const body = payload instanceof FormData ? payload : JSON.stringify(payload);
+  return request<{ message: string; user: any }>(`/api/admin/users/${userId}`, { method: 'PATCH', body }, token);
 }
 
 export function toggleUserStatus(token: string, userId: string) {
@@ -193,10 +239,14 @@ export function getAuditLogs(token: string, params?: Record<string, string | num
 export function getAdminSettings(token: string) {
   return request<{
     feedbackEnabled: boolean;
+    feedbackEnabledCohorts?: string[];
     isMaintenanceMode: boolean;
     registrationCap: number;
     referralCodes: { code: string; label: string; isActive: boolean }[];
     activeReminderCohort: string | null;
+    cohorts?: string[];
+    activeCohort?: string;
+    salespersons?: string[];
   }>('/api/admin/settings', {}, token);
 }
 
@@ -220,6 +270,10 @@ export function updateFeedbackSetting(token: string, feedbackEnabled: boolean) {
   return request<{ feedbackEnabled: boolean }>('/api/admin/settings/feedback', { method: 'PATCH', body: JSON.stringify({ feedbackEnabled }) }, token);
 }
 
+export function toggleCohortFeedbackApi(token: string, cohort: string, enabled: boolean) {
+  return request<{ feedbackEnabledCohorts: string[] }>('/api/admin/settings/feedback/cohorts', { method: 'PATCH', body: JSON.stringify({ cohort, enabled }) }, token);
+}
+
 /** @deprecated use updateFeedbackSetting */
 export const updateAdminSettings = updateFeedbackSetting;
 
@@ -229,6 +283,30 @@ export function updateMaintenanceMode(token: string, isMaintenanceMode: boolean)
 
 export function updateRegistrationCap(token: string, registrationCap: number) {
   return request<{ message: string; registrationCap: number }>('/api/admin/settings/cap', { method: 'PATCH', body: JSON.stringify({ registrationCap }) }, token);
+}
+
+export function updateGroupAdditionsSetting(token: string, allowProfileGroupAdditions: boolean) {
+  return request<any>('/api/admin/settings/group-additions', { method: 'PATCH', body: JSON.stringify({ allowProfileGroupAdditions }) }, token);
+}
+
+export function addCohort(token: string, cohort: string) {
+  return request<any>('/api/admin/settings/cohorts', { method: 'POST', body: JSON.stringify({ cohort }) }, token);
+}
+
+export function deleteCohort(token: string, cohort: string) {
+  return request<any>(`/api/admin/settings/cohorts/${encodeURIComponent(cohort)}`, { method: 'DELETE' }, token);
+}
+
+export function updateActiveCohort(token: string, activeCohort: string) {
+  return request<any>('/api/admin/settings/active-cohort', { method: 'PATCH', body: JSON.stringify({ activeCohort }) }, token);
+}
+
+export function addSalesperson(token: string, salesperson: string) {
+  return request<any>('/api/admin/settings/salespersons', { method: 'POST', body: JSON.stringify({ salesperson }) }, token);
+}
+
+export function deleteSalesperson(token: string, name: string) {
+  return request<any>(`/api/admin/settings/salespersons/${encodeURIComponent(name)}`, { method: 'DELETE' }, token);
 }
 
 export function getReferralCodes(token: string) {

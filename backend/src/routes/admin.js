@@ -7,8 +7,26 @@ const { sendCustomBulkEmail, sendProfileApprovedEmail } = require('../utils/emai
 const adminAuth = require('../middleware/adminAuth');
 const auditLogger = require('../middleware/auditLogger');
 const AuditLog = require('../models/AuditLog');
+const fs = require('fs').promises;
 const Joi = require('joi');
 const validate = require('../middleware/validate');
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '../../uploads'));
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `id-${unique}${path.extname(file.originalname)}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
 
 const router = express.Router();
 
@@ -166,18 +184,80 @@ router.get('/audit-logs', adminAuth, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/stats', adminAuth, async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const users = await User.find().select('registeredEvents createdAt userType referralCode isWaitlisted heardFrom');
+    const { cohort = 'all', referral = 'all', source = 'all' } = req.query;
+    const activeSource = source !== 'all' ? source : referral;
+    const query = {};
+    if (cohort !== 'all') {
+      if (cohort === '-') {
+        query.$or = [
+          { selectedCohort: null },
+          { selectedCohort: '' },
+          { selectedCohort: '-' }
+        ];
+      } else {
+        query.selectedCohort = cohort;
+      }
+    }
+    if (activeSource !== 'all') {
+      if (activeSource === '-') {
+        query.$or = [
+          { referralCode: null },
+          { referralCode: '' },
+          { referralCode: '-' }
+        ];
+      } else if (activeSource === 'social media') {
+        query.heardFrom = { $regex: '^social\\s*media$', $options: 'i' };
+        query.$or = [{ referralCode: null }, { referralCode: '' }, { referralCode: '-' }];
+      } else if (activeSource === 'newspaper') {
+        query.heardFrom = { $regex: '^newspaper$', $options: 'i' };
+        query.$or = [{ referralCode: null }, { referralCode: '' }, { referralCode: '-' }];
+      } else if (activeSource === 'gkt employee') {
+        query.heardFrom = { $regex: 'gkt\\s*employee', $options: 'i' };
+        query.$or = [{ referralCode: null }, { referralCode: '' }, { referralCode: '-' }];
+      } else if (activeSource === 'others') {
+        query.$and = [
+          { heardFrom: { $exists: true } },
+          { heardFrom: { $ne: '' } },
+          { heardFrom: { $ne: '-' } },
+          { heardFrom: { $nin: [/social\s*media/i, /newspaper/i, /gkt\s*employee/i] } }
+        ];
+        query.$or = [{ referralCode: null }, { referralCode: '' }, { referralCode: '-' }];
+      } else {
+        const escaped = activeSource.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query.$or = [
+          { referralCode: activeSource },
+          { referralCode: { $regex: new RegExp(escaped, 'i') } }
+        ];
+      }
+    }
+
+    const totalUsers = await User.countDocuments(query);
+    const users = await User.find(query).select('registeredEvents createdAt userType referralCode isWaitlisted heardFrom selectedCohort collegeName organization country salesperson');
 
     let paidUsers = 0;
     let totalRevenue = 0;
     let studentCount = 0;
     let professionalCount = 0;
+    let paidStudentCount = 0;
+    let paidProfessionalCount = 0;
     let waitlistCount = 0;
     let heardFromSocialMedia = 0;
     let heardFromNewspaper = 0;
+    let heardFromGktEmployee = 0;
     let heardFromOthers = 0;
     const referralBreakdown = {};
+
+    const salespersonReport = {};
+    const collegeReport = {};
+    const organizationReport = {};
+    const countryReport = {};
+    const noReferralBreakdown = {
+      'Social Media': { students: 0, professionals: 0, revenue: 0 },
+      'Newspaper':    { students: 0, professionals: 0, revenue: 0 },
+      'Others':       { students: 0, professionals: 0, revenue: 0 }
+    };
+
+    const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
 
     users.forEach(u => {
       if (u.userType === 'student') {
@@ -196,6 +276,8 @@ router.get('/stats', adminAuth, async (req, res) => {
           heardFromSocialMedia++;
         } else if (/newspaper/i.test(h)) {
           heardFromNewspaper++;
+        } else if (/gkt\s*employee/i.test(h)) {
+          heardFromGktEmployee++;
         } else if (h !== '-' && h !== '') {
           heardFromOthers++;
         }
@@ -205,18 +287,147 @@ router.get('/stats', adminAuth, async (req, res) => {
       if (confirmed) {
         paidUsers++;
         totalRevenue += u.userType === 'student' ? 499 : 999;
+        if (u.userType === 'student') {
+          paidStudentCount++;
+        } else {
+          paidProfessionalCount++;
+        }
       }
 
-      if (u.referralCode) {
-        if (!referralBreakdown[u.referralCode]) {
-          referralBreakdown[u.referralCode] = { total: 0, students: 0, professionals: 0 };
+      if (confirmed) {
+        let sourceKey = null;
+        if (u.referralCode && u.referralCode.trim() && u.referralCode !== '-') {
+          sourceKey = u.referralCode.trim();
+        } else if (u.heardFrom) {
+          const h = u.heardFrom.trim();
+          if (/social\s*media/i.test(h)) {
+            sourceKey = 'Social Media';
+          } else if (/newspaper/i.test(h)) {
+            sourceKey = 'Newspaper';
+          } else if (/gkt\s*employee/i.test(h)) {
+            sourceKey = 'GKT Employee';
+          } else if (h !== '-' && h !== '') {
+            sourceKey = 'Others';
+          }
         }
-        referralBreakdown[u.referralCode].total += 1;
+
+        if (sourceKey) {
+          if (!referralBreakdown[sourceKey]) {
+            referralBreakdown[sourceKey] = { total: 0, students: 0, professionals: 0, revenue: 0 };
+          }
+          referralBreakdown[sourceKey].total += 1;
+          if (u.userType === 'student') {
+            referralBreakdown[sourceKey].students += 1;
+          } else {
+            referralBreakdown[sourceKey].professionals += 1;
+          }
+          referralBreakdown[sourceKey].revenue += u.userType === 'student' ? 499 : 999;
+        }
+      }
+
+      // Salesperson report
+      if (u.salesperson) {
+        const sp = u.salesperson.trim();
+        if (confirmed) {
+          if (!salespersonReport[sp]) {
+            salespersonReport[sp] = { registrations: 0, revenue: 0 };
+          }
+          salespersonReport[sp].registrations++;
+          salespersonReport[sp].revenue += u.userType === 'student' ? 499 : 999;
+        }
+      }
+
+      // Determine source bucket for this user (shared helper)
+      const _getSourceBucket = (user) => {
+        if (user.referralCode && user.referralCode.trim()) return 'Referral';
+        const h = (user.heardFrom || '').trim();
+        if (/social\s*media/i.test(h)) return 'Social Media';
+        if (/newspaper/i.test(h)) return 'Newspaper';
+        return 'Others';
+      };
+      const _sourceBucket = _getSourceBucket(u);
+
+      // College report
+      if (u.userType === 'student' && u.collegeName) {
+        const colName = u.collegeName.trim();
+        if (colName && colName !== '-') {
+          if (confirmed) {
+            if (!collegeReport[colName]) {
+              collegeReport[colName] = { registrations: 0, revenue: 0, byReferral: {}, bySource: {} };
+            }
+            collegeReport[colName].registrations++;
+            collegeReport[colName].revenue += 499;
+            // bySource
+            if (!collegeReport[colName].bySource[_sourceBucket]) {
+              collegeReport[colName].bySource[_sourceBucket] = { count: 0, revenue: 0 };
+            }
+            collegeReport[colName].bySource[_sourceBucket].count++;
+            collegeReport[colName].bySource[_sourceBucket].revenue += 499;
+            // byReferral
+            if (u.referralCode && u.referralCode.trim()) {
+              const refKey = u.referralCode.trim();
+              if (!collegeReport[colName].byReferral[refKey]) {
+                collegeReport[colName].byReferral[refKey] = { count: 0, revenue: 0 };
+              }
+              collegeReport[colName].byReferral[refKey].count++;
+              collegeReport[colName].byReferral[refKey].revenue += 499;
+            }
+          }
+        }
+      }
+
+      // Organization report
+      if (u.userType === 'working' && u.organization) {
+        const orgName = u.organization.trim();
+        if (orgName && orgName !== '-') {
+          if (confirmed) {
+            if (!organizationReport[orgName]) {
+              organizationReport[orgName] = { registrations: 0, revenue: 0, byReferral: {}, bySource: {} };
+            }
+            organizationReport[orgName].registrations++;
+            organizationReport[orgName].revenue += 999;
+            // bySource
+            if (!organizationReport[orgName].bySource[_sourceBucket]) {
+              organizationReport[orgName].bySource[_sourceBucket] = { count: 0, revenue: 0 };
+            }
+            organizationReport[orgName].bySource[_sourceBucket].count++;
+            organizationReport[orgName].bySource[_sourceBucket].revenue += 999;
+            // byReferral
+            if (u.referralCode && u.referralCode.trim()) {
+              const refKey = u.referralCode.trim();
+              if (!organizationReport[orgName].byReferral[refKey]) {
+                organizationReport[orgName].byReferral[refKey] = { count: 0, revenue: 0 };
+              }
+              organizationReport[orgName].byReferral[refKey].count++;
+              organizationReport[orgName].byReferral[refKey].revenue += 999;
+            }
+          }
+        }
+      }
+
+      // noReferralBreakdown — paid users with NO referral code
+      if (confirmed && (!u.referralCode || !u.referralCode.trim())) {
+        const bucket = _sourceBucket === 'Referral' ? 'Others' : _sourceBucket; // safety guard
+        if (!noReferralBreakdown[bucket]) {
+          noReferralBreakdown[bucket] = { students: 0, professionals: 0, revenue: 0 };
+        }
+        const amt = u.userType === 'student' ? 499 : 999;
         if (u.userType === 'student') {
-          referralBreakdown[u.referralCode].students += 1;
+          noReferralBreakdown[bucket].students++;
         } else {
-          referralBreakdown[u.referralCode].professionals += 1;
+          noReferralBreakdown[bucket].professionals++;
         }
+        noReferralBreakdown[bucket].revenue += amt;
+      }
+
+      // Country report
+      const countryName = u.country || 'India';
+      if (confirmed) {
+        if (!countryReport[countryName]) {
+          countryReport[countryName] = { registrations: 0, revenue: 0 };
+        }
+        countryReport[countryName].registrations++;
+        countryReport[countryName].revenue += u.userType === 'student' ? 499 : 999;
       }
     });
 
@@ -229,11 +440,19 @@ router.get('/stats', adminAuth, async (req, res) => {
       totalRevenue,
       studentCount,
       professionalCount,
+      paidStudentCount,
+      paidProfessionalCount,
       waitlistCount,
       referralBreakdown,
       heardFromSocialMedia,
       heardFromNewspaper,
-      heardFromOthers
+      heardFromGktEmployee,
+      heardFromOthers,
+      salespersonReport,
+      collegeReport,
+      organizationReport,
+      countryReport,
+      noReferralBreakdown
     });
   } catch (err) {
     console.error('Admin stats error:', err);
@@ -260,21 +479,25 @@ router.get('/users', adminAuth, async (req, res) => {
       sortOrder = 'desc',
       filterProfile = 'all',
       filterHeardFrom = 'all',
+      filterSource = 'all',
       filterCohort = 'all',
       filterFeedback = 'all',
       filterCertSent = 'all'
     } = req.query;
 
     const query = {};
+    const andConditions = [];
 
     // Search
     if (search) {
-      query.$or = [
-        { fullName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { collegeName: { $regex: search, $options: 'i' } },
-        { organization: { $regex: search, $options: 'i' } }
-      ];
+      andConditions.push({
+        $or: [
+          { fullName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { collegeName: { $regex: search, $options: 'i' } },
+          { organization: { $regex: search, $options: 'i' } }
+        ]
+      });
     }
 
     // Filter Type
@@ -288,8 +511,59 @@ router.get('/users', adminAuth, async (req, res) => {
     if (filterActive === 'active') query.isActive = { $ne: false };
     else if (filterActive === 'inactive') query.isActive = false;
 
-    // Filter Referral
-    if (filterReferral !== 'all') query.referralCode = filterReferral;
+    // Filter Referral and Heard From consolidated (with multiple sources support)
+    const consolidatedSource = filterSource !== 'all' ? filterSource : (filterReferral !== 'all' ? filterReferral : filterHeardFrom);
+    if (consolidatedSource && consolidatedSource !== 'all') {
+      const sources = consolidatedSource.split(',').map(s => s.trim()).filter(Boolean);
+      if (sources.length > 0) {
+        const sourceConditions = sources.map(src => {
+          if (src === '-') {
+            return {
+              $or: [
+                { referralCode: null },
+                { referralCode: '' },
+                { referralCode: '-' }
+              ]
+            };
+          } else if (src.toLowerCase() === 'social media') {
+            return {
+              heardFrom: { $regex: /^social\s*media$/i },
+              $or: [{ referralCode: null }, { referralCode: '' }, { referralCode: '-' }]
+            };
+          } else if (src.toLowerCase() === 'newspaper') {
+            return {
+              heardFrom: { $regex: /^newspaper$/i },
+              $or: [{ referralCode: null }, { referralCode: '' }, { referralCode: '-' }]
+            };
+          } else if (src.toLowerCase() === 'gkt employee') {
+            return {
+              heardFrom: { $regex: /gkt\s*employee/i },
+              $or: [{ referralCode: null }, { referralCode: '' }, { referralCode: '-' }]
+            };
+          } else if (src.toLowerCase() === 'others') {
+            return {
+              heardFrom: {
+                $exists: true,
+                $ne: '',
+                $nin: [/social\s*media/i, /newspaper/i, /gkt\s*employee/i, /-/]
+              },
+              $or: [{ referralCode: null }, { referralCode: '' }, { referralCode: '-' }]
+            };
+          } else {
+            const escaped = src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return {
+              $or: [
+                { referralCode: src },
+                { referralCode: { $regex: new RegExp(escaped, 'i') } }
+              ]
+            };
+          }
+        });
+        if (sourceConditions.length > 0) {
+          andConditions.push({ $or: sourceConditions });
+        }
+      }
+    }
 
     // Filter Paid
     if (filterPaid === 'paid') {
@@ -302,26 +576,24 @@ router.get('/users', adminAuth, async (req, res) => {
     if (filterProfile === 'complete') {
       query.phone = { $exists: true, $ne: '' };
     } else if (filterProfile === 'incomplete') {
-      query.$or = [{ phone: { $exists: false } }, { phone: '' }];
-    }
-
-    // Filter Heard From
-    if (filterHeardFrom === 'social media') {
-      query.heardFrom = { $regex: '^social\\s*media$', $options: 'i' };
-    } else if (filterHeardFrom === 'newspaper') {
-      query.heardFrom = { $regex: '^newspaper$', $options: 'i' };
-    } else if (filterHeardFrom === 'others') {
-      query.$and = [
-        { heardFrom: { $exists: true } },
-        { heardFrom: { $ne: '' } },
-        { heardFrom: { $ne: '-' } },
-        { heardFrom: { $nin: [/social\s*media/i, /newspaper/i] } }
-      ];
+      andConditions.push({
+        $or: [{ phone: { $exists: false } }, { phone: '' }]
+      });
     }
 
     // Filter Cohort Date
     if (filterCohort !== 'all') {
-      query.selectedCohort = filterCohort;
+      if (filterCohort === '-') {
+        andConditions.push({
+          $or: [
+            { selectedCohort: null },
+            { selectedCohort: '' },
+            { selectedCohort: '-' }
+          ]
+        });
+      } else {
+        query.selectedCohort = filterCohort;
+      }
     }
 
     // Filter Feedback Status
@@ -336,6 +608,10 @@ router.get('/users', adminAuth, async (req, res) => {
       query.isCertificateSent = true;
     } else if (filterCertSent === 'not_sent') {
       query.isCertificateSent = { $ne: true };
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
     }
 
     const isExport = exportCsv === 'true';
@@ -366,6 +642,7 @@ router.get('/users', adminAuth, async (req, res) => {
         isWaitlisted: u.isWaitlisted || false,
         isActive:     u.isActive !== false,
         referralCode: u.referralCode || '-',
+        salesperson:  u.salesperson || null,
         // Student fields
         collegeName:  u.collegeName  || '-',
         course:       u.course       || '-',
@@ -418,57 +695,180 @@ router.get('/users', adminAuth, async (req, res) => {
 const createRegistrantSchema = Joi.object({
   fullName: Joi.string().required(),
   email: Joi.string().email().required(),
-  userType: Joi.string().valid('student', 'working').optional(),
+  userType: Joi.string().valid('student', 'working').required(),
+  phone: Joi.string().allow('', null).optional(),
+  collegeName: Joi.string().allow('', null).optional(),
+  course: Joi.string().allow('', null).optional(),
+  year: Joi.string().allow('', null).optional(),
+  domain: Joi.string().allow('', null).optional(),
+  organization: Joi.string().allow('', null).optional(),
   referralCode: Joi.string().allow('', null).optional(),
-  selectedCohort: Joi.string().valid(
-    'June 13 & 14, 2026'
-  ).allow('', null).optional()
+  selectedCohort: Joi.string().required(),
+  paymentStatus: Joi.string().valid('pending', 'confirmed').default('pending').optional(),
+  customPaymentAmount: Joi.number().min(0).optional(),
+  heardFrom: Joi.string().allow('', null).optional(),
+  heardFromOther: Joi.string().allow('', null).optional(),
+  referralName: Joi.string().allow('', null).optional(),
 });
 
-router.post('/users', adminAuth, validate(createRegistrantSchema), async (req, res) => {
+router.post('/users', adminAuth, upload.single('idCard'), validate(createRegistrantSchema), async (req, res) => {
   try {
-    const { fullName, email, userType, referralCode, selectedCohort } = req.body;
+    const {
+      fullName,
+      email,
+      userType,
+      phone,
+      collegeName,
+      course,
+      year,
+      domain,
+      organization,
+      referralCode,
+      selectedCohort,
+      paymentStatus,
+      customPaymentAmount,
+      heardFrom,
+      heardFromOther,
+      referralName,
+    } = req.body;
 
     // Check duplicate (case-insensitive email)
     const existing = await User.findOne({ email: email.toLowerCase().trim() });
     if (existing) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(409).json({ error: 'A user with this email address already exists.' });
     }
 
-    // Resolve referral code
+    const settings = await Settings.getSingleton();
+
+    // Resolve referral code & salesperson
     let mappedReferral = null;
+    let finalSalesperson = null;
+
     if (referralCode) {
-      const settings = await Settings.getSingleton();
       const activeReferrals = settings.referralCodes.filter(r => r.isActive);
       const match = activeReferrals.find(r => r.code === referralCode.toLowerCase().trim());
       mappedReferral = match ? match.label : referralCode.trim();
     }
 
+    let finalHeardFrom = heardFrom?.trim() || 'Admin Assisted Registration';
+    if (finalHeardFrom === 'Others') {
+      finalHeardFrom = heardFromOther?.trim() || 'Others';
+    }
+
+    if (heardFrom === 'GKT Employee') {
+      finalSalesperson = referralName?.trim() || null;
+      if (finalSalesperson) {
+        const activeReferrals = settings.referralCodes ? settings.referralCodes.filter(r => r.isActive) : [];
+        const matchedRef = activeReferrals.find(r => r.label === finalSalesperson);
+        if (matchedRef) {
+          mappedReferral = matchedRef.label;
+        }
+      }
+    }
+
     const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
+    const eventEntry = {
+      eventName: EVENT_NAME,
+      paymentStatus: paymentStatus || 'pending',
+      paymentMethod: 'razorpay',
+    };
+    if (paymentStatus === 'confirmed') {
+      eventEntry.razorpayPaymentId = 'manual_' + Date.now();
+    }
+
     const userData = {
       fullName: fullName.trim(),
       email: email.toLowerCase().trim(),
-      heardFrom: 'Admin Assisted Registration',
+      phone: phone?.trim() || undefined,
+      userType,
+      heardFrom: finalHeardFrom,
       referralCode: mappedReferral,
+      salesperson: finalSalesperson,
       selectedCohort: selectedCohort || null,
       isAdminCreated: true,
-      registeredEvents: [{
-        eventName: EVENT_NAME,
-        paymentStatus: 'pending'
-      }]
+      registeredEvents: [eventEntry]
     };
 
-    if (userType) {
-      userData.userType = userType;
+    if (userType === 'student') {
+      userData.collegeName = collegeName?.trim() || undefined;
+      userData.course = course?.trim() || undefined;
+      userData.year = year?.trim() || undefined;
+      if (req.file) {
+        userData.idCardPath = req.file.filename;
+      }
+    } else {
+      userData.domain = domain?.trim() || undefined;
+      userData.organization = organization?.trim() || undefined;
     }
 
     const user = await User.create(userData);
 
+    // Audit price override
+    if (customPaymentAmount !== undefined) {
+      await AuditLog.create({
+        adminId: req.adminId,
+        action: 'PRICE_OVERRIDE',
+        target: email.toLowerCase().trim(),
+        details: `Custom payment amount of ₹${customPaymentAmount} set by admin manually creating registrant.`,
+      });
+    }
+
+    // Register for Zoom if confirmed
+    if (paymentStatus === 'confirmed') {
+      let zoomJoinUrl = null;
+      try {
+        const { registerForWebinar } = require('../utils/zoom');
+        const [firstName, ...lastNameParts] = user.fullName.split(' ');
+        const joinUrl = await registerForWebinar(user.email, firstName, lastNameParts.join(' '), selectedCohort);
+        zoomJoinUrl = joinUrl;
+        
+        await User.updateOne(
+          { _id: user._id, 'registeredEvents.eventName': EVENT_NAME },
+          { 
+            $set: { 
+              'registeredEvents.$.zoomJoinUrl': joinUrl,
+              'registeredEvents.$.zoomRegistrationStatus': 'success'
+            } 
+          }
+        );
+      } catch (zoomErr) {
+        console.error('Admin manual confirm zoom error:', zoomErr);
+        await User.updateOne(
+          { _id: user._id, 'registeredEvents.eventName': EVENT_NAME },
+          { $set: { 'registeredEvents.$.zoomRegistrationStatus': 'failed' } }
+        );
+      }
+
+      // Send payment confirmation email (non-blocking)
+      const razorpayPaymentId = eventEntry.razorpayPaymentId || ('manual_' + Date.now());
+      const { sendPaymentConfirmationEmail } = require('../utils/email');
+      
+      User.findById(user._id)
+        .then(async (updatedUser) => {
+          if (updatedUser) {
+            await sendPaymentConfirmationEmail(updatedUser, EVENT_NAME, razorpayPaymentId, zoomJoinUrl);
+            await User.updateOne(
+              { _id: updatedUser._id, 'registeredEvents.eventName': EVENT_NAME },
+              { $set: { 'registeredEvents.$.emailConfirmationStatus': 'success' } }
+            );
+          }
+        })
+        .catch(async (err) => {
+          console.error('Admin manual creation email failed:', err);
+          await User.updateOne(
+            { _id: user._id, 'registeredEvents.eventName': EVENT_NAME },
+            { $set: { 'registeredEvents.$.emailConfirmationStatus': 'failed' } }
+          );
+        });
+    }
+
     res.locals.auditTarget = user.email;
     res.locals.auditDetails = {
       fullName: user.fullName,
-      userType: userType || 'unspecified',
-      selectedCohort: user.selectedCohort
+      userType,
+      selectedCohort: user.selectedCohort,
+      customPaymentAmount,
     };
 
     return res.status(201).json({
@@ -510,6 +910,8 @@ router.get('/users/:id', adminAuth, async (req, res) => {
       heardFrom:    user.heardFrom || '-',
       isWaitlisted: user.isWaitlisted || false,
       isActive:     user.isActive !== false,
+      referralCode: user.referralCode || null,
+      salesperson:  user.salesperson || null,
       // Student fields
       collegeName:  user.collegeName  || '-',
       course:       user.course       || '-',
@@ -539,29 +941,35 @@ router.get('/users/:id', adminAuth, async (req, res) => {
 // Edit user fields
 // ─────────────────────────────────────────────
 const editUserSchema = Joi.object({
-  fullName:     Joi.string().optional(),
-  phone:        Joi.string().optional(),
-  collegeName:  Joi.string().allow('', null).optional(),
-  course:       Joi.string().allow('', null).optional(),
-  year:         Joi.string().allow('', null).optional(),
-  domain:       Joi.string().allow('', null).optional(),
-  organization: Joi.string().allow('', null).optional(),
-  heardFrom:    Joi.string().optional(),
-  referralCode: Joi.string().allow('', null).optional(),
-  country:      Joi.string().allow('', null).optional(),
-  selectedCohort: Joi.string().valid(
-    'June 13 & 14, 2026'
-  ).allow('', null).optional()
+  fullName:       Joi.string().optional(),
+  phone:          Joi.string().allow('', null).optional(),
+  collegeName:    Joi.string().allow('', null).optional(),
+  course:         Joi.string().allow('', null).optional(),
+  year:           Joi.string().allow('', null).optional(),
+  domain:         Joi.string().allow('', null).optional(),
+  organization:   Joi.string().allow('', null).optional(),
+  heardFrom:      Joi.string().allow('', null).optional(),
+  heardFromOther: Joi.string().allow('', null).optional(),
+  referralName:   Joi.string().allow('', null).optional(),
+  referralCode:   Joi.string().allow('', null).optional(),
+  country:        Joi.string().allow('', null).optional(),
+  selectedCohort: Joi.string().allow('', null).optional()
 });
 
-router.patch('/users/:id', adminAuth, validate(editUserSchema), async (req, res) => {
+router.patch('/users/:id', adminAuth, upload.single('idCard'), validate(editUserSchema), async (req, res) => {
   try {
-    const allowedFields = ['fullName', 'phone', 'collegeName', 'course', 'year', 'domain', 'organization', 'heardFrom', 'selectedCohort', 'country'];
+    const allowedFields = ['fullName', 'phone', 'collegeName', 'course', 'year', 'domain', 'organization', 'selectedCohort', 'country'];
     const updates = {};
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     }
 
+    // Handle ID Card file upload
+    if (req.file) {
+      updates.idCardPath = req.file.filename;
+    }
+
+    // Handle referralCode (direct setting/override) if provided
     if (req.body.referralCode !== undefined) {
       let mappedReferral = null;
       if (req.body.referralCode && req.body.referralCode.trim() !== '') {
@@ -571,6 +979,40 @@ router.patch('/users/:id', adminAuth, validate(editUserSchema), async (req, res)
         mappedReferral = match ? match.label : req.body.referralCode.trim();
       }
       updates.referralCode = mappedReferral;
+    }
+
+    // Resolve heardFrom details if heardFrom field is provided
+    if (req.body.heardFrom !== undefined) {
+      const settings = await Settings.getSingleton();
+      const activeReferrals = settings.referralCodes.filter(r => r.isActive);
+
+      let finalHeardFrom = req.body.heardFrom?.trim() || '';
+      let finalSalesperson = null;
+      let finalReferralCode = null;
+
+      if (finalHeardFrom === 'Others') {
+        finalHeardFrom = req.body.heardFromOther?.trim() || 'Others';
+      } else if (req.body.heardFrom === 'GKT Employee') {
+        finalSalesperson = req.body.referralName?.trim() || null;
+        if (finalSalesperson) {
+          // Auto-assign: find the referral code whose label matches the selected salesperson
+          const matchedRef = activeReferrals.find(r => r.label === finalSalesperson);
+          if (matchedRef) {
+            finalReferralCode = matchedRef.label;
+          }
+        }
+        finalHeardFrom = 'GKT Employee';
+      }
+
+      updates.heardFrom = finalHeardFrom;
+      updates.salesperson = finalSalesperson;
+      if (req.body.heardFrom === 'GKT Employee' && finalReferralCode) {
+        updates.referralCode = finalReferralCode;
+      } else if (req.body.heardFrom !== 'GKT Employee' && req.body.referralCode === undefined) {
+        // Clear referral/salesperson if it's no longer GKT Employee and no referral code is supplied
+        updates.salesperson = null;
+        updates.referralCode = null;
+      }
     }
 
     const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true }).select('-otpHash -otpExpiry');
@@ -698,6 +1140,8 @@ router.post('/users/:id/confirm-payment', adminAuth, validate(confirmPaymentSche
     }
 
     await user.save();
+
+
 
     // Send confirmation email (non-blocking)
     const { sendPaymentConfirmationEmail } = require('../utils/email');
@@ -1097,6 +1541,37 @@ router.patch('/settings/feedback', adminAuth, validate(feedbackSettingsSchema), 
 });
 
 // ─────────────────────────────────────────────
+// PATCH /api/admin/settings/feedback/cohorts
+// Toggle feedback status for a specific cohort
+// ─────────────────────────────────────────────
+const feedbackCohortSchema = Joi.object({
+  cohort: Joi.string().required(),
+  enabled: Joi.boolean().required()
+});
+
+router.patch('/settings/feedback/cohorts', adminAuth, validate(feedbackCohortSchema), async (req, res) => {
+  try {
+    const { cohort, enabled } = req.body;
+    const settings = await Settings.getSingleton();
+    if (!settings.feedbackEnabledCohorts) {
+      settings.feedbackEnabledCohorts = [];
+    }
+    if (enabled) {
+      if (!settings.feedbackEnabledCohorts.includes(cohort)) {
+        settings.feedbackEnabledCohorts.push(cohort);
+      }
+    } else {
+      settings.feedbackEnabledCohorts = settings.feedbackEnabledCohorts.filter(c => c !== cohort);
+    }
+    await settings.save();
+    res.json(settings);
+  } catch (err) {
+    console.error('Update cohort feedback error:', err);
+    res.status(500).json({ error: 'Failed to update cohort feedback.' });
+  }
+});
+
+// ─────────────────────────────────────────────
 // PATCH /api/admin/settings/maintenance
 // Toggle maintenance mode
 // ─────────────────────────────────────────────
@@ -1133,6 +1608,26 @@ router.patch('/settings/cap', adminAuth, validate(capSchema), async (req, res) =
   } catch (err) {
     console.error('PATCH /api/admin/settings/cap error:', err);
     res.status(500).json({ error: 'Failed to update registration cap' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// PATCH /api/admin/settings/group-additions
+// Toggle allowing profile group additions
+// ─────────────────────────────────────────────
+const groupAdditionsSchema = Joi.object({
+  allowProfileGroupAdditions: Joi.boolean().required()
+});
+
+router.patch('/settings/group-additions', adminAuth, validate(groupAdditionsSchema), async (req, res) => {
+  try {
+    const settings = await Settings.getSingleton();
+    settings.allowProfileGroupAdditions = req.body.allowProfileGroupAdditions;
+    await settings.save();
+    res.json(settings);
+  } catch (err) {
+    console.error('PATCH /api/admin/settings/group-additions error:', err);
+    res.status(500).json({ error: 'Failed to update group additions setting' });
   }
 });
 
@@ -1258,52 +1753,208 @@ router.delete('/settings/referrals/:code', adminAuth, async (req, res) => {
   }
 });
 // ─────────────────────────────────────────────
-// POST /api/admin/settings/send-reminders
-// Trigger / Schedule reminders for upcoming cohort
+// POST /api/admin/settings/cohorts
+// Add a cohort
 // ─────────────────────────────────────────────
-router.post('/settings/send-reminders', adminAuth, async (req, res) => {
+const addCohortSchema = Joi.object({
+  cohort: Joi.string().required()
+});
+router.post('/settings/cohorts', adminAuth, validate(addCohortSchema), async (req, res) => {
   try {
+    const { cohort } = req.body;
     const settings = await Settings.getSingleton();
-
-    settings.activeReminderCohort = 'June 13 & 14, 2026';
+    if (settings.cohorts.includes(cohort)) {
+      return res.status(400).json({ error: 'Cohort date already exists.' });
+    }
+    settings.cohorts.push(cohort);
     await settings.save();
-
-    res.locals.auditDetails = {
-      cohort: 'June 13 & 14, 2026',
-      action: 'Reminder Schedule Activated'
-    };
-
-    return res.json({
-      message: 'Cohort reminders successfully scheduled for June 13 & 14, 2026. Day 1 email will be sent on June 12 at 10:00 AM IST and Day 2 email will be sent on June 13 at 6:30 PM IST.',
-      cohort: 'June 13 & 14, 2026',
-      activeReminderCohort: 'June 13 & 14, 2026'
-    });
+    return res.json(settings);
   } catch (err) {
-    console.error('POST /api/admin/settings/send-reminders error:', err);
-    res.status(500).json({ error: 'Failed to schedule reminders: ' + err.message });
+    console.error('Add cohort error:', err);
+    res.status(500).json({ error: 'Failed to add cohort.' });
   }
 });
 
-// POST /api/admin/settings/cancel-reminders
-// Deactivate / cancel reminders for upcoming cohort
-router.post('/settings/cancel-reminders', adminAuth, async (req, res) => {
+// ─────────────────────────────────────────────
+// DELETE /api/admin/settings/cohorts/:cohort
+// Delete a cohort
+// ─────────────────────────────────────────────
+router.delete('/settings/cohorts/:cohort', adminAuth, async (req, res) => {
   try {
+    const { cohort } = req.params;
     const settings = await Settings.getSingleton();
-
-    settings.activeReminderCohort = null;
+    settings.cohorts = settings.cohorts.filter(c => c !== cohort);
+    if (settings.activeCohort === cohort) {
+      settings.activeCohort = settings.cohorts[0] || null;
+    }
     await settings.save();
+    return res.json(settings);
+  } catch (err) {
+    console.error('Delete cohort error:', err);
+    res.status(500).json({ error: 'Failed to delete cohort.' });
+  }
+});
 
+// ─────────────────────────────────────────────
+// PATCH /api/admin/settings/active-cohort
+// Update active cohort
+// ─────────────────────────────────────────────
+const activeCohortSchema = Joi.object({
+  activeCohort: Joi.string().required()
+});
+router.patch('/settings/active-cohort', adminAuth, validate(activeCohortSchema), async (req, res) => {
+  try {
+    const { activeCohort } = req.body;
+    const settings = await Settings.getSingleton();
+    if (!settings.cohorts.includes(activeCohort)) {
+      return res.status(400).json({ error: 'Selected cohort must exist first.' });
+    }
+    settings.activeCohort = activeCohort;
+    await settings.save();
+    return res.json(settings);
+  } catch (err) {
+    console.error('Update active cohort error:', err);
+    res.status(500).json({ error: 'Failed to update active cohort.' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/admin/settings/salespersons
+// Add active salesperson
+// ─────────────────────────────────────────────
+const addSalespersonSchema = Joi.object({
+  salesperson: Joi.string().required()
+});
+router.post('/settings/salespersons', adminAuth, validate(addSalespersonSchema), async (req, res) => {
+  try {
+    const { salesperson } = req.body;
+    const settings = await Settings.getSingleton();
+    if (settings.salespersons.includes(salesperson.trim())) {
+      return res.status(400).json({ error: 'Salesperson already exists.' });
+    }
+    settings.salespersons.push(salesperson.trim());
+    await settings.save();
+    return res.json(settings);
+  } catch (err) {
+    console.error('Add salesperson error:', err);
+    res.status(500).json({ error: 'Failed to add salesperson.' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// DELETE /api/admin/settings/salespersons/:name
+// Delete salesperson
+// ─────────────────────────────────────────────
+router.delete('/settings/salespersons/:name', adminAuth, async (req, res) => {
+  try {
+    const { name } = req.params;
+    const settings = await Settings.getSingleton();
+    settings.salespersons = settings.salespersons.filter(s => s !== name);
+    await settings.save();
+    return res.json(settings);
+  } catch (err) {
+    console.error('Delete salesperson error:', err);
+    res.status(500).json({ error: 'Failed to delete salesperson.' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/admin/bulk-register
+// Bulk registration via JSON array parsed from CSV
+// ─────────────────────────────────────────────
+const bulkRegisterSchema = Joi.object({
+  users: Joi.array().items(Joi.object({
+    fullName: Joi.string().required(),
+    email: Joi.string().email().required(),
+    phone: Joi.string().required(),
+    userType: Joi.string().valid('student', 'working').required(),
+    collegeName: Joi.string().allow('', null).optional(),
+    course: Joi.string().allow('', null).optional(),
+    year: Joi.string().allow('', null).optional(),
+    domain: Joi.string().allow('', null).optional(),
+    organization: Joi.string().allow('', null).optional(),
+    heardFrom: Joi.string().allow('', null).optional(),
+    referralCode: Joi.string().allow('', null).optional(),
+  })).min(1).required()
+});
+
+router.post('/bulk-register', adminAuth, validate(bulkRegisterSchema), async (req, res) => {
+  try {
+    const { users } = req.body;
+    const settings = await Settings.getSingleton();
+    const cohortToRegister = settings.activeCohort || 'June 13 & 14, 2026';
+    const EVENT_NAME = 'Lead with AI: Adopt, Implement and Transform';
+
+    const results = {
+      successCount: 0,
+      failCount: 0,
+      errors: []
+    };
+
+    for (const u of users) {
+      try {
+        const emailLower = u.email.toLowerCase().trim();
+        const existing = await User.findOne({ email: emailLower });
+        if (existing) {
+          results.failCount++;
+          results.errors.push({ email: u.email, error: 'User already exists' });
+          continue;
+        }
+
+        // Resolve referral code
+        let mappedReferral = null;
+        if (u.referralCode) {
+          const match = settings.referralCodes.find(r => r.code === u.referralCode.toLowerCase().trim());
+          mappedReferral = match ? match.label : u.referralCode.trim();
+        }
+
+        const userData = {
+          fullName: u.fullName.trim(),
+          email: emailLower,
+          phone: u.phone?.trim() || undefined,
+          userType: u.userType,
+          heardFrom: u.heardFrom?.trim() || 'Admin Bulk Upload',
+          referralCode: mappedReferral,
+          selectedCohort: cohortToRegister,
+          isAdminCreated: true,
+          registeredEvents: [{
+            eventName: EVENT_NAME,
+            paymentStatus: 'pending'
+          }]
+        };
+
+        if (u.userType === 'student') {
+          userData.collegeName = u.collegeName?.trim();
+          userData.course = u.course?.trim();
+          userData.year = u.year?.trim();
+        } else {
+          userData.domain = u.domain?.trim();
+          userData.organization = u.organization?.trim();
+        }
+
+        await User.create(userData);
+        results.successCount++;
+      } catch (err) {
+        console.error(`Bulk upload failed for ${u.email}:`, err);
+        results.failCount++;
+        results.errors.push({ email: u.email, error: err.message });
+      }
+    }
+
+    res.locals.auditTarget = 'bulk-registration';
     res.locals.auditDetails = {
-      action: 'Reminder Schedule Cancelled'
+      uploaded_count: users.length,
+      successCount: results.successCount,
+      failCount: results.failCount
     };
 
     return res.json({
-      message: 'Cohort reminders schedule successfully cancelled.',
-      activeReminderCohort: null
+      message: `Bulk registration completed: ${results.successCount} succeeded, ${results.failCount} failed.`,
+      ...results
     });
   } catch (err) {
-    console.error('POST /api/admin/settings/cancel-reminders error:', err);
-    res.status(500).json({ error: 'Failed to cancel reminders: ' + err.message });
+    console.error('Bulk registration main error:', err);
+    res.status(500).json({ error: 'Failed to process bulk registration.' });
   }
 });
 // ─────────────────────────────────────────────
@@ -1358,12 +2009,14 @@ router.post('/send-certificates', adminAuth, async (req, res) => {
         query.heardFrom = { $regex: '^social\\s*media$', $options: 'i' };
       } else if (filterHeardFrom === 'newspaper') {
         query.heardFrom = { $regex: '^newspaper$', $options: 'i' };
+      } else if (filterHeardFrom === 'gkt employee') {
+        query.heardFrom = { $regex: 'gkt\\s*employee', $options: 'i' };
       } else if (filterHeardFrom === 'others') {
         query.$and = [
           { heardFrom: { $exists: true } },
           { heardFrom: { $ne: '' } },
           { heardFrom: { $ne: '-' } },
-          { heardFrom: { $nin: [/social\s*media/i, /newspaper/i] } }
+          { heardFrom: { $nin: [/social\s*media/i, /newspaper/i, /gkt\s*employee/i] } }
         ];
       }
 

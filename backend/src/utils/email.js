@@ -134,23 +134,42 @@ function getHtmlTemplate({ greeting, contentHtml, otpCode }) {
   `;
 }
 
+async function getCohortDateForUser(user) {
+  if (user && user.selectedCohort) return user.selectedCohort;
+  try {
+    const Settings = require('../models/Settings');
+    const settings = await Settings.findOne();
+    if (settings && settings.activeCohort) return settings.activeCohort;
+  } catch (err) {
+    console.error('getCohortDateForUser error:', err);
+  }
+  return 'June 13 & 14, 2026';
+}
+
 // Helper: Map selectedCohort label to .ics start and end timestamps in UTC
 function getIcsDateRange(cohortStr) {
-  // Defaults to June 6 & 7 cohort
-  let start = '20260606T043000Z'; // 10:00 AM IST is 04:30 UTC
-  let end = '20260607T123000Z';   // 6:00 PM IST is 12:30 UTC
+  // Defaults to June 13 & 14 cohort
+  let start = '20260613T043000Z'; // 10:00 AM IST is 04:30 UTC
+  let end = '20260614T123000Z';   // 6:00 PM IST is 12:30 UTC
   
   if (cohortStr) {
-    const s = cohortStr.toLowerCase();
-    if (s.includes('13')) {
-      start = '20260613T043000Z';
-      end = '20260614T123000Z';
-    } else if (s.includes('20')) {
-      start = '20260620T043000Z';
-      end = '20260621T123000Z';
-    } else if (s.includes('27')) {
-      start = '20260627T043000Z';
-      end = '20260628T123000Z';
+    const match = cohortStr.match(/([A-Za-z]+)\s+(\d+)\s*(?:&\s*(\d+))?,\s*(\d{4})/);
+    if (match) {
+      const monthStr = match[1];
+      const day1 = parseInt(match[2], 10);
+      const day2 = match[3] ? parseInt(match[3], 10) : day1 + 1;
+      const year = parseInt(match[4], 10);
+      
+      const months = {
+        january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+        july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+        jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+      };
+      const month = months[monthStr.toLowerCase()] !== undefined ? months[monthStr.toLowerCase()] : 5;
+      
+      const pad = (num) => String(num).padStart(2, '0');
+      start = `${year}${pad(month + 1)}${pad(day1)}T043000Z`;
+      end = `${year}${pad(month + 1)}${pad(day2)}T123000Z`;
     }
   }
   return { start, end };
@@ -161,18 +180,46 @@ function getIcsDateRange(cohortStr) {
  */
 async function sendRegistrationEmail(user) {
   const greeting = `Welcome, ${user.fullName.split(' ')[0]}!`;
-  const contentHtml = `
-    <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop scheduled on <strong>June 13 & 14, 2026</strong>.</p>
-    <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
-    <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
-  `;
+  const cohortDate = await getCohortDateForUser(user);
+  let contentHtml = '';
+  let subject = 'Registration Confirmed — Lead with AI Workshop';
+
+  if (user.groupLeaderId) {
+    const User = require('../models/User');
+    const leader = await User.findById(user.groupLeaderId);
+    const leaderName = leader ? leader.fullName : 'your colleague';
+    
+    if (user.userType === 'student') {
+      subject = 'Action Required: Complete your Student Profile — Lead with AI Workshop';
+      contentHtml = `
+        <p>You have been added to the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop group by <strong>${leaderName}</strong> scheduled on <strong>${cohortDate}</strong>.</p>
+        <p>Since you are registering as a student, to secure your seat, you must complete your profile by entering your college details, uploading your physical College ID card, and completing your individual payment of <strong>₹499</strong>.</p>
+        <p>Please log in to your registration portal to complete your profile and proceed with your payment:</p>
+        <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
+      `;
+    } else {
+      subject = 'Action Required: Complete your Payment — Lead with AI Workshop';
+      contentHtml = `
+        <p>You have been added to the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop group by <strong>${leaderName}</strong> scheduled on <strong>${cohortDate}</strong>.</p>
+        <p>Your profile details are complete. To secure your seat, you must complete your individual payment of <strong>₹999</strong>.</p>
+        <p>Please log in to your registration portal to make your payment:</p>
+        <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
+      `;
+    }
+  } else {
+    contentHtml = `
+      <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop scheduled on <strong>${cohortDate}</strong>.</p>
+      <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
+      <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
+    `;
+  }
 
   const html = getHtmlTemplate({ greeting, contentHtml });
 
   await transporter.sendMail({
     from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
     to: user.email,
-    subject: `Registration Confirmed — Lead with AI Workshop`,
+    subject,
     html,
   });
 }
@@ -220,6 +267,7 @@ async function sendOtpEmail(email, otp, name) {
  */
 async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoinUrl) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
+  const cohortDate = await getCohortDateForUser(user);
   const contentHtml = `
     <p style="font-size: 18px; color: #10B981; font-weight: bold; margin-bottom: 20px;">Payment Confirmed!</p>
     <p>Your seat for <strong>${eventName}</strong> is officially confirmed. We look forward to seeing you!</p>
@@ -232,7 +280,7 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">June 13 & 14, 2026</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${cohortDate}</td>
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Amount Paid</strong></td>
@@ -251,7 +299,7 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
 
   const html = getHtmlTemplate({ greeting, contentHtml });
 
-  const { start, end } = getIcsDateRange(user.selectedCohort);
+  const { start, end } = getIcsDateRange(cohortDate);
   const icalContent = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Global Knowledge Technologies//Lead with AI//EN
@@ -297,11 +345,12 @@ async function sendCustomBulkEmail(emails, subject, htmlContent) {
  */
 async function sendReminderEmail(user, eventName) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
+  const cohortDate = await getCohortDateForUser(user);
   const contentHtml = `
     <p style="font-size: 18px; font-weight: bold; color: #0D1117; margin-bottom: 20px;">Reminder: Lead with AI Workshop starts TOMORROW!</p>
     <p>We're excited to have you join us for two days of learning, innovation, and hands-on exploration in the world of AI. Get ready to gain practical insights, interact with experts, and connect with fellow participants.</p>
     <p>Please ensure you join the session on time.</p>
-
+ 
     <div style="background-color: #F0F4F8; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; margin: 30px 0;">
       <table width="100%" border="0" cellspacing="0" cellpadding="0">
         <tr>
@@ -310,7 +359,7 @@ async function sendReminderEmail(user, eventName) {
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">June 13 & 14, 2026</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${cohortDate}</td>
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Time</strong></td>
@@ -395,6 +444,7 @@ async function sendProfileApprovedEmail(user) {
 
 async function sendZoomJoinLinkEmail(user, eventName, zoomJoinUrl) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
+  const cohortDate = await getCohortDateForUser(user);
   const contentHtml = `
     <p style="font-size: 18px; font-weight: bold; color: #0D1117; margin-bottom: 20px;">Your Workshop Access Link is Ready!</p>
     <p>Thank you for registering and confirming your payment for <strong>${eventName}</strong>. Your unique Zoom join link for the session is now ready.</p>
@@ -407,7 +457,7 @@ async function sendZoomJoinLinkEmail(user, eventName, zoomJoinUrl) {
         </tr>
         <tr>
           <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">June 13 & 14, 2026</td>
+          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${cohortDate}</td>
         </tr>
         <tr>
           <td style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Session Link</strong></td>

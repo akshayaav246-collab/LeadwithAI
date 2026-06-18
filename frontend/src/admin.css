@@ -697,3 +697,100 @@
     height: auto !important;
   }
 }
+
+/* ── Print Styles ────────────────────────────────────────────── */
+@media print {
+  /* Hide the admin sidebar, nav items, logout buttons, headers, and any other non-report elements */
+  .no-print,
+  .admin-sidebar,
+  .admin-sidebar *,
+  aside,
+  header,
+  .admin-logout-btn,
+  .admin-header-logout,
+  button {
+    display: none !important;
+  }
+
+  /* Force layout container to display block and use clean white backgrounds */
+  .admin-layout {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  .admin-main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #fff !important;
+    background-image: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    box-shadow: none !important;
+  }
+
+  /* Clean print background and colors for the body and html elements */
+  body, html {
+    background: #fff !important;
+    background-color: #fff !important;
+    color: #1E293B !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Force the report wrapper to fill the print area without margins/shadows on print */
+  .print-page {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    border-radius: 0 !important;
+  }
+
+  /* A4 Page dimensions and default margins */
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+
+  /* Avoid splitting sections, stats grid, and tables across pages if possible */
+  .page-break-avoid,
+  .report-page-header,
+  .admin-stats-grid,
+  table,
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Ensure table headers repeat on every printed page */
+  thead {
+    display: table-header-group !important;
+  }
+}
+
+/* ── Screen layout styling for the print report ── */
+@media screen {
+  .print-page {
+    box-shadow: 0 4px 32px rgba(0,0,0,0.12);
+    margin: 2rem auto !important;
+    border-radius: 8px;
+  }
+}
+
+tr:nth-child(even) td {
+  background: #FAFBFC;
+}
+

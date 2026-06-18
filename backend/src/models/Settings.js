@@ -9,10 +9,14 @@ const referralCodeSchema = new mongoose.Schema({
 const settingsSchema = new mongoose.Schema(
   {
     feedbackEnabled:      { type: Boolean, default: false },
+    feedbackEnabledCohorts: { type: [String], default: [] },
     isMaintenanceMode:    { type: Boolean, default: false },
     registrationCap:      { type: Number,  default: 1000 },
+    allowProfileGroupAdditions: { type: Boolean, default: false },
     referralCodes:        { type: [referralCodeSchema], default: [] },
-    activeReminderCohort: { type: String,  default: null },
+    cohorts:              { type: [String], default: ['June 13 & 14, 2026', 'June 27 & 28, 2026'] },
+    activeCohort:         { type: String, default: 'June 27 & 28, 2026' },
+    salespersons:         { type: [String], default: [] },
   },
   { timestamps: true }
 );
@@ -44,6 +48,32 @@ settingsSchema.statics.getSingleton = async function () {
       dirty = true;
     }
   }
+
+  // Migrate: ensure both June cohorts are present and active cohort is June 27 & 28
+  const JUNE13 = 'June 13 & 14, 2026';
+  const JUNE27 = 'June 27 & 28, 2026';
+  if (!settings.cohorts.includes(JUNE13)) {
+    settings.cohorts.push(JUNE13);
+    dirty = true;
+  }
+  if (!settings.cohorts.includes(JUNE27)) {
+    settings.cohorts.push(JUNE27);
+    dirty = true;
+  }
+  if (settings.activeCohort === JUNE13) {
+    settings.activeCohort = JUNE27;
+    dirty = true;
+  }
+
+  // Migrate: ensure June 13 & 14 feedback stays enabled (never disable existing cohort feedback)
+  if (!settings.feedbackEnabledCohorts) {
+    settings.feedbackEnabledCohorts = [JUNE13];
+    dirty = true;
+  } else if (!settings.feedbackEnabledCohorts.includes(JUNE13)) {
+    settings.feedbackEnabledCohorts.push(JUNE13);
+    dirty = true;
+  }
+
   if (dirty) await settings.save();
 
   return settings;

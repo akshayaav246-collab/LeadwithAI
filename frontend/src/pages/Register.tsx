@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/context/AuthContext';
 import * as api from '@/lib/api';
@@ -63,6 +64,10 @@ export function Register() {
   // Read referral code only from global storage (set by landing page)
   const refCode = localStorage.getItem('referralCode') || '';
 
+  const [activeCohort, setActiveCohort] = useState('');
+  const [salespersons, setSalespersons] = useState<string[]>([]);
+  const [salesperson, setSalesperson] = useState('');
+
   useEffect(() => {
     // If someone tries to use a ref link directly on the register page,
     // bounce them to the landing page so they see the full event details
@@ -75,12 +80,24 @@ export function Register() {
 
     api.getPublicSettings()
       .then(settings => {
-        if (settings && settings.availableCohorts) {
-          setAvailableCohorts(settings.availableCohorts);
+        if (settings) {
+          if (settings.availableCohorts) {
+            setAvailableCohorts(settings.availableCohorts);
+          }
+          if (settings.activeCohort) {
+            setActiveCohort(settings.activeCohort);
+            setSelectedCohort(settings.activeCohort);
+          }
+          if (settings.referralCodes) {
+            const activeReferrals = settings.referralCodes
+              .filter((rc: any) => rc.isActive)
+              .map((rc: any) => rc.label);
+            setSalespersons(activeReferrals);
+          }
         }
       })
       .catch(err => {
-        console.error('Failed to load available cohorts:', err);
+        console.error('Failed to load public settings:', err);
       });
   }, []);
 
@@ -115,11 +132,134 @@ export function Register() {
   const [selectedCohort, setSelectedCohort] = useState('June 13 & 14, 2026');
   const [availableCohorts, setAvailableCohorts] = useState<string[]>([]);
 
-  // Nepal payment proof state
-  const [nepalTxnRef, setNepalTxnRef] = useState('');
-  const [nepalScreenshot, setNepalScreenshot] = useState<File | null>(null);
-  const [isSubmittingNepalProof, setIsSubmittingNepalProof] = useState(false);
-  const [nepalProofSubmitted, setNepalProofSubmitted] = useState(false);
+  // Group members state
+  const [groupMembers, setGroupMembers] = useState<any[]>([]);
+  const [showMemberModal, setShowMemberModal] = useState(false);
+  const [editingMemberIdx, setEditingMemberIdx] = useState<number | null>(null);
+
+  // Group member form fields
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [mName, setMName] = useState('');
+  const [mEmail, setMEmail] = useState('');
+  const [mPhone, setMPhone] = useState('');
+  const [mDomain, setMDomain] = useState('');
+  const [mOrg, setMOrg] = useState('');
+
+  const openAddMemberModal = () => {
+    setEditingMemberIdx(null);
+    setMName('');
+    setMEmail('');
+    setMPhone('');
+    setMDomain(domain);
+    setMOrg(organization);
+    setShowMemberModal(true);
+  };
+
+  const openEditMemberModal = (idx: number) => {
+    setEditingMemberIdx(idx);
+    const m = groupMembers[idx];
+    setMName(m.fullName);
+    setMEmail(m.email);
+    setMPhone(m.phone);
+    setMDomain(m.domain || '');
+    setMOrg(m.organization || '');
+    setShowMemberModal(true);
+  };
+
+  const removeMember = (idx: number) => {
+    setGroupMembers(groupMembers.filter((_, i) => i !== idx));
+    toast.success('Member removed.');
+  };
+
+  const handleSaveMember = async () => {
+    if (!mName.trim() || !mEmail.trim() || !mPhone.trim()) {
+      toast.error('Please fill in all required fields.');
+      return;
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(mEmail)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+
+    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(mPhone);
+    const cleanedPhone = mPhone.replace(/[^\d+]/g, '');
+    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
+    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
+      toast.error('Please enter a valid phone number.');
+      return;
+    }
+
+    const normalizedEmail = mEmail.toLowerCase().trim();
+
+    if (normalizedEmail === email.toLowerCase().trim()) {
+      toast.error("Colleague/Friend's email cannot be the same as your registration email.");
+      return;
+    }
+
+    if (userType === 'working') {
+      if (!mDomain.trim()) {
+        toast.error('Domain is required.');
+        return;
+      }
+      if (!mOrg.trim()) {
+        toast.error('Organization is required.');
+        return;
+      }
+    }
+
+    const newMember: any = {
+      fullName: mName.trim(),
+      email: normalizedEmail,
+      phone: mPhone.trim()
+    };
+    if (userType === 'working') {
+      newMember.domain = mDomain.trim();
+      newMember.organization = mOrg.trim();
+    }
+
+    const isDuplicate = groupMembers.some((m, idx) => m.email === newMember.email && idx !== editingMemberIdx);
+    if (isDuplicate) {
+      toast.error('A colleague/friend with this email address has already been added.');
+      return;
+    }
+
+    // Call check-email API to verify if the email is already registered in the system
+    const isEditingWithSameEmail = editingMemberIdx !== null && groupMembers[editingMemberIdx].email === normalizedEmail;
+
+    if (!isEditingWithSameEmail) {
+      setIsCheckingEmail(true);
+      try {
+        const { exists } = await api.checkEmailExists(normalizedEmail);
+        if (exists) {
+          toast.error(`A user with email ${normalizedEmail} is already registered in the system.`);
+          setIsCheckingEmail(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to verify email availability:', err);
+      } finally {
+        setIsCheckingEmail(false);
+      }
+    }
+
+    if (editingMemberIdx !== null) {
+      const updated = [...groupMembers];
+      updated[editingMemberIdx] = newMember;
+      setGroupMembers(updated);
+      toast.success('Colleague/Friend details updated.');
+    } else {
+      if (groupMembers.length >= 9) {
+        toast.error('You can only add up to 9 colleagues/friends.');
+        return;
+      }
+      setGroupMembers([...groupMembers, newMember]);
+      toast.success('Colleague/Friend added.');
+    }
+
+    setShowMemberModal(false);
+  };
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const clearError = (field: string) => setErrors(prev => ({ ...prev, [field]: '' }));
@@ -152,7 +292,7 @@ export function Register() {
   const [regOtp, setRegOtp] = useState('');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
-  const [heardFrom, setHeardFrom] = useState('');
+  const [heardFrom, setHeardFrom] = useState(refCode ? 'Referral' : '');
   const [heardFromOther, setHeardFromOther] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -375,16 +515,21 @@ export function Register() {
       if (!year) newErrors.year = 'Please select your year.';
     } else {
       if (!domain.trim()) newErrors.domain = 'Please select your domain/field.';
+      if (!organization.trim()) newErrors.organization = 'Please enter your organization name.';
     }
     
     if (!selectedCohort) {
       newErrors.selectedCohort = 'Please select your preferred date.';
     }
 
-    if (!heardFrom) {
-      newErrors.heardFrom = 'Please let us know how you heard about this.';
-    } else if (heardFrom === 'Others' && !heardFromOther.trim()) {
-      newErrors.heardFromOther = 'Please specify how you heard about this.';
+    if (!refCode) {
+      if (!heardFrom) {
+        newErrors.heardFrom = 'Please let us know how you heard about this.';
+      } else if (heardFrom === 'Others' && !heardFromOther.trim()) {
+        newErrors.heardFromOther = 'Please specify how you heard about this.';
+      } else if (heardFrom === 'GKT Employee' && !salesperson) {
+        newErrors.salesperson = 'Please select your referral.';
+      }
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -408,51 +553,32 @@ export function Register() {
         if (idFile) formData.append('idCard', idFile);
       } else {
         formData.append('domain', domain.trim());
-        if (organization.trim()) formData.append('organization', organization.trim());
+        formData.append('organization', organization.trim());
       }
 
-      const finalHeardFrom = heardFrom === 'Others' ? heardFromOther.trim() : heardFrom;
+      const finalHeardFrom = refCode ? 'Referral' : (heardFrom === 'Others' ? heardFromOther.trim() : heardFrom);
       formData.append('heardFrom', finalHeardFrom);
+      if (!refCode && heardFrom === 'GKT Employee' && salesperson) {
+        formData.append('salesperson', salesperson);
+      }
       formData.append('selectedCohort', selectedCohort);
       
       formData.append('country', country);
       if (refCode) {
         formData.append('referralCode', refCode);
       }
+      if (groupMembers.length > 0) {
+        formData.append('groupMembers', JSON.stringify(groupMembers));
+      }
 
       const { token, user } = await api.registerUser(formData);
       
-
-
       login(token, user);
-      setRegToken(token);
-      setRegSuccess(true);
-      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      navigate('/profile');
     } catch (err: any) {
       toast.error(err.message || 'Registration failed. Please try again.');
     } finally {
       setRegLoading(false);
-    }
-  };
-
-  // ─────────────────────────────────────────────────────────────
-  // NEPAL PAYMENT PROOF SUBMIT
-  // ─────────────────────────────────────────────────────────────
-  const handleNepalProofSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!nepalTxnRef.trim()) {
-      toast.error('Please enter the Transaction Reference ID (UTR).');
-      return;
-    }
-    setIsSubmittingNepalProof(true);
-    try {
-      await api.submitNepalProof(regToken, nepalTxnRef.trim());
-      setNepalProofSubmitted(true);
-      toast.success('Payment details submitted successfully!');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to submit payment details.');
-    } finally {
-      setIsSubmittingNepalProof(false);
     }
   };
 
@@ -508,7 +634,7 @@ export function Register() {
   return (
     <>
       {/* ══ ID Verification Rejection Modal ══════════════════════ */}
-      {showIdModal && (
+      {showIdModal && createPortal(
         <div className="id-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="id-modal-title">
           <div className="id-modal-card">
             <div className="id-modal-title" id="id-modal-title">ID Verification Failed</div>
@@ -530,7 +656,8 @@ export function Register() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       <main>
         <section className="register-section">
@@ -598,106 +725,21 @@ export function Register() {
                 ) : regSuccess ? (
                   /* ── Registered — payment pending ── */
                   <div className="register-success" role="status">
-                    {country === 'Nepal' ? (
-                      nepalProofSubmitted ? (
-                        <>
-                          <div className="register-success-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          </div>
-                          <h3>Profile Created Successfully!</h3>
-                          <p><strong>Your registration is currently pending admin verification. We will send you a confirmation email once approved.</strong></p>
-                          <button
-                            type="button"
-                            className="btn-primary"
-                            style={{ marginTop: '1.5rem', width: '100%' }}
-                            onClick={() => navigate('/profile')}
-                          >
-                            Go to My Profile →
-                          </button>
-                        </>
-                      ) : (
-                        <form onSubmit={handleNepalProofSubmit} style={{ width: '100%' }}>
-                          <h3>Profile Registration Completed</h3>
-                          <p style={{ marginBottom: '1.5rem' }}><strong>Please scan the QR code below using your UPI app and pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span>. Once done, enter the transaction ID.</strong></p>
-                          
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-                            <img 
-                              src={publicAsset("Qr_code_Nepal.png")} 
-                              alt="Nepal UPI QR Code" 
-                              style={{ maxWidth: '240px', border: '2px solid #E2E8F0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} 
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                const parent = e.currentTarget.parentElement;
-                                if (parent) {
-                                  const placeholder = parent.querySelector('.qr-placeholder');
-                                  if (!placeholder) {
-                                    const newPlaceholder = document.createElement('div');
-                                    newPlaceholder.className = 'qr-placeholder';
-                                    newPlaceholder.style.width = '240px';
-                                    newPlaceholder.style.height = '240px';
-                                    newPlaceholder.style.display = 'flex';
-                                    newPlaceholder.style.alignItems = 'center';
-                                    newPlaceholder.style.justifyContent = 'center';
-                                    newPlaceholder.style.border = '2px dashed #CBD5E1';
-                                    newPlaceholder.style.borderRadius = '12px';
-                                    newPlaceholder.style.background = '#F8FAFC';
-                                    newPlaceholder.style.color = '#64748B';
-                                    newPlaceholder.style.fontSize = '0.85rem';
-                                    newPlaceholder.style.fontWeight = '500';
-                                    newPlaceholder.style.textAlign = 'center';
-                                    newPlaceholder.style.padding = '1rem';
-                                    newPlaceholder.innerText = 'QR Code Image (Qr_code_Nepal.png) not found. Please upload to frontend/public/ folder.';
-                                    parent.insertBefore(newPlaceholder, parent.firstChild);
-                                  }
-                                }
-                              }}
-                            />
-                          </div>
-
-                          <div className="register-field" style={{ textAlign: 'left', marginBottom: '1.5rem' }}>
-                            <label htmlFor="nepal-txn-ref" style={{ fontWeight: 600 }}>Transaction ID (UTR Code) *</label>
-                            <input
-                              id="nepal-txn-ref"
-                              type="text"
-                              value={nepalTxnRef}
-                              onChange={(e) => setNepalTxnRef(e.target.value)}
-                              placeholder="Enter transaction reference ID"
-                              required
-                            />
-                          </div>
-
-                          <button
-                            type="submit"
-                            className="btn-primary"
-                            style={{ width: '100%' }}
-                            disabled={isSubmittingNepalProof}
-                          >
-                            {isSubmittingNepalProof ? 'Submitting...' : 'Submit Payment Details →'}
-                          </button>
-
-                        </form>
-                      )
-                    ) : (
-                      <>
-                        <div className="register-success-icon" style={{ background: 'rgba(196,149,106,0.12)', color: 'var(--color-sienna)' }} aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-                          </svg>
-                        </div>
-                        <h3>Registration completed</h3>
-                        <p><strong>Please complete the <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span> payment to confirm your seat.</strong></p>
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          style={{ marginTop: '1.5rem', width: '100%' }}
-                          onClick={() => launchRazorpay(regToken, {})}
-                        >
-                          Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span> Now →
-                        </button>
-                      </>
-                    )}
+                    <div className="register-success-icon" style={{ background: 'rgba(196,149,106,0.12)', color: 'var(--color-sienna)' }} aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    </div>
+                    <h3>Registration completed</h3>
+                    <p><strong>Please complete the <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span> payment to confirm your seat.</strong></p>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ marginTop: '1.5rem', width: '100%' }}
+                      onClick={() => launchRazorpay(regToken, {})}
+                    >
+                      Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span> Now →
+                    </button>
                   </div>
                 ) : (
                   /* ── Register Form ── */
@@ -1084,7 +1126,7 @@ export function Register() {
                           <div className="reg-conditional-fields">
                             <div className="register-grid-2">
                               <div className="register-field">
-                                <label htmlFor="reg-domain">Domain</label>
+                                <label htmlFor="reg-domain">Domain *</label>
                                 <select
                                   id="reg-domain"
                                   value={domain}
@@ -1101,7 +1143,7 @@ export function Register() {
                                 </select>
                               </div>
                               <div className="register-field">
-                                <label htmlFor="reg-org">Organization</label>
+                                <label htmlFor="reg-org">Organization *</label>
                                 <input
                                   id="reg-org"
                                   type="text"
@@ -1116,29 +1158,48 @@ export function Register() {
                           </div>
                         )}
 
-                        {/* Preferred Weekend Cohort */}
+                        {/* How did you hear about us? - only shown when no referral code */}
+                        {!refCode && (
+                          <div className="register-field" style={{ marginTop: '1.25rem' }}>
+                            <label htmlFor="reg-heardFrom">How did you hear about us? *</label>
+                            <select
+                              id="reg-heardFrom"
+                              value={heardFrom}
+                              onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+                              onFocus={handleOtherFieldFocus}
+                              className="register-select"
+                              disabled={!isEmailVerified}
+                              required
+                            >
+                              <option value="">Select an option</option>
+                              <option value="Social Media">Social Media</option>
+                              <option value="Newspaper">Newspaper</option>
+                              <option value="GKT Employee">GKT Employee</option>
+                              <option value="Others">Others</option>
+                            </select>
+                          </div>
+                        )}
 
+                        {heardFrom === 'GKT Employee' && !refCode && (
+                          <div className="register-field" style={{ marginTop: '1rem' }}>
+                            <label htmlFor="reg-salesperson">Referral *</label>
+                            <select
+                              id="reg-salesperson"
+                              value={salesperson}
+                              onChange={(e) => { setSalesperson(e.target.value); clearError('salesperson'); }}
+                              className="register-select"
+                              disabled={!isEmailVerified}
+                              required
+                            >
+                              <option value="">Select referral</option>
+                              {salespersons.map(sp => (
+                                <option key={sp} value={sp}>{sp}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
 
-                        {/* How did you hear about us? */}
-                        <div className="register-field">
-                          <label htmlFor="reg-heardFrom">How did you hear about us? *</label>
-                          <select
-                            id="reg-heardFrom"
-                            value={heardFrom}
-                            onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
-                            onFocus={handleOtherFieldFocus}
-                            className="register-select"
-                            disabled={!isEmailVerified}
-                            required
-                          >
-                            <option value="">Select an option</option>
-                            <option value="Social Media">Social Media</option>
-                            <option value="Newspaper">Newspaper</option>
-                            <option value="Others">Others</option>
-                          </select>
-                        </div>
-
-                        {heardFrom === 'Others' && (
+                        {heardFrom === 'Others' && !refCode && (
                           <div className="register-field" style={{ marginTop: '1rem' }}>
                             <label htmlFor="reg-heardFromOther">Please specify *</label>
                             <input
@@ -1153,6 +1214,76 @@ export function Register() {
                             />
                           </div>
                         )}
+
+                        {/* Group registration section */}
+                        {userType && (
+                          <div style={{ marginTop: '1.5rem', borderTop: '1px dashed #e7dfd5', paddingTop: '1rem', marginBottom: '1.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (groupMembers.length >= 9) {
+                                    toast.error('You can only add up to 9 colleagues/friends.');
+                                    return;
+                                  }
+                                  openAddMemberModal();
+                                }}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: 'var(--color-sienna)',
+                                  cursor: 'pointer',
+                                  fontWeight: 600,
+                                  fontSize: '0.95rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: 0
+                                }}
+                                disabled={!isEmailVerified}
+                              >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                Add Colleague/Friend
+                              </button>
+                            </div>
+
+                            {groupMembers.length > 0 && (
+                              <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                {groupMembers.map((m, idx) => (
+                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fcfbf9', border: '1px solid #e7dfd5', borderRadius: '6px', padding: '0.6rem 0.8rem', fontSize: '0.85rem' }}>
+                                    <div>
+                                      <div style={{ fontWeight: 600, color: 'var(--color-espresso)' }}>{m.fullName}</div>
+                                      <div style={{ color: 'var(--color-stone)', fontSize: '0.78rem' }}>{m.email} | {m.phone}</div>
+                                      {userType === 'working' && (
+                                        <div style={{ color: 'var(--color-stone)', fontSize: '0.78rem', fontStyle: 'italic' }}>{m.organization} ({m.domain})</div>
+                                      )}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditMemberModal(idx)}
+                                        style={{ background: 'transparent', border: 'none', color: 'var(--color-sienna)', cursor: 'pointer', fontWeight: 600 }}
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeMember(idx)}
+                                        style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
 
                         <button
                           type="submit"
@@ -1266,6 +1397,143 @@ export function Register() {
           </div>
         </section>
       </main>
+      {/* ══ Add Group Member Modal ══════════════════════ */}
+      {showMemberModal && createPortal(
+        <div 
+          onClick={() => setShowMemberModal(false)} 
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            width: '100vw', 
+            height: '100vh', 
+            backgroundColor: 'rgba(15, 23, 42, 0.45)', // Premium slate dark overlay
+            zIndex: 10000, 
+            backdropFilter: 'blur(8px)', // Modern glassmorphism blur
+            padding: '1rem',
+            boxSizing: 'border-box'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ 
+              maxWidth: '480px', 
+              backgroundColor: '#ffffff', 
+              padding: '2rem', 
+              borderRadius: '12px', 
+              width: '100%', 
+              maxHeight: '90vh', 
+              overflowY: 'auto', 
+              border: '1px solid #e2e8f0', 
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', // Premium shadow
+              textAlign: 'left',
+              boxSizing: 'border-box'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.25rem', margin: 0, color: '#1e293b', fontFamily: 'Playfair Display, serif', fontWeight: 600 }}>
+                {editingMemberIdx !== null ? 'Edit Colleague/Friend' : 'Add Colleague/Friend'}
+              </h2>
+              <button 
+                type="button" 
+                onClick={() => setShowMemberModal(false)} 
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }} className="register-form">
+              <div className="register-field">
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Full Name *</label>
+                <input
+                  type="text"
+                  value={mName}
+                  onChange={(e) => setMName(e.target.value)}
+                  placeholder="Enter full name"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div className="register-field">
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Email Address *</label>
+                <input
+                  type="email"
+                  value={mEmail}
+                  onChange={(e) => setMEmail(e.target.value)}
+                  placeholder="Enter email address"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div className="register-field">
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Phone Number *</label>
+                <input
+                  type="text"
+                  value={mPhone}
+                  onChange={(e) => setMPhone(e.target.value.replace(/[^\d+\s()-]/g, ''))}
+                  placeholder="+91 98765 43210"
+                  maxLength={25}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {userType === 'working' && (
+                <>
+                  <div className="register-field">
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Domain *</label>
+                    <select
+                      value={mDomain}
+                      onChange={(e) => setMDomain(e.target.value)}
+                      className="register-select"
+                      style={{ width: '100%', boxSizing: 'border-box' }}
+                    >
+                      <option value="">Select industry</option>
+                      {DOMAIN_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="register-field">
+                    <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Organization *</label>
+                    <input
+                      type="text"
+                      value={mOrg}
+                      onChange={(e) => setMOrg(e.target.value)}
+                      placeholder="e.g. TCS"
+                      style={{ width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => setShowMemberModal(false)}
+                style={{ padding: '0.6rem 1.2rem', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleSaveMember}
+                disabled={isCheckingEmail}
+                style={{ padding: '0.6rem 1.2rem', borderRadius: '4px', fontWeight: 600, fontSize: '0.85rem', cursor: isCheckingEmail ? 'not-allowed' : 'pointer', opacity: isCheckingEmail ? 0.7 : 1 }}
+              >
+                {isCheckingEmail ? 'Checking...' : (editingMemberIdx !== null ? 'Update Colleague/Friend' : 'Add Colleague/Friend')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }

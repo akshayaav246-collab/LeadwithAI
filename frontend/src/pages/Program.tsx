@@ -180,32 +180,7 @@ export function Program() {
             Pick a module to explore or move through them in order.
           </p>
 
-          <div style={{
-            background: 'var(--color-sienna)',
-            borderRadius: '8px',
-            padding: '0.8rem 1.25rem',
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem',
-            marginBottom: '2.5rem',
-            color: 'var(--color-white)'
-          }}>
-            <div className="program-hero-sub" style={{ margin: 0, color: 'inherit', fontWeight: 500 }}>
-              <strong style={{ fontWeight: 700 }}>Graduation Ceremony</strong> · Day Two Afternoon
-            </div>
-            <div style={{
-              border: '1px solid rgba(255,255,255,0.5)',
-              borderRadius: '100px',
-              padding: '0.3rem 0.8rem',
-              fontSize: '0.9rem',
-              fontWeight: 600,
-              letterSpacing: '0.02em'
-            }}>
-              5:00 – 6:00 PM IST
-            </div>
-          </div>
+
 
           <div className="program-modules-rail" role="tablist" aria-label="Modules">
             {MODULES.map((m, i) => (

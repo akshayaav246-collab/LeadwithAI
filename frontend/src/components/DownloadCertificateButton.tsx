@@ -30,10 +30,12 @@ export function DownloadCertificateButton({ fullName, userId }: DownloadCertific
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // The public URL where anyone can scan and verify the certificate
-  const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const origin = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? window.location.origin
+    : 'https://www.globalknowledgetech.com';
   const verificationUrl = userId 
-    ? `${window.location.origin}${baseUrl}/verify/${userId}`
-    : `${window.location.origin}${baseUrl}`;
+    ? `${origin}/leadwithAI/verify/${userId}`
+    : `${origin}/leadwithAI`;
 
   const handleDownload = async () => {
     setIsGenerating(true);

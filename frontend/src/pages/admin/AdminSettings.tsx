@@ -10,21 +10,50 @@ import {
   updateReferralLabel,
   getAdmins,
   deleteAdmin,
-  triggerCohortReminders,
-  cancelCohortReminders
+  addCohort,
+  deleteCohort,
+  updateActiveCohort,
+  toggleCohortFeedbackApi,
+  updateGroupAdditionsSetting
 } from '../../lib/api';
 import { toast } from 'sonner';
+
+function isCohortCompleted(cohortStr: string) {
+  if (!cohortStr) return false;
+  const match = cohortStr.match(/([A-Za-z]+)\s+(\d+)\s*(?:&\s*(\d+))?,\s*(\d{4})/);
+  if (match) {
+    const monthStr = match[1];
+    const day2 = match[3] ? parseInt(match[3], 10) : parseInt(match[2], 10);
+    const year = parseInt(match[4], 10);
+    
+    const months: Record<string, number> = {
+      january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+      july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+      jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    };
+    const month = months[monthStr.toLowerCase()] !== undefined ? months[monthStr.toLowerCase()] : 5;
+    
+    // Create Date for the end of the cohort day (6:00 PM IST -> 12:30 UTC)
+    const cohortEndDate = new Date(Date.UTC(year, month, day2, 12, 30, 0));
+    return new Date() > cohortEndDate;
+  }
+  return false;
+}
 
 export function AdminSettings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [feedbackEnabled, setFeedbackEnabled] = useState(false);
+  const [feedbackEnabledCohorts, setFeedbackEnabledCohorts] = useState<string[]>([]);
   const [isMaintenance, setIsMaintenance] = useState(false);
   const [registrationCap, setRegistrationCap] = useState(1000);
   const [newCap, setNewCap] = useState<number | ''>('');
   const [referrals, setReferrals] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
-  const [activeReminderCohort, setActiveReminderCohort] = useState<string | null>(null);
+  const [cohorts, setCohorts] = useState<string[]>([]);
+  const [activeCohort, setActiveCohort] = useState<string>('');
+  const [newCohort, setNewCohort] = useState('');
+  const [allowProfileGroupAdditions, setAllowProfileGroupAdditions] = useState(false);
   
   // New referral input state
   const [refCode, setRefCode] = useState('');
@@ -44,11 +73,14 @@ export function AdminSettings() {
     try {
       const settings = await getAdminSettings(token);
       setFeedbackEnabled(settings.feedbackEnabled);
+      setFeedbackEnabledCohorts(settings.feedbackEnabledCohorts || []);
       setIsMaintenance(settings.isMaintenanceMode);
       setRegistrationCap(settings.registrationCap);
       setNewCap(settings.registrationCap);
       setReferrals(settings.referralCodes || []);
-      setActiveReminderCohort(settings.activeReminderCohort || null);
+      setCohorts((settings as any).cohorts || []);
+      setActiveCohort((settings as any).activeCohort || '');
+      setAllowProfileGroupAdditions(!!(settings as any).allowProfileGroupAdditions);
       
       const adminList = await getAdmins(token);
       setAdmins(adminList);
@@ -73,11 +105,32 @@ export function AdminSettings() {
     }
   };
 
+  const handleToggleCohortFeedback = async (cohort: string) => {
+    const isEnabled = feedbackEnabledCohorts.includes(cohort);
+    try {
+      const res = await toggleCohortFeedbackApi(token, cohort, !isEnabled);
+      setFeedbackEnabledCohorts(res.feedbackEnabledCohorts || []);
+      toast.success(`Feedback ${!isEnabled ? 'enabled' : 'disabled'} for cohort "${cohort}"`);
+    } catch (err: any) {
+      toast.error('Failed to update cohort feedback: ' + err.message);
+    }
+  };
+
   const handleToggleMaintenance = async () => {
     try {
       const res = await updateMaintenanceMode(token, !isMaintenance);
       setIsMaintenance(res.isMaintenanceMode);
       toast.success(res.isMaintenanceMode ? 'Maintenance active' : 'Maintenance disabled');
+    } catch (err: any) {
+      toast.error('Failed: ' + err.message);
+    }
+  };
+
+  const handleToggleGroupAdditions = async () => {
+    try {
+      const res = await updateGroupAdditionsSetting(token, !allowProfileGroupAdditions);
+      setAllowProfileGroupAdditions(!!res.allowProfileGroupAdditions);
+      toast.success(res.allowProfileGroupAdditions ? 'Group additions from Profile enabled' : 'Group additions from Profile disabled');
     } catch (err: any) {
       toast.error('Failed: ' + err.message);
     }
@@ -183,36 +236,45 @@ export function AdminSettings() {
     });
   };
 
-  const handleSendReminders = () => {
+  const handleAddCohort = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCohort.trim()) return;
+    try {
+      const settings = await addCohort(token, newCohort.trim());
+      setCohorts(settings.cohorts || []);
+      setActiveCohort(settings.activeCohort || '');
+      setNewCohort('');
+      toast.success('Cohort added successfully!');
+    } catch (err: any) {
+      toast.error('Failed to add cohort: ' + err.message);
+    }
+  };
+
+  const handleDeleteCohort = (cohort: string) => {
     setConfirmModal({
-      message: 'Are you sure you want to activate the automated cohort reminder schedule for June 13 & 14, 2026? Day 1 email will be sent on June 12 at 10:00 AM IST and Day 2 email will be sent on June 13 at 6:30 PM IST.',
+      message: `Are you sure you want to delete the cohort "${cohort}"?`,
       onConfirm: async () => {
         try {
-          const res = await triggerCohortReminders(token);
-          setActiveReminderCohort(res.activeReminderCohort);
-          toast.success(res.message);
+          const settings = await deleteCohort(token, cohort);
+          setCohorts(settings.cohorts || []);
+          setActiveCohort(settings.activeCohort || '');
+          toast.success(`Cohort "${cohort}" deleted`);
         } catch (err: any) {
-          toast.error('Failed to activate reminders: ' + err.message);
+          toast.error('Failed to delete cohort: ' + err.message);
         }
         setConfirmModal(null);
       }
     });
   };
 
-  const handleCancelReminders = () => {
-    setConfirmModal({
-      message: 'Are you sure you want to cancel the automated cohort reminder schedule for June 13 & 14, 2026?',
-      onConfirm: async () => {
-        try {
-          const res = await cancelCohortReminders(token);
-          setActiveReminderCohort(res.activeReminderCohort);
-          toast.success(res.message);
-        } catch (err: any) {
-          toast.error('Failed to cancel reminders: ' + err.message);
-        }
-        setConfirmModal(null);
-      }
-    });
+  const handleSelectActiveCohort = async (cohort: string) => {
+    try {
+      const settings = await updateActiveCohort(token, cohort);
+      setActiveCohort(settings.activeCohort || '');
+      toast.success(`Active cohort updated to "${settings.activeCohort}"`);
+    } catch (err: any) {
+      toast.error('Failed to update active cohort: ' + err.message);
+    }
   };
 
 
@@ -233,20 +295,6 @@ export function AdminSettings() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', marginTop: '1rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontWeight: 600, color: '#2A1F14' }}>Post-Session Feedback</div>
-                  <div style={{ fontSize: '0.82rem', color: '#8C7B6B' }}>Allow users to submit workshop feedback and get certificates</div>
-                </div>
-                <button
-                  className="btn-primary"
-                  onClick={handleToggleFeedback}
-                  style={{ padding: '6px 14px', fontSize: '13px', backgroundColor: feedbackEnabled ? '#2e7d32' : '#3B8BD4', borderColor: feedbackEnabled ? '#2e7d32' : '#3B8BD4', color: '#fff' }}
-                >
-                  {feedbackEnabled ? 'Enabled (Turn Off)' : 'Disabled (Turn On)'}
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #FAF7F2', paddingTop: '1.2rem' }}>
-                <div>
                   <div style={{ fontWeight: 600, color: '#2A1F14' }}>Maintenance Mode</div>
                   <div style={{ fontSize: '0.82rem', color: '#8C7B6B' }}>Lock the public site and show maintenance screen</div>
                 </div>
@@ -258,6 +306,59 @@ export function AdminSettings() {
                   {isMaintenance ? 'Maintenance Active (Turn Off)' : 'Normal Mode (Turn On)'}
                 </button>
               </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #FAF7F2', paddingTop: '1.2rem' }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: '#2A1F14' }}>Allow Profile Group Additions</div>
+                  <div style={{ fontSize: '0.82rem', color: '#8C7B6B' }}>Allow registered users to add group members from their profile page</div>
+                </div>
+                <button
+                  className="btn-primary"
+                  onClick={handleToggleGroupAdditions}
+                  style={{ padding: '6px 14px', fontSize: '13px', backgroundColor: allowProfileGroupAdditions ? '#2e7d32' : '#3B8BD4', borderColor: allowProfileGroupAdditions ? '#2e7d32' : '#3B8BD4', color: '#fff' }}
+                >
+                  {allowProfileGroupAdditions ? 'Allowed (Turn Off)' : 'Disabled (Turn On)'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Cohort Feedback Enablement Card */}
+          <div className="admin-card" style={{ marginBottom: '2rem' }}>
+            <h3>Cohort Feedback Enablement</h3>
+            <p style={{ fontSize: '0.82rem', color: '#8C7B6B', marginTop: '0.3rem', marginBottom: '1.2rem' }}>
+              Enable or disable feedback forms (and certificate downloads) on a cohort-by-cohort basis.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {cohorts.map(c => {
+                const isEnabled = feedbackEnabledCohorts.includes(c);
+                const completed = isCohortCompleted(c);
+                return (
+                  <div key={c} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #FAF7F2', paddingBottom: '0.75rem' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#2A1F14', fontSize: '0.9rem' }}>
+                        {c} 
+                        {completed && <span style={{ color: '#8c8c8c', fontSize: '0.75rem', marginLeft: '5px' }}>(Completed)</span>}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#8C7B6B' }}>
+                        {isEnabled ? 'Users in this cohort can submit feedback' : 'Feedback form is disabled for this cohort'}
+                      </div>
+                    </div>
+                    <button
+                      className="btn-primary"
+                      onClick={() => handleToggleCohortFeedback(c)}
+                      style={{ padding: '5px 12px', fontSize: '12.5px', backgroundColor: isEnabled ? '#2e7d32' : '#3B8BD4', borderColor: isEnabled ? '#2e7d32' : '#3B8BD4', color: '#fff' }}
+                    >
+                      {isEnabled ? 'Enabled (Turn Off)' : 'Disabled (Turn On)'}
+                    </button>
+                  </div>
+                );
+              })}
+              {cohorts.length === 0 && (
+                <div style={{ color: '#8C7B6B', fontSize: '0.85rem', textAlign: 'center', padding: '1rem' }}>
+                  No cohorts defined yet.
+                </div>
+              )}
             </div>
           </div>
 
@@ -282,47 +383,86 @@ export function AdminSettings() {
             </form>
           </div>
 
-          {/* Cohort Reminders Card */}
+          {/* Cohort Dates Card */}
           <div className="admin-card" style={{ marginBottom: '2rem' }}>
-            <h3>Cohort Reminders</h3>
-            <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginTop: '0.3rem' }}>
-              Activate or cancel the automated reminder emails schedule for the upcoming June 13 & 14, 2026 cohort.
+            <h3>Manage Cohort Dates</h3>
+            <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginTop: '0.3rem', marginBottom: '1.2rem' }}>
+              Add/remove cohort dates and set which cohort new registrations are automatically assigned to.
             </p>
-            <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#2A1F14' }}>Status:</span>
-              {activeReminderCohort ? (
-                <span className="admin-badge success">Scheduled & Active ({activeReminderCohort})</span>
-              ) : (
-                <span className="admin-badge danger" style={{ backgroundColor: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}>Inactive</span>
-              )}
-            </div>
-            <div style={{ background: '#FAF7F2', border: '1px solid #E2D9CC', borderRadius: 8, padding: '1rem', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ fontSize: '0.85rem', color: '#2A1F14', lineHeight: '1.4' }}>
-                • <strong>Day 1 email</strong>: June 12 (Friday) morning at 10:00 AM IST <br />
-                • <strong>Day 2 email</strong>: June 13 (Saturday) evening at 6:30 PM IST <br />
-                Emails are sent automatically to paid users of the active cohort.
+
+            {/* Active cohort selection */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', background: 'rgba(196,149,106,0.06)', border: '1px solid rgba(196,149,106,0.15)', padding: '0.75rem 1rem', borderRadius: 8 }}>
+              <div>
+                <div style={{ fontWeight: 600, color: '#2A1F14', fontSize: '0.9rem' }}>Active Cohort (New Users Target)</div>
+                <div style={{ fontSize: '0.8rem', color: '#8C7B6B' }}>Select which cohort date registrations automatically map to</div>
               </div>
+              <select
+                value={activeCohort}
+                onChange={e => handleSelectActiveCohort(e.target.value)}
+                style={{ marginLeft: 'auto', padding: '0.4rem 0.6rem', border: '1px solid #E2D9CC', borderRadius: 4, background: '#fff' }}
+              >
+                <option value="">No Active Cohort</option>
+                {cohorts.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
-            <div style={{ marginTop: '1.2rem', display: 'flex', gap: '0.8rem' }}>
-              {activeReminderCohort ? (
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={handleCancelReminders}
-                  style={{ width: '100%', padding: '0.65rem', backgroundColor: '#dc2626', borderColor: '#dc2626' }}
-                >
-                  Cancel Reminder Schedule
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={handleSendReminders}
-                  style={{ width: '100%', padding: '0.65rem' }}
-                >
-                  Activate Reminder Schedule
-                </button>
-              )}
+
+            {/* Add cohort form */}
+            <form onSubmit={handleAddCohort} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              <input
+                type="text"
+                value={newCohort}
+                onChange={e => setNewCohort(e.target.value)}
+                placeholder="e.g. June 20 & 21, 2026"
+                style={{ flex: 1, padding: '0.5rem 0.75rem', border: '1px solid #E2D9CC', borderRadius: 4 }}
+                required
+              />
+              <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1rem' }}>
+                Add Cohort
+              </button>
+            </form>
+
+            <div className="admin-table-container">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Cohort Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cohorts.map(c => {
+                    const completed = isCohortCompleted(c);
+                    return (
+                      <tr key={c}>
+                        <td className="admin-row-name" style={{ fontWeight: c === activeCohort ? 700 : 'normal' }}>
+                          {c} 
+                          {c === activeCohort && <span style={{ color: '#2e7d32', fontSize: '0.75rem', marginLeft: '5px' }}>(Active)</span>}
+                          {completed && <span style={{ color: '#8c8c8c', fontSize: '0.75rem', marginLeft: '5px' }}>(Completed)</span>}
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => handleDeleteCohort(c)}
+                            style={{
+                              background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem'
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {cohorts.length === 0 && (
+                    <tr>
+                      <td colSpan={2} style={{ textAlign: 'center', padding: '1rem', color: '#8C7B6B' }}>
+                        No cohort dates defined yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -472,6 +612,8 @@ export function AdminSettings() {
               </table>
             </div>
           </div>
+
+
         </div>
 
       </div>

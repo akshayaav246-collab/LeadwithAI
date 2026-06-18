@@ -29,6 +29,8 @@ export interface AuthUser {
   country?: 'India' | 'Nepal';
   selectedCohort?: string;
   isFeedbackSubmitted?: boolean;
+  groupMembers?: any[];
+  groupLeaderId?: string;
 }
 
 interface AuthContextValue {

@@ -8,6 +8,7 @@ const { GoogleGenAI } = require('@google/genai');
 const fs = require('fs').promises;
 const User = require('../models/User');
 const Settings = require('../models/Settings');
+const Otp = require('../models/Otp');
 
 const { sendRegistrationEmail, sendOtpEmail, sendVerificationOtpEmail } = require('../utils/email');
 const authMiddleware = require('../middleware/auth');
@@ -15,10 +16,6 @@ const Joi = require('joi');
 const validate = require('../middleware/validate');
 
 const router = express.Router();
-
-// In-memory stores for registration email verification
-const registerOtps = new Map();
-const verifiedEmails = new Set();
 
 
 
@@ -30,12 +27,25 @@ const sendRegisterOtpSchema = Joi.object({
   userType: Joi.string().valid('student', 'working').optional()
 });
 
+// GET /api/auth/check-email (check if user exists)
+router.get('/check-email', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ error: 'Email query parameter is required.' });
+    }
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
+    return res.json({ exists: !!existing });
+  } catch (err) {
+    console.error('Check email error:', err);
+    res.status(500).json({ error: 'Failed to check email.' });
+  }
+});
+
 router.post('/send-register-otp', validate(sendRegisterOtpSchema), async (req, res) => {
   try {
     const { email, userType } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required.' });
-
-
 
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
@@ -43,10 +53,15 @@ router.post('/send-register-otp', validate(sendRegisterOtpSchema), async (req, r
     }
 
     const otp = generateOtp();
-    registerOtps.set(email.toLowerCase(), {
-      otp,
-      expiry: Date.now() + 10 * 60 * 1000 // 10 mins
-    });
+    await Otp.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      {
+        otp,
+        expiry: new Date(Date.now() + 10 * 60 * 1000), // 10 mins
+        isVerified: false
+      },
+      { upsert: true, new: true }
+    );
 
     await sendVerificationOtpEmail(email.toLowerCase(), otp);
     return res.json({ message: 'Registration OTP sent successfully.' });
@@ -64,18 +79,25 @@ const verifyRegisterOtpSchema = Joi.object({
   otp: Joi.string().length(6).required()
 });
 
-router.post('/verify-register-otp', validate(verifyRegisterOtpSchema), (req, res) => {
-  const { email, otp } = req.body;
-  if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required.' });
+router.post('/verify-register-otp', validate(verifyRegisterOtpSchema), async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required.' });
 
-  const record = registerOtps.get(email.toLowerCase());
-  if (!record || record.otp !== otp || Date.now() > record.expiry) {
-    return res.status(400).json({ error: 'Invalid or expired OTP.' });
+    const record = await Otp.findOne({ email: email.toLowerCase() });
+    if (!record || record.otp !== otp || new Date() > record.expiry) {
+      return res.status(400).json({ error: 'Invalid or expired OTP.' });
+    }
+
+    record.isVerified = true;
+    record.expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 mins to complete registration
+    await record.save();
+
+    return res.json({ message: 'Email verified successfully.' });
+  } catch (err) {
+    console.error('Verify register OTP error:', err);
+    res.status(500).json({ error: 'Failed to verify OTP.' });
   }
-
-  registerOtps.delete(email.toLowerCase());
-  verifiedEmails.add(email.toLowerCase());
-  return res.json({ message: 'Email verified successfully.' });
 });
 
 // ─────────────────────────────────────────────
@@ -111,6 +133,53 @@ function signToken(userId) {
 function generateOtp() {
   return crypto.randomInt(100000, 999999).toString();
 }
+
+// Helper: fetch and format user with their group members
+async function getFormattedUser(userId) {
+  const user = await User.findById(userId).select('-otpHash -otpExpiry');
+  if (!user) return null;
+  const groupMembers = await User.find({ groupLeaderId: user._id }).select('-otpHash -otpExpiry');
+  return {
+    id: user._id,
+    fullName: user.fullName,
+    email: user.email,
+    phone: user.phone,
+    userType: user.userType,
+    collegeName: user.collegeName,
+    course: user.course,
+    year: user.year,
+    domain: user.domain,
+    organization: user.organization,
+    heardFrom: user.heardFrom,
+    selectedCohort: user.selectedCohort,
+    salesperson: user.salesperson || null,
+    referralCode: user.referralCode || null,
+    isAdminCreated: user.isAdminCreated,
+    isWaitlisted: user.isWaitlisted,
+    registeredEvents: user.registeredEvents,
+    isFeedbackSubmitted: user.isFeedbackSubmitted,
+    feedback: user.feedback,
+    isProfileComplete: user.isProfileComplete,
+    country: user.country,
+    createdAt: user.createdAt,
+    groupMembers: groupMembers.map(m => ({
+      id: m._id,
+      fullName: m.fullName,
+      email: m.email,
+      phone: m.phone,
+      userType: m.userType,
+      collegeName: m.collegeName,
+      course: m.course,
+      year: m.year,
+      domain: m.domain,
+      organization: m.organization,
+      selectedCohort: m.selectedCohort,
+      registeredEvents: m.registeredEvents,
+      isProfileComplete: m.isProfileComplete
+    }))
+  };
+}
+
 
 // ─────────────────────────────────────────────
 // POST /api/auth/parse-id
@@ -305,11 +374,11 @@ const registerSchema = Joi.object({
   domain: Joi.string().allow('', null),
   organization: Joi.string().allow('', null),
   heardFrom: Joi.string().required(),
+  salesperson: Joi.string().allow('', null).optional(),
   referralCode: Joi.string().allow('', null),
   country: Joi.string().valid('India', 'Nepal').default('India').optional(),
-  selectedCohort: Joi.string().valid(
-    'June 13 & 14, 2026'
-  ).required()
+  selectedCohort: Joi.string().allow('', null).optional(),
+  groupMembers: Joi.string().allow('', null).optional()
 });
 
 router.post('/register', upload.single('idCard'), validate(registerSchema), async (req, res) => {
@@ -326,47 +395,134 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       organization,
       heardFrom,
       referralCode,
-      selectedCohort,
       country,
     } = req.body;
 
     // Validate required fields
-    if (!fullName || !email || !phone || !userType || !heardFrom || !selectedCohort) {
+    if (!fullName || !email || !phone || !userType || !heardFrom) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(400).json({ error: 'Missing required fields.' });
     }
     if (!['student', 'working'].includes(userType)) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(400).json({ error: 'Invalid user type.' });
     }
 
-    if (!verifiedEmails.has(email.toLowerCase())) {
+    const otpRecord = await Otp.findOne({ email: email.toLowerCase(), isVerified: true });
+    if (!otpRecord) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(403).json({ error: 'Email must be verified before registration.' });
     }
 
-    // Check duplicate
-    const existing = await User.findOne({ email: email.toLowerCase() });
-    if (existing) {
-      return res.status(409).json({ error: 'User already exists.' });
+    // Parse group members if any
+    let groupMembers = [];
+    if (req.body.groupMembers) {
+      try {
+        groupMembers = JSON.parse(req.body.groupMembers);
+      } catch (e) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Invalid groupMembers format.' });
+      }
     }
 
-    // Cohort availability validation
-    const { getAvailableCohorts } = require('../utils/cohorts');
-    const available = await getAvailableCohorts();
-    if (!available.includes(selectedCohort)) {
-      return res.status(400).json({ error: `Selected date (${selectedCohort}) is no longer available.` });
+    if (groupMembers.length > 9) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'You can only add up to 9 group members.' });
+    }
+
+    const seenEmails = new Set([email.toLowerCase().trim()]);
+    for (let i = 0; i < groupMembers.length; i++) {
+      const m = groupMembers[i];
+      if (!m.fullName || !m.fullName.trim()) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: `Member ${i + 1}: Name is required.` });
+      }
+      if (!m.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.email)) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: `Member ${i + 1}: A valid email is required.` });
+      }
+      const memberEmail = m.email.toLowerCase().trim();
+      if (seenEmails.has(memberEmail)) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: `Member ${i + 1}: Duplicate email (${m.email}) is not allowed.` });
+      }
+      seenEmails.add(memberEmail);
+
+      if (!m.phone || m.phone.trim().length < 7) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: `Member ${i + 1}: A valid phone number is required.` });
+      }
+
+      if (userType === 'working') {
+        if (!m.domain || !m.domain.trim()) {
+          if (req.file) await fs.unlink(req.file.path).catch(() => {});
+          return res.status(400).json({ error: `Member ${i + 1}: Domain is required.` });
+        }
+        if (!m.organization || !m.organization.trim()) {
+          if (req.file) await fs.unlink(req.file.path).catch(() => {});
+          return res.status(400).json({ error: `Member ${i + 1}: Organization is required.` });
+        }
+      }
+    }
+
+    // Check duplicate emails against DB
+    const allEmails = Array.from(seenEmails);
+    const existingUsers = await User.find({ email: { $in: allEmails } });
+    if (existingUsers.length > 0) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      const duplicateEmails = existingUsers.map(u => u.email).join(', ');
+      return res.status(409).json({ error: `The following email(s) are already registered: ${duplicateEmails}` });
+    }
+
+    const settings = await Settings.getSingleton();
+
+    // Salesperson tracking
+    let selectedSalesperson = null;
+    if (heardFrom === 'GKT Employee') {
+      if (!req.body.salesperson || !req.body.salesperson.trim()) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Salesperson is required when referral is GKT Employee.' });
+      }
+      const activeSalespersons = settings.referralCodes
+        ? settings.referralCodes.filter(r => r.isActive).map(r => r.label)
+        : [];
+      if (!activeSalespersons.includes(req.body.salesperson.trim())) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Selected salesperson is invalid.' });
+      }
+      selectedSalesperson = req.body.salesperson.trim();
+    }
+
+    // Organization validation for working professionals
+    if (userType === 'working') {
+      if (!organization || !organization.trim()) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Organization is required for working professionals.' });
+      }
     }
 
     // Waitlist Logic: Use the dynamic registrationCap from Settings
-    const settings = await Settings.getSingleton();
     const userCount = await User.countDocuments();
     const isWaitlisted = userCount >= (settings.registrationCap || 1000);
 
-    // Referral code resolution from DB (fall back to raw code if not found)
+    // Referral code resolution:
+    // 1. If came via referral link → use that code
+    // 2. If selected GKT Employee + salesperson → find matching referral code and assign it
     let mappedReferral = null;
     if (referralCode) {
       const activeReferrals = settings.referralCodes.filter(r => r.isActive);
       const match = activeReferrals.find(r => r.code === referralCode.toLowerCase());
       mappedReferral = match ? match.label : referralCode;
+    } else if (heardFrom === 'GKT Employee' && selectedSalesperson) {
+      // Auto-assign: find the referral code whose label matches the selected salesperson
+      const activeReferrals = settings.referralCodes ? settings.referralCodes.filter(r => r.isActive) : [];
+      const matchedRef = activeReferrals.find(r => r.label === selectedSalesperson);
+      if (matchedRef) {
+        mappedReferral = matchedRef.label; // store as label (e.g. "gkt01 - Chetana N")
+      }
     }
+
+    const cohortToRegister = settings.activeCohort || 'June 13 & 14, 2026';
 
     // Build user object
     const userData = {
@@ -376,7 +532,8 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       userType,
       heardFrom: heardFrom.trim(),
       referralCode: mappedReferral,
-      selectedCohort,
+      selectedCohort: cohortToRegister,
+      salesperson: selectedSalesperson,
       isWaitlisted,
       country: country || 'India',
       registeredEvents: [{
@@ -398,10 +555,44 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
     }
 
     const user = await User.create(userData);
-    verifiedEmails.delete(email.toLowerCase());
+
+    // Create group members if any
+    const createdMembers = [];
+    if (groupMembers.length > 0) {
+      for (const m of groupMembers) {
+        const memberData = {
+          fullName: m.fullName.trim(),
+          email: m.email.toLowerCase().trim(),
+          phone: m.phone.trim(),
+          userType: userType,
+          selectedCohort: cohortToRegister,
+          groupLeaderId: user._id,
+          heardFrom: user.heardFrom,
+          referralCode: user.referralCode,
+          salesperson: user.salesperson || null,
+          country: country || 'India',
+          registeredEvents: [{
+            eventName: 'Lead with AI: Adopt, Implement and Transform',
+            paymentStatus: 'pending'
+          }]
+        };
+        if (userType === 'working') {
+          memberData.domain = m.domain?.trim() || domain?.trim() || 'General';
+          memberData.organization = m.organization?.trim() || organization?.trim();
+        }
+        const newMember = await User.create(memberData);
+        createdMembers.push(newMember);
+      }
+    }
+
+    // Delete verified OTP record only after all user creations successfully complete
+    await Otp.deleteOne({ email: email.toLowerCase() });
 
     // Send confirmation email (non-blocking)
     sendRegistrationEmail(user).catch((err) => console.error('Email error:', err));
+    for (const member of createdMembers) {
+      sendRegistrationEmail(member).catch((err) => console.error('Email error:', err));
+    }
 
     const token = signToken(user._id);
     return res.status(201).json({
@@ -427,6 +618,9 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
     });
   } catch (err) {
     console.error('Register error:', err);
+    if (req.file) {
+      await fs.unlink(req.file.path).catch(() => {});
+    }
     res.status(500).json({ error: 'Server error. Please try again.' });
   }
 });
@@ -493,27 +687,11 @@ router.post('/verify-otp', validate(verifyOtpSchema), async (req, res) => {
     await user.save();
 
     const token = signToken(user._id);
+    const formattedUser = await getFormattedUser(user._id);
     return res.json({
       message: 'Login successful',
       token,
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        userType: user.userType,
-        collegeName: user.collegeName,
-        course: user.course,
-        year: user.year,
-        domain: user.domain,
-        organization: user.organization,
-        heardFrom: user.heardFrom,
-        selectedCohort: user.selectedCohort,
-        isAdminCreated: user.isAdminCreated,
-        isWaitlisted: user.isWaitlisted,
-        registeredEvents: user.registeredEvents,
-        isProfileComplete: user.isProfileComplete,
-      },
+      user: formattedUser,
     });
   } catch (err) {
     console.error('Verify OTP error:', err);
@@ -526,32 +704,11 @@ router.post('/verify-otp', validate(verifyOtpSchema), async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('-otpHash -otpExpiry');
-    if (!user) return res.status(404).json({ error: 'User not found.' });
+    const formattedUser = await getFormattedUser(req.userId);
+    if (!formattedUser) return res.status(404).json({ error: 'User not found.' });
 
     return res.json({
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        userType: user.userType,
-        collegeName: user.collegeName,
-        course: user.course,
-        year: user.year,
-        domain: user.domain,
-        organization: user.organization,
-        heardFrom: user.heardFrom,
-        selectedCohort: user.selectedCohort,
-        isAdminCreated: user.isAdminCreated,
-        isWaitlisted: user.isWaitlisted,
-        registeredEvents: user.registeredEvents,
-        isFeedbackSubmitted: user.isFeedbackSubmitted,
-        feedback: user.feedback,
-        isProfileComplete: user.isProfileComplete,
-        country: user.country,
-        createdAt: user.createdAt,
-      },
+      user: formattedUser,
     });
   } catch (err) {
     console.error('Get me error:', err);
@@ -584,17 +741,37 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
       heardFromOther,
       selectedCohort,
       country,
+      salesperson,
     } = req.body;
 
+    const isGroupMember = !!user.groupLeaderId;
+
     // Validate required fields
-    if (!phone || !userType || !heardFrom || !selectedCohort) {
+    if (!phone || !userType || (!isGroupMember && !heardFrom) || !selectedCohort) {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(400).json({ error: 'Missing required fields (phone, userType, heardFrom, selectedCohort).' });
     }
 
-    const validCohorts = [
-      'June 13 & 14, 2026'
-    ];
+    const settings = await Settings.getSingleton();
+
+    // Salesperson tracking
+    let selectedSalesperson = null;
+    if (!isGroupMember && heardFrom === 'GKT Employee') {
+      if (!salesperson || !salesperson.trim()) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Salesperson is required when referral is GKT Employee.' });
+      }
+      const activeSalespersons = settings.referralCodes
+        ? settings.referralCodes.filter(r => r.isActive).map(r => r.label)
+        : [];
+      if (!activeSalespersons.includes(salesperson.trim())) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Selected salesperson is invalid.' });
+      }
+      selectedSalesperson = salesperson.trim();
+    }
+
+    const validCohorts = settings.cohorts || ['June 13 & 14, 2026'];
     if (!validCohorts.includes(selectedCohort)) {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(400).json({ error: 'Invalid cohort selected.' });
@@ -634,9 +811,9 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
         return res.status(400).json({ error: 'College ID card PDF is required.' });
       }
     } else if (userType === 'working') {
-      if (!domain?.trim()) {
+      if (!domain?.trim() || !organization?.trim()) {
         if (req.file) await fs.unlink(req.file.path).catch(() => {});
-        return res.status(400).json({ error: 'Domain is required for working professionals.' });
+        return res.status(400).json({ error: 'Domain and Organization are required for working professionals.' });
       }
     } else {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
@@ -644,20 +821,36 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
     }
 
     // Resolve heardFrom
-    let finalHeardFrom = heardFrom.trim();
-    if (finalHeardFrom === 'Others') {
-      if (!heardFromOther?.trim()) {
-        if (req.file) await fs.unlink(req.file.path).catch(() => {});
-        return res.status(400).json({ error: 'Please specify how you heard about us.' });
+    let finalHeardFrom = user.heardFrom || '';
+    if (!isGroupMember && heardFrom) {
+      finalHeardFrom = heardFrom.trim();
+      if (finalHeardFrom === 'Others') {
+        if (!heardFromOther?.trim()) {
+          if (req.file) await fs.unlink(req.file.path).catch(() => {});
+          return res.status(400).json({ error: 'Please specify how you heard about us.' });
+        }
+        finalHeardFrom = heardFromOther.trim();
       }
-      finalHeardFrom = heardFromOther.trim();
     }
 
     // Update user properties
     user.phone = phone.trim();
     user.userType = userType;
-    user.heardFrom = finalHeardFrom;
     user.selectedCohort = selectedCohort;
+    
+    if (!isGroupMember) {
+      user.heardFrom = finalHeardFrom;
+      user.salesperson = selectedSalesperson;
+
+      // Auto-assign referral code when user picks GKT Employee + salesperson (no existing referral)
+      if (!user.referralCode && finalHeardFrom === 'GKT Employee' && selectedSalesperson) {
+        const activeReferrals = settings.referralCodes ? settings.referralCodes.filter(r => r.isActive) : [];
+        const matchedRef = activeReferrals.find(r => r.label === selectedSalesperson);
+        if (matchedRef) {
+          user.referralCode = matchedRef.label;
+        }
+      }
+    }
     if (country) {
       user.country = country;
     }
@@ -673,7 +866,7 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
       user.organization = undefined;
     } else {
       user.domain = domain.trim();
-      user.organization = organization?.trim() || undefined;
+      user.organization = organization.trim();
       user.collegeName = undefined;
       user.course = undefined;
       user.year = undefined;
@@ -682,27 +875,10 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
 
     await user.save();
 
+    const formattedUser = await getFormattedUser(user._id);
     return res.json({
       message: 'Profile completed successfully.',
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        userType: user.userType,
-        collegeName: user.collegeName,
-        course: user.course,
-        year: user.year,
-        domain: user.domain,
-        organization: user.organization,
-        heardFrom: user.heardFrom,
-        selectedCohort: user.selectedCohort,
-        isAdminCreated: user.isAdminCreated,
-        isWaitlisted: user.isWaitlisted,
-        country: user.country,
-        registeredEvents: user.registeredEvents,
-        isProfileComplete: user.isProfileComplete,
-      }
+      user: formattedUser
     });
   } catch (err) {
     console.error('PATCH /complete-profile error:', err);
@@ -716,9 +892,13 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
 // POST /api/auth/change-cohort (protected)
 router.post('/change-cohort', authMiddleware, async (req, res) => {
   try {
-    const validCohorts = [
-      'June 13 & 14, 2026'
-    ];
+    const { cohort } = req.body;
+    if (!cohort) {
+      return res.status(400).json({ error: 'Cohort is required.' });
+    }
+
+    const settings = await Settings.getSingleton();
+    const validCohorts = settings.cohorts || ['June 13 & 14, 2026'];
     if (!validCohorts.includes(cohort)) {
       return res.status(400).json({ error: 'Invalid cohort selected.' });
     }
@@ -748,26 +928,10 @@ router.post('/change-cohort', authMiddleware, async (req, res) => {
 
     await user.save();
 
+    const formattedUser = await getFormattedUser(user._id);
     return res.json({
       message: 'Cohort updated successfully.',
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        userType: user.userType,
-        collegeName: user.collegeName,
-        course: user.course,
-        year: user.year,
-        domain: user.domain,
-        organization: user.organization,
-        heardFrom: user.heardFrom,
-        selectedCohort: user.selectedCohort,
-        isWaitlisted: user.isWaitlisted,
-        country: user.country,
-        registeredEvents: user.registeredEvents,
-        isProfileComplete: user.isProfileComplete,
-      }
+      user: formattedUser
     });
   } catch (err) {
     console.error('Change cohort error:', err);
@@ -780,7 +944,7 @@ const feedbackSchema = Joi.object({
   feedback: Joi.array().items(
     Joi.object({
       session: Joi.string().required(),
-      rating: Joi.string().valid('Excellent', 'Good', 'Average', 'Poor').required(),
+      rating: Joi.string().allow('', null).optional(),
       text: Joi.string().allow('').optional()
     })
   ).min(1).required()
@@ -836,6 +1000,135 @@ router.get('/certificate/:id', async (req, res) => {
   } catch (err) {
     console.error('Certificate fetch error:', err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/auth/add-group-member (protected)
+// ─────────────────────────────────────────────
+const addGroupMemberSchema = Joi.object({
+  fullName: Joi.string().required(),
+  email: Joi.string().email().required(),
+  phone: Joi.string().required(),
+  collegeName: Joi.string().allow('', null).optional(),
+  course: Joi.string().allow('', null).optional(),
+  year: Joi.string().allow('', null).optional(),
+  domain: Joi.string().allow('', null).optional(),
+  organization: Joi.string().allow('', null).optional()
+});
+
+router.post('/add-group-member', authMiddleware, upload.single('idCard'), async (req, res) => {
+  try {
+    const { error, value } = addGroupMemberSchema.validate(req.body, { abortEarly: false, stripUnknown: true });
+    if (error) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      const messages = error.details.map(i => i.message);
+      return res.status(400).json({ error: 'Validation Error', details: messages });
+    }
+
+    const leader = await User.findById(req.userId);
+    if (!leader) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(404).json({ error: 'Leader user not found.' });
+    }
+
+    // Check group size limit (max 9 members added by one leader)
+    const memberCount = await User.countDocuments({ groupLeaderId: leader._id });
+    if (memberCount >= 9) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'You can only add up to 9 group members.' });
+    }
+
+    const { fullName, email, phone, collegeName, course, year, domain, organization } = value;
+    const memberEmail = email.toLowerCase().trim();
+
+    // Check if email already registered
+    const existing = await User.findOne({ email: memberEmail });
+    if (existing) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(409).json({ error: `A user with email ${email} is already registered.` });
+    }
+
+    // Determine target cohort: use leader's cohort
+    const cohortToRegister = leader.selectedCohort || (await Settings.getSingleton()).activeCohort;
+
+    // Validate phone number
+    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
+    const cleanedPhone = phone.replace(/[^\d+]/g, '');
+    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
+    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'Please enter a valid phone number.' });
+    }
+
+    const userData = {
+      fullName: fullName.trim(),
+      email: memberEmail,
+      phone: phone.trim(),
+      userType: leader.userType,
+      selectedCohort: cohortToRegister,
+      groupLeaderId: leader._id,
+      heardFrom: leader.heardFrom,
+      referralCode: leader.referralCode || null,
+      salesperson: leader.salesperson || null,
+      isWaitlisted: leader.isWaitlisted || false,
+      country: leader.country || 'India',
+      registeredEvents: [{
+        eventName: 'Lead with AI: Adopt, Implement and Transform',
+        paymentStatus: 'pending'
+      }]
+    };
+
+    if (leader.userType === 'student') {
+      if (!collegeName?.trim() || !course?.trim() || !year?.trim()) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'College, course, and year are required for student members.' });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: 'College ID card PDF is required for student members.' });
+      }
+      userData.collegeName = collegeName.trim();
+      userData.course = course.trim();
+      userData.year = year.trim();
+      userData.idCardPath = req.file.filename;
+    } else {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      if (!organization?.trim()) {
+        return res.status(400).json({ error: 'Organization is required for working professional members.' });
+      }
+      userData.domain = domain?.trim() || 'General';
+      userData.organization = organization.trim();
+    }
+
+    const newMember = await User.create(userData);
+
+    // Send confirmation email
+    sendRegistrationEmail(newMember).catch(err => console.error('Email error:', err));
+
+    return res.status(201).json({
+      message: 'Group member added successfully.',
+      member: {
+        id: newMember._id,
+        fullName: newMember.fullName,
+        email: newMember.email,
+        phone: newMember.phone,
+        userType: newMember.userType,
+        collegeName: newMember.collegeName,
+        course: newMember.course,
+        year: newMember.year,
+        domain: newMember.domain,
+        organization: newMember.organization,
+        selectedCohort: newMember.selectedCohort,
+        registeredEvents: newMember.registeredEvents,
+        idCardPath: newMember.idCardPath,
+      }
+    });
+  } catch (err) {
+    console.error('Add group member error:', err);
+    if (req.file) {
+      await fs.unlink(req.file.path).catch(() => {});
+    }
+    res.status(500).json({ error: 'Server error. Please try again.' });
   }
 });
 

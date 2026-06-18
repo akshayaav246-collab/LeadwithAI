@@ -12,7 +12,6 @@ const authRoutes = require('./src/routes/auth');
 const paymentRoutes = require('./src/routes/payment');
 const adminRoutes = require('./src/routes/admin');
 const User = require('./src/models/User');
-const { sendReminderEmail, sendDay2ReminderEmail } = require('./src/utils/email');
 const app = express();
 const PORT = process.env.PORT || 4002;
 // Event details
@@ -147,102 +146,7 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
-// Helper: Determine if tomorrow (Friday in Kolkata) is the day before a cohort weekend, and return its name
-function getCohortNameForTomorrow() {
-  const tomorrow = new Date(new Date().getTime() + 24 * 60 * 60 * 1000);
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric'
-  });
-  const parts = formatter.formatToParts(tomorrow);
-  const y = parseInt(parts.find(p => p.type === 'year').value);
-  const m = parseInt(parts.find(p => p.type === 'month').value); // 1-indexed, June is 6
-  const d = parseInt(parts.find(p => p.type === 'day').value);
 
-  if (y === 2026 && m === 6) {
-    if (d === 13) return 'June 13 & 14, 2026';
-  }
-  return null;
-}
-
-// Helper: Determine if today (Saturday in Kolkata) is a cohort day 1, and return its name
-function getCohortNameForToday() {
-  const today = new Date();
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric'
-  });
-  const parts = formatter.formatToParts(today);
-  const y = parseInt(parts.find(p => p.type === 'year').value);
-  const m = parseInt(parts.find(p => p.type === 'month').value); // June is 6
-  const d = parseInt(parts.find(p => p.type === 'day').value);
-
-  if (y === 2026 && m === 6) {
-    if (d === 13) return 'June 13 & 14, 2026';
-  }
-  return null;
-}
-
-// --- Reminder Email Cron Jobs ---------------
-// Runs daily at 10:00 AM IST
-// Sends "starts TOMORROW" reminder to all paid participants registered for the upcoming Saturday cohort if activated by admin
-function scheduleReminderEmails() {
-  const Settings = require('./src/models/Settings');
-  const { sendCohortDay1Reminders, sendCohortDay2Reminders } = require('./src/utils/email');
-
-  cron.schedule('0 10 * * *', async () => {
-    try {
-      const cohort = getCohortNameForTomorrow();
-      if (!cohort) {
-        console.log(`[Cron Day1] Tomorrow is not a cohort Saturday. Skipping.`);
-        return;
-      }
-
-      const settings = await Settings.getSingleton();
-      if (!settings.activeReminderCohort || settings.activeReminderCohort !== cohort) {
-        console.log(`[Cron Day1] Cohort ${cohort} is not active for reminders. Active: ${settings.activeReminderCohort}. Skipping.`);
-        return;
-      }
-
-      await sendCohortDay1Reminders(cohort, EVENT_NAME);
-    } catch (err) {
-      console.error('[Cron Day1] Job error:', err.message);
-    }
-  }, { timezone: 'Asia/Kolkata' });
-  console.log('✓ Day 1 reminder cron scheduled (Daily at 10:00 AM IST)');
-
-  // Runs daily at 6:30 PM IST
-  // Sends "get ready for Day 2" email after Day 1 ends to paid participants of today's cohort if activated by admin
-  cron.schedule('30 18 * * *', async () => {
-    try {
-      const cohort = getCohortNameForToday();
-      if (!cohort) {
-        console.log(`[Cron Day2] Today is not a cohort Saturday. Skipping.`);
-        return;
-      }
-
-      const settings = await Settings.getSingleton();
-      if (!settings.activeReminderCohort || settings.activeReminderCohort !== cohort) {
-        console.log(`[Cron Day2] Cohort ${cohort} is not active for reminders. Active: ${settings.activeReminderCohort}. Skipping.`);
-        return;
-      }
-
-      await sendCohortDay2Reminders(cohort, EVENT_NAME);
-
-      // Clear the active cohort as both Day 1 and Day 2 are completed
-      settings.activeReminderCohort = null;
-      await settings.save();
-      console.log(`[Cron Day2] Cleared activeReminderCohort from Settings after Day 2 reminders.`);
-    } catch (err) {
-      console.error('[Cron Day2] Job error:', err.message);
-    }
-  }, { timezone: 'Asia/Kolkata' });
-  console.log('✓ Day 2 reminder cron scheduled (Daily at 6:30 PM IST)');
-}
 // --- MongoDB + Start Server ------------------
 mongoose.connection.on('disconnected', () => {
   console.warn('MongoDB disconnected. Mongoose will attempt to auto-reconnect...');
@@ -277,7 +181,6 @@ const connectDB = async (retries = 5, delayMs = 5000) => {
       app.listen(PORT, () => {
         console.log(`Backend running on http://localhost:${PORT}`);
       });
-      scheduleReminderEmails();
       return; // Exit loop on success
     } catch (err) {
       console.error(`MongoDB connection failed. Retries left: ${retries - 1}`, err.message);

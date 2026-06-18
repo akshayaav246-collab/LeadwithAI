@@ -46,9 +46,11 @@ export function CertificateGenerator({ user, onClose }: CertificateGeneratorProp
 
   useEffect(() => {
     // Generate QR Code Image using the verify link
-    const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
+    const origin = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? window.location.origin
+      : 'https://www.globalknowledgetech.com';
     const userId = user.id || user._id || '';
-    const verifyUrl = `${window.location.origin}${baseUrl}/verify/${userId}`;
+    const verifyUrl = `${origin}/leadwithAI/verify/${userId}`;
 
     QRCode.toDataURL(verifyUrl, { width: CONFIG.qr.size, margin: 1 })
       .then(url => {
