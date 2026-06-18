@@ -1261,7 +1261,36 @@ export function Register() {
                               <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-espresso)' }}>
                                 Want to add attendees?
                               </span>
-                              {groupMembers.length === 0 ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (groupMembers.length > 0) {
+                                      setGroupMembers(groupMembers.slice(0, -1));
+                                    }
+                                  }}
+                                  disabled={groupMembers.length === 0}
+                                  style={{
+                                    background: groupMembers.length === 0 ? '#cbd5e1' : '#ef4444',
+                                    border: 'none',
+                                    color: '#fff',
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '50%',
+                                    cursor: groupMembers.length === 0 ? 'not-allowed' : 'pointer',
+                                    fontWeight: 700,
+                                    fontSize: '1.2rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                  }}
+                                >
+                                  -
+                                </button>
+                                <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-espresso)', minWidth: '20px', textAlign: 'center' }}>
+                                  {groupMembers.length}
+                                </span>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1269,7 +1298,11 @@ export function Register() {
                                       toast.warning('Please verify your email address first.');
                                       return;
                                     }
-                                    setGroupMembers([{ fullName: '', email: '', phone: '' }]);
+                                    if (groupMembers.length >= 9) {
+                                      toast.error('You can only add up to 9 colleagues/friends.');
+                                      return;
+                                    }
+                                    setGroupMembers([...groupMembers, { fullName: '', email: '', phone: '' }]);
                                   }}
                                   style={{
                                     background: 'var(--color-sienna)',
@@ -1289,63 +1322,7 @@ export function Register() {
                                 >
                                   +
                                 </button>
-                              ) : (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setGroupMembers(groupMembers.slice(0, -1));
-                                    }}
-                                    style={{
-                                      background: '#ef4444',
-                                      border: 'none',
-                                      color: '#fff',
-                                      width: '28px',
-                                      height: '28px',
-                                      borderRadius: '50%',
-                                      cursor: 'pointer',
-                                      fontWeight: 700,
-                                      fontSize: '1.2rem',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                    }}
-                                  >
-                                    -
-                                  </button>
-                                  <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-espresso)', minWidth: '20px', textAlign: 'center' }}>
-                                    {groupMembers.length}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (groupMembers.length >= 9) {
-                                        toast.error('You can only add up to 9 colleagues/friends.');
-                                        return;
-                                      }
-                                      setGroupMembers([...groupMembers, { fullName: '', email: '', phone: '' }]);
-                                    }}
-                                    style={{
-                                      background: 'var(--color-sienna)',
-                                      border: 'none',
-                                      color: '#fff',
-                                      width: '28px',
-                                      height: '28px',
-                                      borderRadius: '50%',
-                                      cursor: 'pointer',
-                                      fontWeight: 700,
-                                      fontSize: '1.2rem',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                                    }}
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              )}
+                              </div>
                             </div>
 
                             {groupMembers.length === 0 ? (
@@ -1493,7 +1470,7 @@ export function Register() {
                                     <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
                                   </span>
                                 ) : (
-                                  <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span>)</span></>
+                                  <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>₹{(1 + groupMembers.length) * (userType === 'student' ? 499 : 999)}</span>)</span></>
                                 )}
                               </button>
                             </div>

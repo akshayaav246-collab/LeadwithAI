@@ -268,34 +268,85 @@ async function sendOtpEmail(email, otp, name) {
 async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoinUrl) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
   const cohortDate = await getCohortDateForUser(user);
-  const contentHtml = `
-    <p style="font-size: 18px; color: #10B981; font-weight: bold; margin-bottom: 20px;">Payment Confirmed!</p>
-    <p>Your seat for <strong>${eventName}</strong> is officially confirmed. We look forward to seeing you!</p>
+  let contentHtml = '';
+  let subject = `Payment Confirmed — Your seat is booked!`;
+
+  if (user.groupLeaderId) {
+    const User = require('../models/User');
+    const leader = await User.findById(user.groupLeaderId);
+    const leaderName = leader ? leader.fullName : 'your colleague';
     
-    <div style="background-color: #F0F4F8; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; margin: 30px 0;">
-      <table width="100%" border="0" cellspacing="0" cellpadding="0">
-        <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B; width: 140px;" valign="top"><strong>Event</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${eventName}</td>
-        </tr>
-        <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${cohortDate}</td>
-        </tr>
-        <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Amount Paid</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">₹${user.userType === 'student' ? '499' : '999'}</td>
-        </tr>
-        <tr>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Payment ID</strong></td>
-          <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${paymentId}</td>
-        </tr>
-        <tr>
-          <td colspan="2" style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #166534; font-weight: bold;" valign="top">Workshop details will be shared shortly through mail.</td>
-        </tr>
-      </table>
-    </div>
-  `;
+    subject = `Registration & Payment Confirmed — Lead with AI Workshop`;
+    contentHtml = `
+      <p style="font-size: 18px; color: #10B981; font-weight: bold; margin-bottom: 20px;">Registration & Payment Confirmed!</p>
+      <p>You have been registered for the <strong>${eventName}</strong> workshop scheduled on <strong>${cohortDate}</strong> by your colleague <strong>${leaderName}</strong>.</p>
+      <p>The payment for your seat has been fully completed and confirmed by your group leader. Your seat is officially booked!</p>
+      
+      <p>To access the workshop sessions and verify your registration, <strong>please log in to your registration portal and complete your individual profile:</strong></p>
+      <p style="margin: 20px 0;"><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold; font-size: 16px;">Click here to log in and complete your profile</a></p>
+      
+      <div style="background-color: #F0F4F8; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; margin: 30px 0;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B; width: 140px;" valign="top"><strong>Event</strong></td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${eventName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${cohortDate}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Payment ID</strong></td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${paymentId}</td>
+          </tr>
+          ${zoomJoinUrl ? `
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Zoom Link</strong></td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #2563EB;" valign="top"><a href="${zoomJoinUrl}" style="color: #2563EB; font-weight: bold; text-decoration: underline;">Join Webinar</a></td>
+          </tr>
+          ` : ''}
+          <tr>
+            <td colspan="2" style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #166534; font-weight: bold;" valign="top">Workshop details will be shared shortly through mail.</td>
+          </tr>
+        </table>
+      </div>
+    `;
+  } else {
+    contentHtml = `
+      <p style="font-size: 18px; color: #10B981; font-weight: bold; margin-bottom: 20px;">Payment Confirmed!</p>
+      <p>Your seat for <strong>${eventName}</strong> is officially confirmed. We look forward to seeing you!</p>
+      
+      <div style="background-color: #F0F4F8; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; margin: 30px 0;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B; width: 140px;" valign="top"><strong>Event</strong></td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${eventName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${cohortDate}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Amount Paid</strong></td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">₹${user.userType === 'student' ? '499' : '999'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Payment ID</strong></td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B;" valign="top">${paymentId}</td>
+          </tr>
+          ${zoomJoinUrl ? `
+          <tr>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Zoom Link</strong></td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #2563EB;" valign="top"><a href="${zoomJoinUrl}" style="color: #2563EB; font-weight: bold; text-decoration: underline;">Join Webinar</a></td>
+          </tr>
+          ` : ''}
+          <tr>
+            <td colspan="2" style="padding: 10px 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #166534; font-weight: bold;" valign="top">Workshop details will be shared shortly through mail.</td>
+          </tr>
+        </table>
+      </div>
+    `;
+  }
 
   const html = getHtmlTemplate({ greeting, contentHtml });
 
@@ -320,7 +371,7 @@ END:VCALENDAR`;
   await transporter.sendMail({
     from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
     to: user.email,
-    subject: `Payment Confirmed — Your seat is booked!`,
+    subject: subject,
     html,
     icalEvent: {
       filename: 'invitation.ics',

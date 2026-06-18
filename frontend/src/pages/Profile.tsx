@@ -802,6 +802,19 @@ export function Profile() {
   const costPerPerson = user.userType === 'student' ? 499 : 999;
   const leaderConfirmed = user.registeredEvents?.some((e: any) => e.eventName === 'Lead with AI: Adopt, Implement and Transform' && e.paymentStatus === 'confirmed');
 
+  const unpaidAttendees = (user.groupMembers || []).filter((m: any) => {
+    return !m.registeredEvents?.some((e: any) => e.eventName === 'Lead with AI: Adopt, Implement and Transform' && e.paymentStatus === 'confirmed');
+  });
+  const unpaidAttendeesCount = unpaidAttendees.length;
+  const needToPaySelf = !leaderConfirmed;
+  let totalAmount = 0;
+  if (needToPaySelf) {
+    totalAmount += costPerPerson;
+  }
+  unpaidAttendees.forEach((m: any) => {
+    totalAmount += m.userType === 'student' ? 499 : 999;
+  });
+
   // Deduplicate events based on eventName (keep the one with 'confirmed' status if there are multiple)
   const uniqueEventsMap = new Map<string, RegisteredEvent>();
   (user.registeredEvents || []).forEach(evt => {
@@ -1215,15 +1228,15 @@ export function Profile() {
                     {evt.paymentStatus === 'pending' && !(user as any).isWaitlisted && (
                       <div style={{ marginTop: '1rem', background: '#fcfbf9', border: '1px solid #e7dfd5', borderRadius: '8px', padding: '1rem', width: '100%', textAlign: 'left' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem', color: 'var(--color-espresso)', fontWeight: 600, marginBottom: '0.75rem' }}>
-                          <span>Registration Amount:</span>
-                          <span>₹{costPerPerson}</span>
+                          <span>Registration Amount{unpaidAttendeesCount > 0 ? ` (including ${unpaidAttendeesCount} attendees)` : ''}:</span>
+                          <span>₹{totalAmount}</span>
                         </div>
                         <button 
                           className="btn-primary" 
                           onClick={handlePayNow} 
                           style={{ width: '100%', padding: '0.6rem', fontSize: '0.9rem', display: 'block' }}
                         >
-                          Pay ₹{costPerPerson} Now →
+                          Pay ₹{totalAmount} Now →
                         </button>
                         {user.country === 'Nepal' && (
                           <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.75rem', color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '6px', padding: '0.6rem', textAlign: 'center', lineHeight: '1.4' }}>

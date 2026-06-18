@@ -43,18 +43,29 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Please complete your profile before proceeding to payment.' });
     }
 
-    // Determine who needs to be paid for
+    // Determine who needs to be paid for (including attendees)
     const usersToPayFor = [];
     if (!isConfirmed(user)) {
       usersToPayFor.push(user);
+    }
+
+    // Find all group members registered by this user
+    const attendees = await User.find({ groupLeaderId: user._id });
+    for (const member of attendees) {
+      if (!isConfirmed(member)) {
+        usersToPayFor.push(member);
+      }
     }
 
     if (usersToPayFor.length === 0) {
       return res.status(409).json({ error: 'You have already paid.' });
     }
 
-    // Calculate total amount
-    let totalAmountPaise = user.userType === 'student' ? AMOUNT_STUDENT_PAISE : AMOUNT_WORKING_PAISE;
+    // Calculate total amount (summing up leader + attendees)
+    let totalAmountPaise = 0;
+    for (const u of usersToPayFor) {
+      totalAmountPaise += u.userType === 'student' ? AMOUNT_STUDENT_PAISE : AMOUNT_WORKING_PAISE;
+    }
 
     const order = await razorpay.orders.create({
       amount: totalAmountPaise,
@@ -131,8 +142,8 @@ router.post('/verify', authMiddleware, validate(verifyPaymentSchema), async (req
     }
 
     for (const u of users) {
-      // Confirm profile is complete for safety
-      if (u.isProfileComplete === false) {
+      // Confirm profile is complete for safety (skip this for attendees paid by leader)
+      if (u.isProfileComplete === false && !u.groupLeaderId) {
         continue;
       }
 
