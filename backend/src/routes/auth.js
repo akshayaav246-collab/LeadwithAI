@@ -895,8 +895,9 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
       user.collegeName = undefined;
       user.course = undefined;
       user.year = undefined;
-      user.idCardPath = undefined;
     }
+    
+    user.isProfileSubmittedByMember = true;
 
     await user.save();
 

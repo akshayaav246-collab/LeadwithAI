@@ -59,6 +59,7 @@ const userSchema = new mongoose.Schema(
     referralCode: { type: String, default: null },
     selectedCohort: { type: String, default: null },
     isAdminCreated: { type: Boolean, default: false },
+    isProfileSubmittedByMember: { type: Boolean, default: false },
 
     // Feedback for the sessions/questions
     feedback: [{
@@ -95,6 +96,7 @@ userSchema.methods.verifyOtp = async function (otpPlain) {
 
 userSchema.virtual('isProfileComplete').get(function () {
   if (!this.phone || !this.phone.trim() || !this.userType) return false;
+  if (this.groupLeaderId && !this.isProfileSubmittedByMember) return false;
   if (this.userType === 'student') {
     return !!(this.collegeName && this.course && this.year && this.idCardPath);
   }

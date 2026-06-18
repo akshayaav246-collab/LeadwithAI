@@ -179,40 +179,20 @@ function getIcsDateRange(cohortStr) {
  * Send registration confirmation email (HTML format)
  */
 async function sendRegistrationEmail(user) {
+  if (user.groupLeaderId) {
+    return; // No registration/payment-pending email for attendees (covered in payment confirmed email)
+  }
+
   const greeting = `Welcome, ${user.fullName.split(' ')[0]}!`;
   const cohortDate = await getCohortDateForUser(user);
   let contentHtml = '';
   let subject = 'Registration Confirmed — Lead with AI Workshop';
 
-  if (user.groupLeaderId) {
-    const User = require('../models/User');
-    const leader = await User.findById(user.groupLeaderId);
-    const leaderName = leader ? leader.fullName : 'your colleague';
-    
-    if (user.userType === 'student') {
-      subject = 'Action Required: Complete your Student Profile — Lead with AI Workshop';
-      contentHtml = `
-        <p>You have been added to the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop group by <strong>${leaderName}</strong> scheduled on <strong>${cohortDate}</strong>.</p>
-        <p>Since you are registering as a student, to secure your seat, you must complete your profile by entering your college details, uploading your physical College ID card, and completing your individual payment of <strong>₹499</strong>.</p>
-        <p>Please log in to your registration portal to complete your profile and proceed with your payment:</p>
-        <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
-      `;
-    } else {
-      subject = 'Action Required: Complete your Payment — Lead with AI Workshop';
-      contentHtml = `
-        <p>You have been added to the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop group by <strong>${leaderName}</strong> scheduled on <strong>${cohortDate}</strong>.</p>
-        <p>Your profile details are complete. To secure your seat, you must complete your individual payment of <strong>₹999</strong>.</p>
-        <p>Please log in to your registration portal to make your payment:</p>
-        <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
-      `;
-    }
-  } else {
-    contentHtml = `
-      <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop scheduled on <strong>${cohortDate}</strong>.</p>
-      <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
-      <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
-    `;
-  }
+  contentHtml = `
+    <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop scheduled on <strong>${cohortDate}</strong>.</p>
+    <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
+    <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
+  `;
 
   const html = getHtmlTemplate({ greeting, contentHtml });
 
@@ -265,7 +245,7 @@ async function sendOtpEmail(email, otp, name) {
 /**
  * Send payment confirmation email
  */
-async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoinUrl) {
+async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoinUrl, totalPaid) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
   const cohortDate = await getCohortDateForUser(user);
   let contentHtml = '';
@@ -274,15 +254,15 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
   if (user.groupLeaderId) {
     const User = require('../models/User');
     const leader = await User.findById(user.groupLeaderId);
-    const leaderName = leader ? leader.fullName : 'your colleague';
+    const leaderName = leader ? leader.fullName : 'Group Leader';
     
     subject = `Registration & Payment Confirmed — Lead with AI Workshop`;
     contentHtml = `
       <p style="font-size: 18px; color: #10B981; font-weight: bold; margin-bottom: 20px;">Registration & Payment Confirmed!</p>
-      <p>You have been registered for the <strong>${eventName}</strong> workshop scheduled on <strong>${cohortDate}</strong> by your colleague <strong>${leaderName}</strong>.</p>
-      <p>The payment for your seat has been fully completed and confirmed by your group leader. Your seat is officially booked!</p>
+      <p>You have been registered for the <strong>${eventName}</strong> workshop scheduled on <strong>${cohortDate}</strong> by <strong>${leaderName}</strong>.</p>
+      <p>The payment for your seat has been fully completed and confirmed!</p>
       
-      <p>To access the workshop sessions and verify your registration, <strong>please log in to your registration portal and complete your individual profile:</strong></p>
+      <p>To access the workshop sessions and verify your registration, <strong>please log in to your registration portal and complete your profile:</strong></p>
       <p style="margin: 20px 0;"><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold; font-size: 16px;">Click here to log in and complete your profile</a></p>
       
       <div style="background-color: #F0F4F8; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; margin: 30px 0;">
@@ -328,7 +308,7 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
           </tr>
           <tr>
             <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Amount Paid</strong></td>
-            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">₹${user.userType === 'student' ? '499' : '999'}</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">₹${totalPaid !== undefined ? totalPaid : (user.userType === 'student' ? 499 : 999)}</td>
           </tr>
           <tr>
             <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Payment ID</strong></td>

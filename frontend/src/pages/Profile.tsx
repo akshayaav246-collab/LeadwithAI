@@ -71,6 +71,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
   const [selectedCohort, setSelectedCohort] = useState(user.selectedCohort || 'June 13 & 14, 2026');
 
   const [isSaving, setIsSaving] = useState(false);
+  const hasReferral = !!(localStorage.getItem('referralCode') || (user && user.referralCode && user.referralCode !== '-'));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -110,7 +111,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
       if (!organization.trim()) newErrors.organization = 'Please enter your organization/company.';
     }
 
-    if (!user.groupLeaderId) {
+    if (!user.groupLeaderId && !hasReferral) {
       if (!heardFrom) {
         newErrors.heardFrom = 'Please let us know how you heard about us.';
       } else if (heardFrom === 'Others' && !heardFromOther.trim()) {
@@ -150,7 +151,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
         formData.append('organization', organization.trim());
       }
 
-      if (!user.groupLeaderId) {
+      if (!user.groupLeaderId && !hasReferral) {
         formData.append('heardFrom', heardFrom === 'Others' ? heardFromOther.trim() : heardFrom);
         if (heardFrom === 'GKT Employee' && salesperson) {
           formData.append('salesperson', salesperson);
@@ -466,7 +467,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
 
 
           {/* How did you hear about us? */}
-          {!user.groupLeaderId && (
+          {!user.groupLeaderId && !hasReferral && (
             <>
               <div className="register-field" style={{ marginTop: '1.25rem' }}>
                 <label htmlFor="comp-heardFrom">How did you hear about us? *</label>
@@ -1238,11 +1239,6 @@ export function Profile() {
                         >
                           Pay ₹{totalAmount} Now →
                         </button>
-                        {user.country === 'Nepal' && (
-                          <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.75rem', color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '6px', padding: '0.6rem', textAlign: 'center', lineHeight: '1.4' }}>
-                            <strong>Note for Nepal users:</strong> Standard payment is through the Razorpay gateway (requires international cards). If you do not have an international card or cannot complete the payment online, please reach out to the admins to complete your registration manually.
-                          </p>
-                        )}
                       </div>
                     )}
                       {(user as any).isWaitlisted && evt.paymentStatus !== 'confirmed' && (

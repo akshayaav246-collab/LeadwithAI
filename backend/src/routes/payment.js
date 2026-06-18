@@ -141,6 +141,8 @@ router.post('/verify', authMiddleware, validate(verifyPaymentSchema), async (req
       return res.status(404).json({ error: 'No registrations found matching this order ID.' });
     }
 
+    const totalPaid = users.reduce((sum, usr) => sum + (usr.userType === 'student' ? 499 : 999), 0);
+
     for (const u of users) {
       // Confirm profile is complete for safety (skip this for attendees paid by leader)
       if (u.isProfileComplete === false && !u.groupLeaderId) {
@@ -174,7 +176,7 @@ router.post('/verify', authMiddleware, validate(verifyPaymentSchema), async (req
         await u.save();
 
         // Send payment confirmation email (non-blocking)
-        sendPaymentConfirmationEmail(u, EVENT_NAME, razorpay_payment_id, eventEntry.zoomJoinUrl)
+        sendPaymentConfirmationEmail(u, EVENT_NAME, razorpay_payment_id, eventEntry.zoomJoinUrl, u.groupLeaderId ? undefined : totalPaid)
           .then(async () => {
             await User.updateOne(
               { _id: u._id, 'registeredEvents.razorpayOrderId': razorpay_order_id },
@@ -242,6 +244,8 @@ router.post('/webhook', async (req, res) => {
         'registeredEvents.razorpayOrderId': orderId
       });
 
+      const totalPaid = users.reduce((sum, usr) => sum + (usr.userType === 'student' ? 499 : 999), 0);
+
       for (const u of users) {
         const eventEntry = u.registeredEvents.find(e => e.razorpayOrderId === orderId);
         if (eventEntry && eventEntry.paymentStatus !== 'confirmed') {
@@ -262,7 +266,7 @@ router.post('/webhook', async (req, res) => {
           await u.save();
 
           // Send Email
-          sendPaymentConfirmationEmail(u, EVENT_NAME, paymentId || eventEntry.razorpayPaymentId, eventEntry.zoomJoinUrl)
+          sendPaymentConfirmationEmail(u, EVENT_NAME, paymentId || eventEntry.razorpayPaymentId, eventEntry.zoomJoinUrl, u.groupLeaderId ? undefined : totalPaid)
             .then(async () => {
               await User.updateOne(
                 { _id: u._id, 'registeredEvents.razorpayOrderId': orderId },

@@ -985,8 +985,9 @@ export function Register() {
                                     <label htmlFor="reg-idcard">
                                       college id card *(PDF)
                                       {isScanningId && (
-                                        <span style={{ marginLeft: '6px', fontSize: '0.8em', color: 'var(--color-sienna)' }}>
-                                          ...
+                                        <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                          <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                          Validating...
                                         </span>
                                       )}
                                     </label>
@@ -1069,7 +1070,7 @@ export function Register() {
                                   </div>
                                 )}
 
-                                <div className="register-grid-3">
+                                <div className={refCode ? "register-grid-2" : "register-grid-3"}>
                                   <div className="register-field">
                                     <label htmlFor="reg-course">Course *</label>
                                     <input
@@ -1105,24 +1106,26 @@ export function Register() {
                                     </select>
                                   </div>
 
-                                  <div className="register-field">
-                                    <label htmlFor="reg-heardFrom">Source *</label>
-                                    <select
-                                      id="reg-heardFrom"
-                                      value={heardFrom}
-                                      onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
-                                      onFocus={handleOtherFieldFocus}
-                                      className="register-select"
-                                      disabled={!isEmailVerified}
-                                      required
-                                    >
-                                      <option value="">Select</option>
-                                      <option value="Social Media">Social Media</option>
-                                      <option value="Newspaper">Newspaper</option>
-                                      <option value="GKT Employee">GKT Employee</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
+                                  {!refCode && (
+                                    <div className="register-field">
+                                      <label htmlFor="reg-heardFrom">Source *</label>
+                                      <select
+                                        id="reg-heardFrom"
+                                        value={heardFrom}
+                                        onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+                                        onFocus={handleOtherFieldFocus}
+                                        className="register-select"
+                                        disabled={!isEmailVerified}
+                                        required
+                                      >
+                                        <option value="">Select</option>
+                                        <option value="Social Media">Social Media</option>
+                                        <option value="Newspaper">Newspaper</option>
+                                        <option value="GKT Employee">GKT Employee</option>
+                                        <option value="Others">Others</option>
+                                      </select>
+                                    </div>
+                                  )}
                                 </div>
 
                                 {heardFrom === 'GKT Employee' && (
@@ -1198,45 +1201,47 @@ export function Register() {
                                   </div>
                                 </div>
 
-                                <div className={heardFrom === 'GKT Employee' ? "register-grid-side" : ""}>
-                                  <div className="register-field">
-                                    <label htmlFor="reg-heardFrom">How did you hear about us? *</label>
-                                    <select
-                                      id="reg-heardFrom"
-                                      value={heardFrom}
-                                      onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
-                                      onFocus={handleOtherFieldFocus}
-                                      className="register-select"
-                                      disabled={!isEmailVerified}
-                                      required
-                                    >
-                                      <option value="">Select option</option>
-                                      <option value="Social Media">Social Media</option>
-                                      <option value="Newspaper">Newspaper</option>
-                                      <option value="GKT Employee">GKT Employee</option>
-                                      <option value="Others">Others</option>
-                                    </select>
-                                  </div>
-
-                                  {heardFrom === 'GKT Employee' && (
+                                {!refCode && (
+                                  <div className={heardFrom === 'GKT Employee' ? "register-grid-side" : ""}>
                                     <div className="register-field">
-                                      <label htmlFor="reg-salesperson">Referral *</label>
+                                      <label htmlFor="reg-heardFrom">How did you hear about us? *</label>
                                       <select
-                                        id="reg-salesperson"
-                                        value={salesperson}
-                                        onChange={(e) => { setSalesperson(e.target.value); clearError('salesperson'); }}
+                                        id="reg-heardFrom"
+                                        value={heardFrom}
+                                        onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+                                        onFocus={handleOtherFieldFocus}
                                         className="register-select"
                                         disabled={!isEmailVerified}
                                         required
                                       >
-                                        <option value="">Select referral</option>
-                                        {salespersons.map(sp => (
-                                          <option key={sp} value={sp}>{sp}</option>
-                                        ))}
+                                        <option value="">Select option</option>
+                                        <option value="Social Media">Social Media</option>
+                                        <option value="Newspaper">Newspaper</option>
+                                        <option value="GKT Employee">GKT Employee</option>
+                                        <option value="Others">Others</option>
                                       </select>
                                     </div>
-                                  )}
-                                </div>
+
+                                    {heardFrom === 'GKT Employee' && (
+                                      <div className="register-field">
+                                        <label htmlFor="reg-salesperson">Referral *</label>
+                                        <select
+                                          id="reg-salesperson"
+                                          value={salesperson}
+                                          onChange={(e) => { setSalesperson(e.target.value); clearError('salesperson'); }}
+                                          className="register-select"
+                                          disabled={!isEmailVerified}
+                                          required
+                                        >
+                                          <option value="">Select referral</option>
+                                          {salespersons.map(sp => (
+                                            <option key={sp} value={sp}>{sp}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
 
                                 {heardFrom === 'Others' && !refCode && (
                                   <div className="register-field">
