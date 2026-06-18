@@ -24,6 +24,7 @@ const registeredEventSchema = new mongoose.Schema({
     default: 'pending',
   },
   zoomJoinUrl: { type: String },
+  amountPaid: { type: Number },
   registeredAt: { type: Date, default: Date.now },
 });
 

@@ -136,6 +136,7 @@ export function Register() {
   const [groupMembers, setGroupMembers] = useState<any[]>([]);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [editingMemberIdx, setEditingMemberIdx] = useState<number | null>(null);
+  const [regStep, setRegStep] = useState(1);
 
   // Group member form fields
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
@@ -484,27 +485,23 @@ export function Register() {
   // ─────────────────────────────────────────────────────────────
   // REGISTER SUBMIT
   // ─────────────────────────────────────────────────────────────
-  const handleRegisterSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
-
     if (!isEmailVerified) newErrors.email = 'Verify the email';
-
-    // Validation
     if (!fullName.trim()) newErrors.fullName = 'Please enter your full name.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Please enter a valid email.';
     const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
     const cleanedPhone = phone.replace(/[^\d+]/g, '');
     const phoneRegex = /^\+?[1-9]\d{6,14}$/;
-    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) newErrors.phone = 'Please enter a valid phone number (e.g. +91 98765 43210).';
+    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
+      newErrors.phone = 'Please enter a valid phone number (e.g. +91 98765 43210).';
+    }
     
     if (userType === 'student') {
-      // ID card is mandatory for all students except from Nepal
       if (!idFile) {
         newErrors.idCard = 'Please upload your College ID Card.';
       } else if (country !== 'Nepal') {
         if (!isInstitutionalEmail && idVerdict === 'REJECTED') {
-          // LLM validation result only blocks non-institutional users
           newErrors.idCard = idRejectionReason || 'The ID card could not be verified. Please upload a valid physical ID.';
         } else if (!isInstitutionalEmail && isScanningId) {
           newErrors.idCard = 'Please wait — your ID card is being validated.';
@@ -535,7 +532,41 @@ export function Register() {
     if (Object.keys(newErrors).length > 0) {
       const firstError = Object.values(newErrors)[0];
       toast.error(firstError);
-      return;
+      return false;
+    }
+    return true;
+  };
+
+  const handleRegisterSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    // 1. Validate step 1 fields
+    if (!validateStep1()) return;
+
+    // 2. Validate step 2 fields if attendees are added
+    if (groupMembers.length > 0) {
+      for (let i = 0; i < groupMembers.length; i++) {
+        const m = groupMembers[i];
+        if (!m.fullName || !m.fullName.trim()) {
+          toast.error(`Attendee ${i + 1}: Name is required.`);
+          return;
+        }
+        if (!m.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.email)) {
+          toast.error(`Attendee ${i + 1}: A valid email is required.`);
+          return;
+        }
+        if (m.email.toLowerCase().trim() === email.toLowerCase().trim()) {
+          toast.error(`Attendee ${i + 1}: Email cannot be the same as the main registration email.`);
+          return;
+        }
+        const hasInvalidPhoneChars = /[^\d+\s()-]/.test(m.phone);
+        const cleanedPhone = m.phone.replace(/[^\d+]/g, '');
+        const phoneRegex = /^\+?[1-9]\d{6,14}$/;
+        if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
+          toast.error(`Attendee ${i + 1}: A valid phone number is required.`);
+          return;
+        }
+      }
     }
     
     setErrors({});
@@ -666,7 +697,7 @@ export function Register() {
             <span className="register-bg-num two">02</span>
           </div>
 
-          <div className="register-wrap">
+          <div className={`register-wrap ${activeTab === 'login' ? 'is-login-wrap' : ''}`}>
             {/* ── Eyebrow ── */}
             <div className="register-eyebrow">LEAD WITH AI · 2-DAY WORKSHOP</div>
             <h1 className="register-title">
@@ -902,402 +933,572 @@ export function Register() {
                           gap: '1.4rem'
                         }}
                       >
-                        {/* Country Selection */}
-                        <div className="register-field">
-                          <label htmlFor="reg-country">Country *</label>
-                          <select
-                            id="reg-country"
-                            value={country}
-                            onChange={(e) => {
-                              const selectedVal = e.target.value;
-                              setCountry(selectedVal);
-                              if (selectedVal === 'Nepal') {
-                                setIdVerdict(null);
-                                setIdRejectionReason('');
-                              }
-                            }}
-                            className="register-select"
-                            disabled={!isEmailVerified}
-                            required
-                          >
-                            <option value="India">India</option>
-                            <option value="Nepal">Nepal</option>
-                          </select>
-                        </div>
-
-                        {/* Student / Working Toggle */}
-                        <div className="register-field">
-                          <label>I am a *</label>
-                          <div className="reg-toggle">
-                            <button
-                              type="button"
-                              className={`reg-toggle-btn ${userType === 'student' ? 'active' : ''}`}
-                              onClick={() => handleToggleUserType('student')}
-                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-                              disabled={!isEmailVerified}
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><path d="M21.42 10.922a2 2 0 0 0-.019-3.838L12.83 4.34a2 2 0 0 0-1.66 0L2.6 7.08a2 2 0 0 0 0 3.832l8.57 3.698a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
-                              Student
-                            </button>
-                            <button
-                              type="button"
-                              className={`reg-toggle-btn ${userType === 'working' ? 'active' : ''}`}
-                              onClick={() => handleToggleUserType('working')}
-                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-                              disabled={!isEmailVerified}
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                              Working Professional/Others
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Student-specific fields */}
-                        {userType === 'student' && (
-                          <div className="reg-conditional-fields">
-                            <div className="register-field">
-                                <label htmlFor="reg-idcard">
-                                  college id card *(Both sides)
-                                  {isScanningId && (
-                                    <span style={{ marginLeft: '10px', fontSize: '0.85em', color: 'var(--color-sienna)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                                      <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                                      Validating...
-                                    </span>
-                                  )}
-                                </label>
-
-                                {!isInstitutionalEmail && (
-                                  <p className="email-hint" style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--color-stone)' }}>
-                                    Please upload your physical College ID card to qualify for student pricing (₹499).
-                                  </p>
-                                )}
-
-                                <div
-                                  className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
-                                  onClick={() => {
-                                    if (checkEmailVerification()) return;
-                                    if (!isScanningId) fileInputRef.current?.click();
-                                  }}
-                                  style={{ cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
-                                >
-                                  <input
-                                    ref={fileInputRef}
-                                    id="reg-idcard"
-                                    type="file"
-                                    accept=".pdf"
-                                    style={{ display: 'none' }}
-                                    disabled={!isEmailVerified}
-                                    onChange={async (e: ChangeEvent<HTMLInputElement>) => {
-                                      const f = e.target.files?.[0] || null;
-
-                                      // Check file size before anything else (5MB limit)
-                                      // This runs client-side so it works even when Nginx
-                                      // rejects the request before Express sees it on the server
-                                      if (f && f.size > 5 * 1024 * 1024) {
-                                        toast.error('File too large. Please upload a PDF under 5MB.');
-                                        e.target.value = '';
-                                        return;
-                                      }
-
-                                      setIdFile(f);
-                                      if (f) clearError('idCard');
+                        {/* Country and UserType Selection */}
+                        {regStep === 1 ? (
+                          <>
+                            <div className="register-grid-side">
+                              <div className="register-field">
+                                <label htmlFor="reg-country">Country *</label>
+                                <select
+                                  id="reg-country"
+                                  value={country}
+                                  onChange={(e) => {
+                                    const selectedVal = e.target.value;
+                                    setCountry(selectedVal);
+                                    if (selectedVal === 'Nepal') {
                                       setIdVerdict(null);
                                       setIdRejectionReason('');
-                                      setShowIdModal(false);
-
-                                      // LLM validation only for non-institutional emails, skip for Nepal
-                                      if (f && !isInstitutionalEmail && country !== 'Nepal') {
-                                        await scanIdCard(f);
-                                      }
-                                    }}
-                                  />
-                                  {idFile ? (
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                      <span className="upload-filename" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                                        {idFile.name}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className="upload-placeholder">
-                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                      PDF only(max. 5MB)
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Inline validation feedback for non-institutional */}
-                                {!isInstitutionalEmail && idFile && !isScanningId && (
-                                  <>
-                                    {idVerdict === 'APPROVED' && (
-                                      <div className="id-verdict-line">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                                        <span>The ID is found to be valid.</span>
-                                      </div>
-                                    )}
-                                    {idVerdict === 'REJECTED' && (
-                                      <div className="id-rejected-block">
-                                        <div className="id-verdict-line">
-                                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                          <span>ID Verification Failed.</span>
-                                        </div>
-                                        <div className="id-rejected-hint" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
-                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                                          <span>If you are working professional register under </span>
-                                          <button
-                                            type="button"
-                                            style={{
-                                              background: 'none',
-                                              border: 'none',
-                                              padding: 0,
-                                              margin: 0,
-                                              font: 'inherit',
-                                              color: '#2563eb',
-                                              fontWeight: 'bold',
-                                              textDecoration: 'underline',
-                                              cursor: 'pointer',
-                                              display: 'inline',
-                                            }}
-                                            onClick={() => { setUserType('working'); resetIdUpload(); }}
-                                            disabled={!isEmailVerified}
-                                          >
-                                            Working professional/others
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-
-                            <div className="register-grid-2">
-                              <div className="register-field">
-                                <label htmlFor="reg-college">College Name *</label>
-                                <input
-                                  id="reg-college"
-                                  type="text"
-                                  value={collegeName}
-                                  onChange={(e) => { setCollegeName(e.target.value); clearError('collegeName'); }}
-                                  onFocus={handleOtherFieldFocus}
-                                  placeholder="e.g. PSG College of Technology"
-                                  disabled={!isEmailVerified}
-                                  required
-                                />
-                              </div>
-                              <div className="register-field">
-                                <label htmlFor="reg-course">Course *</label>
-                                <input
-                                  id="reg-course"
-                                  type="text"
-                                  value={course}
-                                  onChange={(e) => { setCourse(e.target.value); clearError('course'); }}
-                                  onFocus={handleOtherFieldFocus}
-                                  placeholder="e.g. B.Tech CSE"
-                                  disabled={!isEmailVerified}
-                                  required
-                                />
-                              </div>
-                            </div>
-                            <div className="register-field">
-                              <label htmlFor="reg-year">Year *</label>
-                              <select
-                                id="reg-year"
-                                value={year}
-                                onChange={(e) => { setYear(e.target.value); clearError('year'); }}
-                                onFocus={handleOtherFieldFocus}
-                                className="register-select"
-                                disabled={!isEmailVerified}
-                                required
-                              >
-                                <option value="">Select year</option>
-                                <option value="1st Year">1st Year</option>
-                                <option value="2nd Year">2nd Year</option>
-                                <option value="3rd Year">3rd Year</option>
-                                <option value="4th Year">4th Year</option>
-                                <option value="5th Year">5th Year</option>
-                                <option value="Postgraduate">Postgraduate</option>
-                              </select>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Working professional fields */}
-                        {userType === 'working' && (
-                          <div className="reg-conditional-fields">
-                            <div className="register-grid-2">
-                              <div className="register-field">
-                                <label htmlFor="reg-domain">Domain *</label>
-                                <select
-                                  id="reg-domain"
-                                  value={domain}
-                                  onChange={(e) => { setDomain(e.target.value); clearError('domain'); }}
-                                  onFocus={handleOtherFieldFocus}
+                                    }
+                                  }}
                                   className="register-select"
                                   disabled={!isEmailVerified}
                                   required
                                 >
-                                  <option value="">Select your industry</option>
-                                  {DOMAIN_OPTIONS.map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
-                                  ))}
+                                  <option value="India">India</option>
+                                  <option value="Nepal">Nepal</option>
                                 </select>
                               </div>
+
                               <div className="register-field">
-                                <label htmlFor="reg-org">Organization *</label>
-                                <input
-                                  id="reg-org"
-                                  type="text"
-                                  value={organization}
-                                  onChange={(e) => setOrganization(e.target.value)}
-                                  onFocus={handleOtherFieldFocus}
-                                  placeholder="e.g. Tata Consultancy Services"
+                                <label htmlFor="reg-usertype">I am a *</label>
+                                <select
+                                  id="reg-usertype"
+                                  value={userType}
+                                  onChange={(e) => handleToggleUserType(e.target.value as UserType)}
+                                  className="register-select"
                                   disabled={!isEmailVerified}
-                                />
+                                  required
+                                >
+                                  <option value="student">Student</option>
+                                  <option value="working">Working Professional</option>
+                                </select>
                               </div>
                             </div>
-                          </div>
-                        )}
 
-                        {/* How did you hear about us? - only shown when no referral code */}
-                        {!refCode && (
-                          <div className="register-field" style={{ marginTop: '1.25rem' }}>
-                            <label htmlFor="reg-heardFrom">How did you hear about us? *</label>
-                            <select
-                              id="reg-heardFrom"
-                              value={heardFrom}
-                              onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
-                              onFocus={handleOtherFieldFocus}
-                              className="register-select"
-                              disabled={!isEmailVerified}
-                              required
-                            >
-                              <option value="">Select an option</option>
-                              <option value="Social Media">Social Media</option>
-                              <option value="Newspaper">Newspaper</option>
-                              <option value="GKT Employee">GKT Employee</option>
-                              <option value="Others">Others</option>
-                            </select>
-                          </div>
-                        )}
 
-                        {heardFrom === 'GKT Employee' && !refCode && (
-                          <div className="register-field" style={{ marginTop: '1rem' }}>
-                            <label htmlFor="reg-salesperson">Referral *</label>
-                            <select
-                              id="reg-salesperson"
-                              value={salesperson}
-                              onChange={(e) => { setSalesperson(e.target.value); clearError('salesperson'); }}
-                              className="register-select"
-                              disabled={!isEmailVerified}
-                              required
-                            >
-                              <option value="">Select referral</option>
-                              {salespersons.map(sp => (
-                                <option key={sp} value={sp}>{sp}</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
 
-                        {heardFrom === 'Others' && !refCode && (
-                          <div className="register-field" style={{ marginTop: '1rem' }}>
-                            <label htmlFor="reg-heardFromOther">Please specify *</label>
-                            <input
-                              id="reg-heardFromOther"
-                              type="text"
-                              value={heardFromOther}
-                              onChange={(e) => { setHeardFromOther(e.target.value); clearError('heardFromOther'); }}
-                              onFocus={handleOtherFieldFocus}
-                              placeholder="e.g. Friend, Professor, etc."
-                              disabled={!isEmailVerified}
-                              required
-                            />
-                          </div>
-                        )}
+                            {/* Student-specific fields */}
+                            {userType === 'student' && (
+                              <div className="reg-conditional-fields" style={{ gap: '0.65rem' }}>
+                                <div className="register-grid-side">
+                                  <div className="register-field">
+                                    <label htmlFor="reg-idcard">
+                                      college id card *(PDF)
+                                      {isScanningId && (
+                                        <span style={{ marginLeft: '6px', fontSize: '0.8em', color: 'var(--color-sienna)' }}>
+                                          ...
+                                        </span>
+                                      )}
+                                    </label>
+                                    <div
+                                      className={`register-upload ${idFile ? 'has-file' : ''} ${isScanningId ? 'scanning' : ''}`}
+                                      onClick={() => {
+                                        if (checkEmailVerification()) return;
+                                        if (!isScanningId) fileInputRef.current?.click();
+                                      }}
+                                      style={{ cursor: isScanningId ? 'not-allowed' : 'pointer', opacity: isScanningId ? 0.7 : 1 }}
+                                    >
+                                      <input
+                                        ref={fileInputRef}
+                                        id="reg-idcard"
+                                        type="file"
+                                        accept=".pdf"
+                                        style={{ display: 'none' }}
+                                        disabled={!isEmailVerified}
+                                        onChange={async (e: ChangeEvent<HTMLInputElement>) => {
+                                          const f = e.target.files?.[0] || null;
+                                          if (f && f.size > 5 * 1024 * 1024) {
+                                            toast.error('File too large. Please upload a PDF under 5MB.');
+                                            e.target.value = '';
+                                            return;
+                                          }
+                                          setIdFile(f);
+                                          if (f) clearError('idCard');
+                                          setIdVerdict(null);
+                                          setIdRejectionReason('');
+                                          if (f && !isInstitutionalEmail && country !== 'Nepal') {
+                                            await scanIdCard(f);
+                                          }
+                                        }}
+                                      />
+                                      {idFile ? (
+                                        <span className="upload-filename" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '160px' }}>
+                                          ✓ {idFile.name}
+                                        </span>
+                                      ) : (
+                                        <span className="upload-placeholder">PDF only (max 5MB)</span>
+                                      )}
+                                    </div>
+                                  </div>
 
-                        {/* Group registration section */}
-                        {userType && (
-                          <div style={{ marginTop: '1.5rem', borderTop: '1px dashed #e7dfd5', paddingTop: '1rem', marginBottom: '1.5rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                  <div className="register-field">
+                                    <label htmlFor="reg-college">College Name *</label>
+                                    <input
+                                      id="reg-college"
+                                      type="text"
+                                      value={collegeName}
+                                      onChange={(e) => { setCollegeName(e.target.value); clearError('collegeName'); }}
+                                      onFocus={handleOtherFieldFocus}
+                                      placeholder="e.g. College Name"
+                                      disabled={!isEmailVerified}
+                                      required
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* ID Verification Verdict Feedback */}
+                                {!isInstitutionalEmail && idFile && !isScanningId && (
+                                  <div style={{ marginTop: '0.1rem', fontSize: '0.8rem' }}>
+                                    {idVerdict === 'APPROVED' && (
+                                      <div style={{ color: '#22c55e', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        ✓ Valid ID card.
+                                      </div>
+                                    )}
+                                    {idVerdict === 'REJECTED' && (
+                                      <div style={{ color: '#ef4444', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                        <span>ID Verification Failed.</span>
+                                        <button
+                                          type="button"
+                                          style={{ background: 'none', border: 'none', padding: 0, color: '#2563eb', textDecoration: 'underline', cursor: 'pointer', textAlign: 'left', font: 'inherit', fontSize: '0.8rem' }}
+                                          onClick={() => { setUserType('working'); resetIdUpload(); }}
+                                        >
+                                          Register as Working Professional instead
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                <div className="register-grid-3">
+                                  <div className="register-field">
+                                    <label htmlFor="reg-course">Course *</label>
+                                    <input
+                                      id="reg-course"
+                                      type="text"
+                                      value={course}
+                                      onChange={(e) => { setCourse(e.target.value); clearError('course'); }}
+                                      onFocus={handleOtherFieldFocus}
+                                      placeholder="e.g. B.Tech"
+                                      disabled={!isEmailVerified}
+                                      required
+                                    />
+                                  </div>
+
+                                  <div className="register-field">
+                                    <label htmlFor="reg-year">Year *</label>
+                                    <select
+                                      id="reg-year"
+                                      value={year}
+                                      onChange={(e) => { setYear(e.target.value); clearError('year'); }}
+                                      onFocus={handleOtherFieldFocus}
+                                      className="register-select"
+                                      disabled={!isEmailVerified}
+                                      required
+                                    >
+                                      <option value="">Year</option>
+                                      <option value="1st Year">1st Yr</option>
+                                      <option value="2nd Year">2nd Yr</option>
+                                      <option value="3rd Year">3rd Yr</option>
+                                      <option value="4th Year">4th Yr</option>
+                                      <option value="5th Year">5th Yr</option>
+                                      <option value="Postgraduate">PG</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="register-field">
+                                    <label htmlFor="reg-heardFrom">Source *</label>
+                                    <select
+                                      id="reg-heardFrom"
+                                      value={heardFrom}
+                                      onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+                                      onFocus={handleOtherFieldFocus}
+                                      className="register-select"
+                                      disabled={!isEmailVerified}
+                                      required
+                                    >
+                                      <option value="">Select</option>
+                                      <option value="Social Media">Social Media</option>
+                                      <option value="Newspaper">Newspaper</option>
+                                      <option value="GKT Employee">GKT Employee</option>
+                                      <option value="Others">Others</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                {heardFrom === 'GKT Employee' && (
+                                  <div className="register-field">
+                                    <label htmlFor="reg-salesperson">Referral *</label>
+                                    <select
+                                      id="reg-salesperson"
+                                      value={salesperson}
+                                      onChange={(e) => { setSalesperson(e.target.value); clearError('salesperson'); }}
+                                      className="register-select"
+                                      disabled={!isEmailVerified}
+                                      required
+                                    >
+                                      <option value="">Select referral</option>
+                                      {salespersons.map(sp => (
+                                        <option key={sp} value={sp}>{sp}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+
+                                {heardFrom === 'Others' && !refCode && (
+                                  <div className="register-field">
+                                    <label htmlFor="reg-heardFromOther">Please specify *</label>
+                                    <input
+                                      id="reg-heardFromOther"
+                                      type="text"
+                                      value={heardFromOther}
+                                      onChange={(e) => { setHeardFromOther(e.target.value); clearError('heardFromOther'); }}
+                                      onFocus={handleOtherFieldFocus}
+                                      placeholder="Please specify"
+                                      disabled={!isEmailVerified}
+                                      required
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Working professional fields */}
+                            {userType === 'working' && (
+                              <div className="reg-conditional-fields" style={{ gap: '0.65rem' }}>
+                                <div className="register-grid-side">
+                                  <div className="register-field">
+                                    <label htmlFor="reg-domain">Domain *</label>
+                                    <select
+                                      id="reg-domain"
+                                      value={domain}
+                                      onChange={(e) => { setDomain(e.target.value); clearError('domain'); }}
+                                      onFocus={handleOtherFieldFocus}
+                                      className="register-select"
+                                      disabled={!isEmailVerified}
+                                      required
+                                    >
+                                      <option value="">Select Industry</option>
+                                      {DOMAIN_OPTIONS.map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div className="register-field">
+                                    <label htmlFor="reg-org">Organization *</label>
+                                    <input
+                                      id="reg-org"
+                                      type="text"
+                                      value={organization}
+                                      onChange={(e) => setOrganization(e.target.value)}
+                                      onFocus={handleOtherFieldFocus}
+                                      placeholder="e.g. TCS"
+                                      disabled={!isEmailVerified}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className={heardFrom === 'GKT Employee' ? "register-grid-side" : ""}>
+                                  <div className="register-field">
+                                    <label htmlFor="reg-heardFrom">How did you hear about us? *</label>
+                                    <select
+                                      id="reg-heardFrom"
+                                      value={heardFrom}
+                                      onChange={(e) => { setHeardFrom(e.target.value); clearError('heardFrom'); }}
+                                      onFocus={handleOtherFieldFocus}
+                                      className="register-select"
+                                      disabled={!isEmailVerified}
+                                      required
+                                    >
+                                      <option value="">Select option</option>
+                                      <option value="Social Media">Social Media</option>
+                                      <option value="Newspaper">Newspaper</option>
+                                      <option value="GKT Employee">GKT Employee</option>
+                                      <option value="Others">Others</option>
+                                    </select>
+                                  </div>
+
+                                  {heardFrom === 'GKT Employee' && (
+                                    <div className="register-field">
+                                      <label htmlFor="reg-salesperson">Referral *</label>
+                                      <select
+                                        id="reg-salesperson"
+                                        value={salesperson}
+                                        onChange={(e) => { setSalesperson(e.target.value); clearError('salesperson'); }}
+                                        className="register-select"
+                                        disabled={!isEmailVerified}
+                                        required
+                                      >
+                                        <option value="">Select referral</option>
+                                        {salespersons.map(sp => (
+                                          <option key={sp} value={sp}>{sp}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {heardFrom === 'Others' && !refCode && (
+                                  <div className="register-field">
+                                    <label htmlFor="reg-heardFromOther">Please specify *</label>
+                                    <input
+                                      id="reg-heardFromOther"
+                                      type="text"
+                                      value={heardFromOther}
+                                      onChange={(e) => { setHeardFromOther(e.target.value); clearError('heardFromOther'); }}
+                                      onFocus={handleOtherFieldFocus}
+                                      placeholder="Please specify"
+                                      disabled={!isEmailVerified}
+                                      required
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Stepper / Add attendees Section */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.25rem', marginBottom: '0.4rem' }}>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-espresso)' }}>
+                                Want to add attendees?
+                              </span>
+                              {groupMembers.length === 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!isEmailVerified) {
+                                      toast.warning('Please verify your email address first.');
+                                      return;
+                                    }
+                                    setGroupMembers([{ fullName: '', email: '', phone: '' }]);
+                                  }}
+                                  style={{
+                                    background: 'var(--color-sienna)',
+                                    border: 'none',
+                                    color: '#fff',
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '50%',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                    fontSize: '1.2rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                  }}
+                                >
+                                  +
+                                </button>
+                              ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setGroupMembers(groupMembers.slice(0, -1));
+                                    }}
+                                    style={{
+                                      background: '#ef4444',
+                                      border: 'none',
+                                      color: '#fff',
+                                      width: '28px',
+                                      height: '28px',
+                                      borderRadius: '50%',
+                                      cursor: 'pointer',
+                                      fontWeight: 700,
+                                      fontSize: '1.2rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                  >
+                                    -
+                                  </button>
+                                  <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-espresso)', minWidth: '20px', textAlign: 'center' }}>
+                                    {groupMembers.length}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (groupMembers.length >= 9) {
+                                        toast.error('You can only add up to 9 colleagues/friends.');
+                                        return;
+                                      }
+                                      setGroupMembers([...groupMembers, { fullName: '', email: '', phone: '' }]);
+                                    }}
+                                    style={{
+                                      background: 'var(--color-sienna)',
+                                      border: 'none',
+                                      color: '#fff',
+                                      width: '28px',
+                                      height: '28px',
+                                      borderRadius: '50%',
+                                      cursor: 'pointer',
+                                      fontWeight: 700,
+                                      fontSize: '1.2rem',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {groupMembers.length === 0 ? (
+                              <button
+                                type="submit"
+                                className="btn-primary register-submit"
+                                style={{ width: '100%' }}
+                                disabled={regLoading || !isEmailVerified}
+                              >
+                                {regLoading ? (
+                                  <span className="btn-loading">
+                                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                                  </span>
+                                ) : (
+                                  <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span>)</span></>
+                                )}
+                              </button>
+                            ) : (
                               <button
                                 type="button"
+                                className="btn-primary register-submit"
+                                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                onClick={() => {
+                                  if (validateStep1()) {
+                                    setRegStep(2);
+                                  }
+                                }}
+                              >
+                                Continue to Attendees ({groupMembers.length}) →
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          /* Step 2 layout */
+                          <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                              <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--color-espresso)', fontWeight: 700 }}>
+                                Step 2: Attendee Details ({groupMembers.length} added)
+                              </h4>
+                              <button
+                                type="button"
+                                className="btn-primary"
+                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', minHeight: 'auto', height: 'auto', lineHeight: 'normal' }}
                                 onClick={() => {
                                   if (groupMembers.length >= 9) {
                                     toast.error('You can only add up to 9 colleagues/friends.');
                                     return;
                                   }
-                                  openAddMemberModal();
+                                  setGroupMembers([...groupMembers, { fullName: '', email: '', phone: '' }]);
                                 }}
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: 'var(--color-sienna)',
-                                  cursor: 'pointer',
-                                  fontWeight: 600,
-                                  fontSize: '0.95rem',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: 0
-                                }}
-                                disabled={!isEmailVerified}
                               >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                                </svg>
-                                Add Colleague/Friend
+                                + Add Attendee
                               </button>
                             </div>
 
-                            {groupMembers.length > 0 && (
-                              <div style={{ marginTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                {groupMembers.map((m, idx) => (
-                                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fcfbf9', border: '1px solid #e7dfd5', borderRadius: '6px', padding: '0.6rem 0.8rem', fontSize: '0.85rem' }}>
-                                    <div>
-                                      <div style={{ fontWeight: 600, color: 'var(--color-espresso)' }}>{m.fullName}</div>
-                                      <div style={{ color: 'var(--color-stone)', fontSize: '0.78rem' }}>{m.email} | {m.phone}</div>
-                                      {userType === 'working' && (
-                                        <div style={{ color: 'var(--color-stone)', fontSize: '0.78rem', fontStyle: 'italic' }}>{m.organization} ({m.domain})</div>
-                                      )}
+                            <div style={{ maxHeight: '280px', overflowY: 'auto', paddingRight: '4px', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                              {groupMembers.map((m, idx) => (
+                                <div key={idx} className="attendee-grid-card">
+                                  <div className="attendee-grid-header">
+                                    <span className="attendee-grid-title">Attendee #{idx + 1}</span>
+                                    {groupMembers.length > 1 && (
+                                      <button
+                                        type="button"
+                                        className="attendee-remove-btn"
+                                        onClick={() => {
+                                          setGroupMembers(groupMembers.filter((_, i) => i !== idx));
+                                        }}
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="attendee-grid-inputs">
+                                    <div className="register-field">
+                                      <label>Name *</label>
+                                      <input
+                                        type="text"
+                                        value={m.fullName || ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const updated = [...groupMembers];
+                                          updated[idx] = { ...updated[idx], fullName: val };
+                                          setGroupMembers(updated);
+                                        }}
+                                        placeholder="Full Name"
+                                        required
+                                      />
                                     </div>
-                                    <div style={{ display: 'flex', gap: '12px' }}>
-                                      <button
-                                        type="button"
-                                        onClick={() => openEditMemberModal(idx)}
-                                        style={{ background: 'transparent', border: 'none', color: 'var(--color-sienna)', cursor: 'pointer', fontWeight: 600 }}
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => removeMember(idx)}
-                                        style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 600 }}
-                                      >
-                                        Remove
-                                      </button>
+
+                                    <div className="register-field">
+                                      <label>Email *</label>
+                                      <input
+                                        type="email"
+                                        value={m.email || ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const updated = [...groupMembers];
+                                          updated[idx] = { ...updated[idx], email: val };
+                                          setGroupMembers(updated);
+                                        }}
+                                        placeholder="Email"
+                                        required
+                                      />
+                                    </div>
+
+                                    <div className="register-field">
+                                      <label>Phone *</label>
+                                      <input
+                                        type="tel"
+                                        value={m.phone || ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value.replace(/[^\d+\s()-]/g, '');
+                                          const updated = [...groupMembers];
+                                          updated[idx] = { ...updated[idx], phone: val };
+                                          setGroupMembers(updated);
+                                        }}
+                                        placeholder="Phone"
+                                        required
+                                      />
                                     </div>
                                   </div>
-                                ))}
-                              </div>
-                            )}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Step 2 buttons */}
+                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                              <button
+                                type="button"
+                                className="btn-primary"
+                                style={{ flex: 1, background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1' }}
+                                onClick={() => setRegStep(1)}
+                              >
+                                ← Back
+                              </button>
+                              <button
+                                type="submit"
+                                className="btn-primary register-submit"
+                                style={{ flex: 2, marginTop: 0 }}
+                                disabled={regLoading}
+                              >
+                                {regLoading ? (
+                                  <span className="btn-loading">
+                                    <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
+                                  </span>
+                                ) : (
+                                  <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span>)</span></>
+                                )}
+                              </button>
+                            </div>
                           </div>
                         )}
-
-
-                        <button
-                          type="submit"
-                          className="btn-primary register-submit"
-                          disabled={regLoading || !isEmailVerified}
-                        >
-                          {regLoading ? (
-                            <span className="btn-loading">
-                              <span className="loading-dot" /><span className="loading-dot" /><span className="loading-dot" />
-                            </span>
-                          ) : (
-                            <>Register &amp; Enroll Now → <span style={{ fontSize: '0.85rem', fontWeight: 'normal', opacity: 0.85 }}>(Pay <span style={{ fontFamily: 'system-ui, sans-serif' }}>{userType === 'student' ? '₹499' : '₹999'}</span>)</span></>
-                          )}
-                        </button>
                       </div>
                     </div>
 
@@ -1316,9 +1517,9 @@ export function Register() {
                 LOGIN TAB
             ══════════════════════════════════════ */}
             {activeTab === 'login' && (
-              <>
+              <div className="login-form-container">
                 {otpStep === 'email' ? (
-                  <form className="register-form" onSubmit={handleSendOtp} noValidate>
+                  <form className="register-form login-form" onSubmit={handleSendOtp} noValidate>
                     <p className="register-sub">Enter your registered email to receive a one-time password.</p>
 
                     <div className="register-field">
@@ -1350,7 +1551,7 @@ export function Register() {
                     </p>
                   </form>
                 ) : (
-                  <form className="register-form" onSubmit={handleVerifyOtp} noValidate>
+                  <form className="register-form login-form" onSubmit={handleVerifyOtp} noValidate>
                     <p className="register-sub">
                       OTP sent to <strong>{loginEmail}</strong>! Please check your email.
                     </p>
@@ -1392,148 +1593,11 @@ export function Register() {
                     </p>
                   </form>
                 )}
-              </>
+              </div>
             )}
           </div>
         </section>
       </main>
-      {/* ══ Add Group Member Modal ══════════════════════ */}
-      {showMemberModal && createPortal(
-        <div 
-          onClick={() => setShowMemberModal(false)} 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            position: 'fixed', 
-            top: 0, 
-            left: 0, 
-            width: '100vw', 
-            height: '100vh', 
-            backgroundColor: 'rgba(15, 23, 42, 0.45)', // Premium slate dark overlay
-            zIndex: 10000, 
-            backdropFilter: 'blur(8px)', // Modern glassmorphism blur
-            padding: '1rem',
-            boxSizing: 'border-box'
-          }}
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ 
-              maxWidth: '480px', 
-              backgroundColor: '#ffffff', 
-              padding: '2rem', 
-              borderRadius: '12px', 
-              width: '100%', 
-              maxHeight: '90vh', 
-              overflowY: 'auto', 
-              border: '1px solid #e2e8f0', 
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', // Premium shadow
-              textAlign: 'left',
-              boxSizing: 'border-box'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
-              <h2 style={{ fontSize: '1.25rem', margin: 0, color: '#1e293b', fontFamily: 'Playfair Display, serif', fontWeight: 600 }}>
-                {editingMemberIdx !== null ? 'Edit Colleague/Friend' : 'Add Colleague/Friend'}
-              </h2>
-              <button 
-                type="button" 
-                onClick={() => setShowMemberModal(false)} 
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }} className="register-form">
-              <div className="register-field">
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Full Name *</label>
-                <input
-                  type="text"
-                  value={mName}
-                  onChange={(e) => setMName(e.target.value)}
-                  placeholder="Enter full name"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div className="register-field">
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Email Address *</label>
-                <input
-                  type="email"
-                  value={mEmail}
-                  onChange={(e) => setMEmail(e.target.value)}
-                  placeholder="Enter email address"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div className="register-field">
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Phone Number *</label>
-                <input
-                  type="text"
-                  value={mPhone}
-                  onChange={(e) => setMPhone(e.target.value.replace(/[^\d+\s()-]/g, ''))}
-                  placeholder="+91 98765 43210"
-                  maxLength={25}
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              {userType === 'working' && (
-                <>
-                  <div className="register-field">
-                    <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Domain *</label>
-                    <select
-                      value={mDomain}
-                      onChange={(e) => setMDomain(e.target.value)}
-                      className="register-select"
-                      style={{ width: '100%', boxSizing: 'border-box' }}
-                    >
-                      <option value="">Select industry</option>
-                      {DOMAIN_OPTIONS.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="register-field">
-                    <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Organization *</label>
-                    <input
-                      type="text"
-                      value={mOrg}
-                      onChange={(e) => setMOrg(e.target.value)}
-                      placeholder="e.g. TCS"
-                      style={{ width: '100%', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => setShowMemberModal(false)}
-                style={{ padding: '0.6rem 1.2rem', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleSaveMember}
-                disabled={isCheckingEmail}
-                style={{ padding: '0.6rem 1.2rem', borderRadius: '4px', fontWeight: 600, fontSize: '0.85rem', cursor: isCheckingEmail ? 'not-allowed' : 'pointer', opacity: isCheckingEmail ? 0.7 : 1 }}
-              >
-                {isCheckingEmail ? 'Checking...' : (editingMemberIdx !== null ? 'Update Colleague/Friend' : 'Add Colleague/Friend')}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </>
   );
 }

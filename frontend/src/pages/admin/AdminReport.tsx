@@ -56,8 +56,6 @@ export function AdminReport() {
   const paidStudents = stats.paidStudentCount || 0;
   const paidProfs = stats.paidProfessionalCount || 0;
   const totalRev = stats.totalRevenue || 0;
-  const studRev = paidStudents * 499;
-  const profRev = paidProfs * 999;
 
   const referralEntries: [string, any][] = Object.entries(stats.referralBreakdown || {})
     .sort((a: any, b: any) => b[1].revenue - a[1].revenue);
@@ -71,23 +69,92 @@ export function AdminReport() {
   const orgEntries: [string, any][] = Object.entries(stats.organizationReport || {})
     .sort((a, b) => a[0].localeCompare(b[0]));
 
-  // Group colleges by referral and by source
-  function groupBy(entries: [string, any][], key: 'byReferral' | 'bySource') {
-    const groups: Record<string, { name: string; count: number; revenue: number }[]> = {};
+  // Group colleges/orgs by referral and by source, splitting by rate
+  function groupBy(entries: [string, any][], key: 'byReferral' | 'bySource', defaultRate: number) {
+    const groups: Record<string, { name: string; rate: number; count: number; revenue: number }[]> = {};
     for (const [name, data] of entries) {
       const map: Record<string, any> = data[key] || {};
       for (const [groupKey, val] of Object.entries(map)) {
         if (!groups[groupKey]) groups[groupKey] = [];
-        groups[groupKey].push({ name, count: (val as any).count || val, revenue: (val as any).revenue || 0 });
+        
+        if (typeof val === 'number') {
+          // Fallback for old simple number count
+          groups[groupKey].push({
+            name,
+            rate: defaultRate,
+            count: val,
+            revenue: val * defaultRate,
+          });
+        } else if (val && typeof val === 'object') {
+          // Check if it is a rate-grouped object (new structure) or a direct { count, revenue } object
+          const keys = Object.keys(val);
+          const isRateGrouped = keys.length > 0 && keys.every(k => !isNaN(Number(k)));
+          
+          if (isRateGrouped) {
+            for (const [rateStr, rateData] of Object.entries(val)) {
+              const rate = Number(rateStr);
+              const count = (rateData as any).count || 0;
+              const revenue = (rateData as any).revenue || 0;
+              groups[groupKey].push({
+                name,
+                rate,
+                count,
+                revenue,
+              });
+            }
+          } else {
+            // Direct { count, revenue } object or similar
+            const count = (val as any).count || 0;
+            const revenue = (val as any).revenue || (count * defaultRate);
+            const rate = count > 0 ? Math.round(revenue / count) : defaultRate;
+            groups[groupKey].push({
+              name,
+              rate,
+              count,
+              revenue,
+            });
+          }
+        }
       }
     }
     return groups;
   }
 
-  const collegeByReferral = groupBy(collegeEntries, 'byReferral');
-  const collegeBySource = groupBy(collegeEntries, 'bySource');
-  const orgByReferral = groupBy(orgEntries, 'byReferral');
-  const orgBySource = groupBy(orgEntries, 'bySource');
+  const collegeByReferral = groupBy(collegeEntries, 'byReferral', 499);
+  const collegeBySource = groupBy(collegeEntries, 'bySource', 499);
+  const orgByReferral = groupBy(orgEntries, 'byReferral', 999);
+  const orgBySource = groupBy(orgEntries, 'bySource', 999);
+
+  // Dynamically group revenueSplit or fall back to standard students (499) / professionals (999)
+  const revenueSplitList: { category: string; rate: number; count: number; revenue: number }[] = [];
+  if (stats.revenueSplit && Array.isArray(stats.revenueSplit) && stats.revenueSplit.length > 0) {
+    revenueSplitList.push(...stats.revenueSplit);
+  } else {
+    if (paidStudents > 0) {
+      revenueSplitList.push({
+        category: 'Students',
+        rate: 499,
+        count: paidStudents,
+        revenue: paidStudents * 499,
+      });
+    }
+    if (paidProfs > 0) {
+      revenueSplitList.push({
+        category: 'Professionals',
+        rate: 999,
+        count: paidProfs,
+        revenue: paidProfs * 999,
+      });
+    }
+  }
+
+  // Sort by category (Students first) and rate (descending)
+  const sortedRevenueSplit = [...revenueSplitList].sort((a, b) => {
+    if (a.category !== b.category) {
+      return a.category === 'Students' ? -1 : 1;
+    }
+    return b.rate - a.rate;
+  });
 
   const sourceOrder = ['Social Media', 'Newspaper', 'Friends', 'Others'];
 
@@ -248,18 +315,17 @@ export function AdminReport() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td style={styles.td}>Students (₹499 each)</td>
-              <td style={styles.tdCenter}>{paidStudents}</td>
-              <td style={styles.tdRight}>{fmt(studRev)}</td>
-              <td style={styles.tdRight}>{totalRev > 0 ? Math.round((studRev / totalRev) * 100) : 0}%</td>
-            </tr>
-            <tr>
-              <td style={styles.td}>Professionals (₹999 each)</td>
-              <td style={styles.tdCenter}>{paidProfs}</td>
-              <td style={styles.tdRight}>{fmt(profRev)}</td>
-              <td style={styles.tdRight}>{totalRev > 0 ? Math.round((profRev / totalRev) * 100) : 0}%</td>
-            </tr>
+            {sortedRevenueSplit.map((item, idx) => {
+              const percent = totalRev > 0 ? Math.round((item.revenue / totalRev) * 100) : 0;
+              return (
+                <tr key={`${item.category}-${item.rate}-${idx}`}>
+                  <td style={styles.td}>{item.category} ({fmt(item.rate)} each)</td>
+                  <td style={styles.tdCenter}>{item.count}</td>
+                  <td style={styles.tdRight}>{fmt(item.revenue)}</td>
+                  <td style={styles.tdRight}>{percent}%</td>
+                </tr>
+              );
+            })}
             <tr style={styles.totalsRow}>
               <td style={styles.td}><strong>Total</strong></td>
               <td style={styles.tdCenter}><strong>{paid}</strong></td>
@@ -335,20 +401,23 @@ export function AdminReport() {
                 <tr>
                   <th style={styles.th}>College Name</th>
                   <th style={{ ...styles.th, textAlign: 'center' }}>Count</th>
+                  <th style={{ ...styles.th, textAlign: 'right' }}>Rate</th>
                   <th style={{ ...styles.th, textAlign: 'right' }}>Revenue</th>
                 </tr>
               </thead>
               <tbody>
-                {colleges.sort((a, b) => a.name.localeCompare(b.name)).map(c => (
-                  <tr key={c.name}>
+                {colleges.sort((a, b) => a.name.localeCompare(b.name) || b.rate - a.rate).map(c => (
+                  <tr key={`${c.name}-${c.rate}`}>
                     <td style={styles.td}>{c.name}</td>
                     <td style={styles.tdCenter}>{c.count}</td>
+                    <td style={styles.tdRight}>{fmt(c.rate)}</td>
                     <td style={styles.tdRight}>{fmt(c.revenue)}</td>
                   </tr>
                 ))}
                 <tr style={styles.totalsRow}>
                   <td style={styles.td}><strong>Subtotal</strong></td>
                   <td style={styles.tdCenter}><strong>{colleges.reduce((s, c) => s + c.count, 0)}</strong></td>
+                  <td style={styles.td}></td>
                   <td style={styles.tdRight}><strong>{fmt(colleges.reduce((s, c) => s + c.revenue, 0))}</strong></td>
                 </tr>
               </tbody>
@@ -365,20 +434,23 @@ export function AdminReport() {
                 <tr>
                   <th style={styles.th}>College Name</th>
                   <th style={{ ...styles.th, textAlign: 'center' }}>Count</th>
+                  <th style={{ ...styles.th, textAlign: 'right' }}>Rate</th>
                   <th style={{ ...styles.th, textAlign: 'right' }}>Revenue</th>
                 </tr>
               </thead>
               <tbody>
-                {(collegeBySource[src] || []).sort((a, b) => a.name.localeCompare(b.name)).map(c => (
-                  <tr key={c.name}>
+                {(collegeBySource[src] || []).sort((a, b) => a.name.localeCompare(b.name) || b.rate - a.rate).map(c => (
+                  <tr key={`${c.name}-${c.rate}`}>
                     <td style={styles.td}>{c.name}</td>
                     <td style={styles.tdCenter}>{c.count}</td>
+                    <td style={styles.tdRight}>{fmt(c.rate)}</td>
                     <td style={styles.tdRight}>{fmt(c.revenue)}</td>
                   </tr>
                 ))}
                 <tr style={styles.totalsRow}>
                   <td style={styles.td}><strong>Subtotal</strong></td>
                   <td style={styles.tdCenter}><strong>{(collegeBySource[src] || []).reduce((s, c) => s + c.count, 0)}</strong></td>
+                  <td style={styles.td}></td>
                   <td style={styles.tdRight}><strong>{fmt((collegeBySource[src] || []).reduce((s, c) => s + c.revenue, 0))}</strong></td>
                 </tr>
               </tbody>
@@ -400,20 +472,23 @@ export function AdminReport() {
                 <tr>
                   <th style={styles.th}>Organization Name</th>
                   <th style={{ ...styles.th, textAlign: 'center' }}>Count</th>
+                  <th style={{ ...styles.th, textAlign: 'right' }}>Rate</th>
                   <th style={{ ...styles.th, textAlign: 'right' }}>Revenue</th>
                 </tr>
               </thead>
               <tbody>
-                {orgs.sort((a, b) => a.name.localeCompare(b.name)).map(o => (
-                  <tr key={o.name}>
+                {orgs.sort((a, b) => a.name.localeCompare(b.name) || b.rate - a.rate).map(o => (
+                  <tr key={`${o.name}-${o.rate}`}>
                     <td style={styles.td}>{o.name}</td>
                     <td style={styles.tdCenter}>{o.count}</td>
+                    <td style={styles.tdRight}>{fmt(o.rate)}</td>
                     <td style={styles.tdRight}>{fmt(o.revenue)}</td>
                   </tr>
                 ))}
                 <tr style={styles.totalsRow}>
                   <td style={styles.td}><strong>Subtotal</strong></td>
                   <td style={styles.tdCenter}><strong>{orgs.reduce((s, o) => s + o.count, 0)}</strong></td>
+                  <td style={styles.td}></td>
                   <td style={styles.tdRight}><strong>{fmt(orgs.reduce((s, o) => s + o.revenue, 0))}</strong></td>
                 </tr>
               </tbody>
@@ -430,20 +505,23 @@ export function AdminReport() {
                 <tr>
                   <th style={styles.th}>Organization Name</th>
                   <th style={{ ...styles.th, textAlign: 'center' }}>Count</th>
+                  <th style={{ ...styles.th, textAlign: 'right' }}>Rate</th>
                   <th style={{ ...styles.th, textAlign: 'right' }}>Revenue</th>
                 </tr>
               </thead>
               <tbody>
-                {(orgBySource[src] || []).sort((a, b) => a.name.localeCompare(b.name)).map(o => (
-                  <tr key={o.name}>
+                {(orgBySource[src] || []).sort((a, b) => a.name.localeCompare(b.name) || b.rate - a.rate).map(o => (
+                  <tr key={`${o.name}-${o.rate}`}>
                     <td style={styles.td}>{o.name}</td>
                     <td style={styles.tdCenter}>{o.count}</td>
+                    <td style={styles.tdRight}>{fmt(o.rate)}</td>
                     <td style={styles.tdRight}>{fmt(o.revenue)}</td>
                   </tr>
                 ))}
                 <tr style={styles.totalsRow}>
                   <td style={styles.td}><strong>Subtotal</strong></td>
                   <td style={styles.tdCenter}><strong>{(orgBySource[src] || []).reduce((s, o) => s + o.count, 0)}</strong></td>
+                  <td style={styles.td}></td>
                   <td style={styles.tdRight}><strong>{fmt((orgBySource[src] || []).reduce((s, o) => s + o.revenue, 0))}</strong></td>
                 </tr>
               </tbody>

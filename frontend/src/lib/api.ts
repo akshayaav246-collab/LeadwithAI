@@ -60,6 +60,13 @@ export function completeProfile(token: string, formData: FormData) {
   return request<{ message: string; user: any }>('/api/auth/complete-profile', { method: 'PATCH', body: formData }, token);
 }
 
+export function updateWorkingDetails(token: string, domain: string, organization: string) {
+  return request<{ message: string; user: any }>('/api/auth/update-working-details', {
+    method: 'PATCH',
+    body: JSON.stringify({ domain, organization })
+  }, token);
+}
+
 export function changeCohort(token: string, cohort: string) {
   return request<{ message: string; user: any }>('/api/auth/change-cohort', { method: 'POST', body: JSON.stringify({ cohort }) }, token);
 }

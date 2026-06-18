@@ -246,6 +246,7 @@ router.get('/stats', adminAuth, async (req, res) => {
     let heardFromGktEmployee = 0;
     let heardFromOthers = 0;
     const referralBreakdown = {};
+    const revenueSplit = {};
 
     const salespersonReport = {};
     const collegeReport = {};
@@ -284,14 +285,30 @@ router.get('/stats', adminAuth, async (req, res) => {
       }
 
       const confirmed = u.registeredEvents && u.registeredEvents.find(e => e.paymentStatus === 'confirmed');
+      let amtPaid = 0;
       if (confirmed) {
         paidUsers++;
-        totalRevenue += u.userType === 'student' ? 499 : 999;
+        amtPaid = confirmed.amountPaid !== undefined ? confirmed.amountPaid : (u.userType === 'student' ? 499 : 999);
+        totalRevenue += amtPaid;
         if (u.userType === 'student') {
           paidStudentCount++;
         } else {
           paidProfessionalCount++;
         }
+
+        // Group by userType and amtPaid for the detailed split
+        const typeLabel = u.userType === 'student' ? 'Students' : 'Professionals';
+        const splitKey = `${typeLabel}-${amtPaid}`;
+        if (!revenueSplit[splitKey]) {
+          revenueSplit[splitKey] = {
+            category: typeLabel,
+            rate: amtPaid,
+            count: 0,
+            revenue: 0
+          };
+        }
+        revenueSplit[splitKey].count++;
+        revenueSplit[splitKey].revenue += amtPaid;
       }
 
       if (confirmed) {
@@ -321,7 +338,7 @@ router.get('/stats', adminAuth, async (req, res) => {
           } else {
             referralBreakdown[sourceKey].professionals += 1;
           }
-          referralBreakdown[sourceKey].revenue += u.userType === 'student' ? 499 : 999;
+          referralBreakdown[sourceKey].revenue += amtPaid;
         }
       }
 
@@ -333,7 +350,7 @@ router.get('/stats', adminAuth, async (req, res) => {
             salespersonReport[sp] = { registrations: 0, revenue: 0 };
           }
           salespersonReport[sp].registrations++;
-          salespersonReport[sp].revenue += u.userType === 'student' ? 499 : 999;
+          salespersonReport[sp].revenue += amtPaid;
         }
       }
 
@@ -356,21 +373,30 @@ router.get('/stats', adminAuth, async (req, res) => {
               collegeReport[colName] = { registrations: 0, revenue: 0, byReferral: {}, bySource: {} };
             }
             collegeReport[colName].registrations++;
-            collegeReport[colName].revenue += 499;
-            // bySource
-            if (!collegeReport[colName].bySource[_sourceBucket]) {
-              collegeReport[colName].bySource[_sourceBucket] = { count: 0, revenue: 0 };
+            collegeReport[colName].revenue += amtPaid;
+            
+            // bySource (grouped by rate)
+            const sourceKey = _sourceBucket;
+            if (!collegeReport[colName].bySource[sourceKey]) {
+              collegeReport[colName].bySource[sourceKey] = {};
             }
-            collegeReport[colName].bySource[_sourceBucket].count++;
-            collegeReport[colName].bySource[_sourceBucket].revenue += 499;
-            // byReferral
+            if (!collegeReport[colName].bySource[sourceKey][amtPaid]) {
+              collegeReport[colName].bySource[sourceKey][amtPaid] = { count: 0, revenue: 0 };
+            }
+            collegeReport[colName].bySource[sourceKey][amtPaid].count++;
+            collegeReport[colName].bySource[sourceKey][amtPaid].revenue += amtPaid;
+
+            // byReferral (grouped by rate)
             if (u.referralCode && u.referralCode.trim()) {
               const refKey = u.referralCode.trim();
               if (!collegeReport[colName].byReferral[refKey]) {
-                collegeReport[colName].byReferral[refKey] = { count: 0, revenue: 0 };
+                collegeReport[colName].byReferral[refKey] = {};
               }
-              collegeReport[colName].byReferral[refKey].count++;
-              collegeReport[colName].byReferral[refKey].revenue += 499;
+              if (!collegeReport[colName].byReferral[refKey][amtPaid]) {
+                collegeReport[colName].byReferral[refKey][amtPaid] = { count: 0, revenue: 0 };
+              }
+              collegeReport[colName].byReferral[refKey][amtPaid].count++;
+              collegeReport[colName].byReferral[refKey][amtPaid].revenue += amtPaid;
             }
           }
         }
@@ -385,21 +411,30 @@ router.get('/stats', adminAuth, async (req, res) => {
               organizationReport[orgName] = { registrations: 0, revenue: 0, byReferral: {}, bySource: {} };
             }
             organizationReport[orgName].registrations++;
-            organizationReport[orgName].revenue += 999;
-            // bySource
-            if (!organizationReport[orgName].bySource[_sourceBucket]) {
-              organizationReport[orgName].bySource[_sourceBucket] = { count: 0, revenue: 0 };
+            organizationReport[orgName].revenue += amtPaid;
+            
+            // bySource (grouped by rate)
+            const sourceKey = _sourceBucket;
+            if (!organizationReport[orgName].bySource[sourceKey]) {
+              organizationReport[orgName].bySource[sourceKey] = {};
             }
-            organizationReport[orgName].bySource[_sourceBucket].count++;
-            organizationReport[orgName].bySource[_sourceBucket].revenue += 999;
-            // byReferral
+            if (!organizationReport[orgName].bySource[sourceKey][amtPaid]) {
+              organizationReport[orgName].bySource[sourceKey][amtPaid] = { count: 0, revenue: 0 };
+            }
+            organizationReport[orgName].bySource[sourceKey][amtPaid].count++;
+            organizationReport[orgName].bySource[sourceKey][amtPaid].revenue += amtPaid;
+
+            // byReferral (grouped by rate)
             if (u.referralCode && u.referralCode.trim()) {
               const refKey = u.referralCode.trim();
               if (!organizationReport[orgName].byReferral[refKey]) {
-                organizationReport[orgName].byReferral[refKey] = { count: 0, revenue: 0 };
+                organizationReport[orgName].byReferral[refKey] = {};
               }
-              organizationReport[orgName].byReferral[refKey].count++;
-              organizationReport[orgName].byReferral[refKey].revenue += 999;
+              if (!organizationReport[orgName].byReferral[refKey][amtPaid]) {
+                organizationReport[orgName].byReferral[refKey][amtPaid] = { count: 0, revenue: 0 };
+              }
+              organizationReport[orgName].byReferral[refKey][amtPaid].count++;
+              organizationReport[orgName].byReferral[refKey][amtPaid].revenue += amtPaid;
             }
           }
         }
@@ -411,13 +446,12 @@ router.get('/stats', adminAuth, async (req, res) => {
         if (!noReferralBreakdown[bucket]) {
           noReferralBreakdown[bucket] = { students: 0, professionals: 0, revenue: 0 };
         }
-        const amt = u.userType === 'student' ? 499 : 999;
         if (u.userType === 'student') {
           noReferralBreakdown[bucket].students++;
         } else {
           noReferralBreakdown[bucket].professionals++;
         }
-        noReferralBreakdown[bucket].revenue += amt;
+        noReferralBreakdown[bucket].revenue += amtPaid;
       }
 
       // Country report
@@ -427,7 +461,7 @@ router.get('/stats', adminAuth, async (req, res) => {
           countryReport[countryName] = { registrations: 0, revenue: 0 };
         }
         countryReport[countryName].registrations++;
-        countryReport[countryName].revenue += u.userType === 'student' ? 499 : 999;
+        countryReport[countryName].revenue += amtPaid;
       }
     });
 
@@ -452,7 +486,8 @@ router.get('/stats', adminAuth, async (req, res) => {
       collegeReport,
       organizationReport,
       countryReport,
-      noReferralBreakdown
+      noReferralBreakdown,
+      revenueSplit: Object.values(revenueSplit)
     });
   } catch (err) {
     console.error('Admin stats error:', err);
@@ -772,6 +807,7 @@ router.post('/users', adminAuth, upload.single('idCard'), validate(createRegistr
       eventName: EVENT_NAME,
       paymentStatus: paymentStatus || 'pending',
       paymentMethod: 'razorpay',
+      amountPaid: customPaymentAmount !== undefined ? customPaymentAmount : (userType === 'student' ? 499 : 999)
     };
     if (paymentStatus === 'confirmed') {
       eventEntry.razorpayPaymentId = 'manual_' + Date.now();
@@ -1118,11 +1154,15 @@ router.post('/users/:id/confirm-payment', adminAuth, validate(confirmPaymentSche
     if (eventEntry) {
       eventEntry.razorpayPaymentId = razorpayPaymentId;
       eventEntry.paymentStatus = 'confirmed';
+      if (!eventEntry.amountPaid) {
+        eventEntry.amountPaid = user.userType === 'student' ? 499 : 999;
+      }
     } else {
       user.registeredEvents.push({
         eventName: EVENT_NAME,
         razorpayPaymentId,
-        paymentStatus: 'confirmed'
+        paymentStatus: 'confirmed',
+        amountPaid: user.userType === 'student' ? 499 : 999
       });
       eventEntry = user.registeredEvents[user.registeredEvents.length - 1];
     }

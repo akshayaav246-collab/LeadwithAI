@@ -3259,3 +3259,249 @@ footer {
   }
 }
 
+/* ── Compact Register Form UI Styles ── */
+.register-section {
+  padding: 1.5rem 1rem !important; /* Reduced page padding */
+  min-height: auto !important; /* Allow the content to define height */
+}
+
+.register-section .register-wrap {
+  max-width: 680px !important; /* Make container wider as requested */
+  padding: 0.75rem 1.5rem !important; /* Reduced padding inside container to reduce height */
+  box-shadow: 0 15px 30px -15px rgba(0,0,0,0.1);
+}
+
+.register-section .register-eyebrow {
+  margin-bottom: 0.3rem !important;
+}
+
+.register-section .register-title {
+  font-size: clamp(1.3rem, 2.2vw, 1.6rem) !important;
+  margin-bottom: 0.3rem !important;
+}
+
+.register-section .register-sub {
+  font-size: 0.82rem !important;
+  margin-bottom: 0.4rem !important;
+}
+
+.register-section .reg-tabs {
+  margin-bottom: 0.5rem !important;
+}
+
+.register-section .reg-tab {
+  padding: 0.4rem 0.8rem !important;
+  font-size: 0.88rem !important;
+}
+
+.register-section .register-form {
+  gap: 0.55rem !important; /* Reduced gaps to fit compact spacing */
+}
+
+.register-section .register-field {
+  gap: 0.2rem !important;
+}
+
+.register-section .register-field label {
+  font-size: 0.72rem !important;
+  letter-spacing: 0.08em !important;
+  margin-bottom: 0.08rem !important;
+  color: #1e3a8a !important; /* Visible dark blue color */
+}
+
+.register-section .register-field input,
+.register-section .register-select {
+  font-size: 0.85rem !important;
+  padding: 0.4rem 0.65rem !important;
+  border-radius: 4px !important;
+}
+
+.register-section .register-select {
+  padding-right: 2rem !important;
+  background-position: right 0.75rem center !important;
+}
+
+.register-section .reg-toggle {
+  gap: 0.4rem !important;
+  padding: 2px !important;
+  background: rgba(59, 139, 212, 0.04) !important;
+  border: 1px solid rgba(59, 139, 212, 0.1) !important;
+}
+
+.register-section .reg-toggle-btn {
+  font-size: 0.8rem !important;
+  padding: 0.45rem 0.75rem !important;
+  border-radius: 4px !important;
+}
+
+.register-section .register-upload {
+  padding: 0.4rem 0.65rem !important;
+  font-size: 0.85rem !important;
+  min-height: 35px !important;
+  height: 35px !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  border-width: 1px !important;
+}
+
+.register-section .register-upload .upload-placeholder,
+.register-section .register-upload .upload-filename {
+  font-size: 0.82rem !important;
+  line-height: 1 !important;
+}
+
+.register-section .btn-primary {
+  padding: 0.55rem 1rem !important;
+  font-size: 0.88rem !important;
+  border-radius: 6px !important;
+}
+
+.register-section .register-submit {
+  margin-top: 0.4rem !important;
+}
+
+.register-section .register-note {
+  margin-top: 0.6rem !important;
+  font-size: 0.82rem !important;
+}
+
+/* Increased grid gap for register fields */
+.register-section .register-grid-2 {
+  gap: 0.55rem !important;
+}
+
+/* Compact group member list styling */
+.register-section .group-member-item {
+  padding: 0.4rem 0.6rem !important;
+  border-radius: 4px !important;
+  font-size: 0.8rem !important;
+}
+
+.register-section .field-hint {
+  font-size: 0.78rem !important;
+  margin-top: 0.2rem !important;
+  gap: 0.25rem !important;
+}
+
+/* Row alignments */
+.register-grid-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.register-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.55rem;
+}
+
+/* Login form overrides */
+.register-section .register-wrap.is-login-wrap {
+  max-width: 520px !important;
+  min-height: 380px !important;
+  padding: 2.25rem 2.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+}
+
+.login-form-container {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 !important;
+  justify-content: center !important;
+}
+
+.register-section .login-form {
+  gap: 1.25rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+}
+
+.register-section .login-form .register-field {
+  gap: 0.5rem !important;
+}
+
+.register-section .login-form .register-field label {
+  font-size: 0.8rem !important;
+  letter-spacing: 0.05em !important;
+  color: #1e3a8a !important; /* Visible dark blue color */
+}
+
+.register-section .login-form .register-field input {
+  font-size: 0.95rem !important;
+  padding: 0.65rem 0.9rem !important;
+  height: 45px !important;
+  box-sizing: border-box !important;
+}
+
+.register-section .login-form .register-submit {
+  padding: 0.75rem 1.25rem !important;
+  font-size: 0.95rem !important;
+  height: 45px !important;
+  margin-top: 0.8rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.register-section .login-form .register-sub {
+  font-size: 0.9rem !important;
+  margin-bottom: 0.8rem !important;
+  line-height: 1.5 !important;
+}
+
+.register-section .login-form .register-note {
+  margin-top: 1rem !important;
+  font-size: 0.88rem !important;
+}
+
+/* Group attendees grid and compact styles */
+.attendee-grid-card {
+  margin-bottom: 0.6rem;
+  position: relative;
+}
+
+.attendee-grid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px dashed #e7dfd5;
+  padding-bottom: 0.15rem;
+}
+
+.attendee-grid-title {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--color-espresso);
+}
+
+.attendee-remove-btn {
+  background: transparent;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  padding: 0 4px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.attendee-grid-inputs {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 0.45rem;
+}
+
+@media (max-width: 640px) {
+  .attendee-grid-inputs {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+}
+
+

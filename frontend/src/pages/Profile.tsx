@@ -596,6 +596,41 @@ export function Profile() {
   const [feedbackEnabledCohorts, setFeedbackEnabledCohorts] = useState<string[]>([]);
   const [allowProfileGroupAdditions, setAllowProfileGroupAdditions] = useState(false);
 
+  // Editing working professional details
+  const [isEditingWorkingDetails, setIsEditingWorkingDetails] = useState(false);
+  const [editDomain, setEditDomain] = useState(user?.domain || '');
+  const [editOrg, setEditOrg] = useState(user?.organization || '');
+  const [isSavingWorkingDetails, setIsSavingWorkingDetails] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setEditDomain(user.domain || '');
+      setEditOrg(user.organization || '');
+    }
+  }, [user]);
+
+  const handleSaveWorkingDetails = async () => {
+    if (!editDomain.trim()) {
+      toast.error('Domain is required.');
+      return;
+    }
+    if (!editOrg.trim()) {
+      toast.error('Organization is required.');
+      return;
+    }
+    setIsSavingWorkingDetails(true);
+    try {
+      const res = await api.updateWorkingDetails(token!, editDomain.trim(), editOrg.trim());
+      toast.success(res.message || 'Professional details updated successfully.');
+      updateUser(res.user);
+      setIsEditingWorkingDetails(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update professional details.');
+    } finally {
+      setIsSavingWorkingDetails(false);
+    }
+  };
+
   // Group Member form states
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [memberFullName, setMemberFullName] = useState('');
@@ -1019,17 +1054,82 @@ export function Profile() {
 
               {user.userType === 'working' && (
                 <>
-                  {user.domain && (
-                    <div className="profile-detail-item">
-                      <span className="profile-detail-label">Domain</span>
-                      <span className="profile-detail-value">{user.domain}</span>
+                  {isEditingWorkingDetails && user.groupLeaderId ? (
+                    <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
+                      <div className="register-field">
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-espresso)' }}>Domain *</label>
+                        <select
+                          value={editDomain}
+                          onChange={(e) => setEditDomain(e.target.value)}
+                          className="register-select"
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '0.5rem' }}
+                        >
+                          <option value="">Select Domain</option>
+                          {DOMAIN_OPTIONS.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="register-field">
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-espresso)' }}>Organization *</label>
+                        <input
+                          type="text"
+                          value={editOrg}
+                          onChange={(e) => setEditOrg(e.target.value)}
+                          placeholder="e.g. TCS"
+                          style={{ width: '100%', boxSizing: 'border-box', padding: '0.5rem' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{ flex: 1, padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                          onClick={handleSaveWorkingDetails}
+                          disabled={isSavingWorkingDetails}
+                        >
+                          {isSavingWorkingDetails ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          style={{ flex: 1, padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1' }}
+                          onClick={() => {
+                            setEditDomain(user.domain || '');
+                            setEditOrg(user.organization || '');
+                            setIsEditingWorkingDetails(false);
+                          }}
+                          disabled={isSavingWorkingDetails}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                  )}
-                  {user.organization && (
-                    <div className="profile-detail-item">
-                      <span className="profile-detail-label">Organization</span>
-                      <span className="profile-detail-value">{user.organization}</span>
-                    </div>
+                  ) : (
+                    <>
+                      <div className="profile-detail-item">
+                        <span className="profile-detail-label">Domain</span>
+                        <span className="profile-detail-value">{user.domain || '-'}</span>
+                      </div>
+                      <div className="profile-detail-item">
+                        <span className="profile-detail-label">Organization</span>
+                        <span className="profile-detail-value">{user.organization || '-'}</span>
+                      </div>
+                      {user.groupLeaderId && (
+                        <div style={{ gridColumn: 'span 2', marginTop: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                            onClick={() => setIsEditingWorkingDetails(true)}
+                          >
+                            Edit Professional Details
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}

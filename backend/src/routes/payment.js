@@ -142,6 +142,7 @@ router.post('/verify', authMiddleware, validate(verifyPaymentSchema), async (req
       if (eventEntry && eventEntry.paymentStatus !== 'confirmed') {
         eventEntry.razorpayPaymentId = razorpay_payment_id;
         eventEntry.paymentStatus = 'confirmed';
+        eventEntry.amountPaid = u.userType === 'student' ? 499 : 999;
         
         // Register for Zoom Webinar
         try {

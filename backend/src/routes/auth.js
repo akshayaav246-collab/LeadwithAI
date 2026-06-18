@@ -452,17 +452,6 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
         if (req.file) await fs.unlink(req.file.path).catch(() => {});
         return res.status(400).json({ error: `Member ${i + 1}: A valid phone number is required.` });
       }
-
-      if (userType === 'working') {
-        if (!m.domain || !m.domain.trim()) {
-          if (req.file) await fs.unlink(req.file.path).catch(() => {});
-          return res.status(400).json({ error: `Member ${i + 1}: Domain is required.` });
-        }
-        if (!m.organization || !m.organization.trim()) {
-          if (req.file) await fs.unlink(req.file.path).catch(() => {});
-          return res.status(400).json({ error: `Member ${i + 1}: Organization is required.` });
-        }
-      }
     }
 
     // Check duplicate emails against DB
@@ -577,8 +566,8 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
           }]
         };
         if (userType === 'working') {
-          memberData.domain = m.domain?.trim() || domain?.trim() || 'General';
-          memberData.organization = m.organization?.trim() || organization?.trim();
+          memberData.domain = domain?.trim() || 'General';
+          memberData.organization = organization?.trim();
         }
         const newMember = await User.create(memberData);
         createdMembers.push(newMember);
@@ -712,6 +701,42 @@ router.get('/me', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error('Get me error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// PATCH /api/auth/update-working-details (protected)
+// ─────────────────────────────────────────────
+router.patch('/update-working-details', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    if (user.userType !== 'working') {
+      return res.status(400).json({ error: 'Only working professional accounts can update domain/organization.' });
+    }
+
+    const { domain, organization } = req.body;
+    if (!domain || !domain.trim()) {
+      return res.status(400).json({ error: 'Domain is required.' });
+    }
+    if (!organization || !organization.trim()) {
+      return res.status(400).json({ error: 'Organization is required.' });
+    }
+
+    user.domain = domain.trim();
+    user.organization = organization.trim();
+    await user.save();
+
+    const formattedUser = await getFormattedUser(user._id);
+
+    return res.json({
+      message: 'Working details updated successfully',
+      user: formattedUser,
+    });
+  } catch (err) {
+    console.error('Update working details error:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });
