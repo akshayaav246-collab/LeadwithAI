@@ -6,6 +6,15 @@ import * as api from '@/lib/api';
 import { toast } from 'sonner';
 import { publicAsset } from '@/lib/assets';
 
+const isValidPhone = (p: string): boolean => {
+  if (!p) return false;
+  const hasInvalidPhoneChars = /[^\d+\s()-]/.test(p);
+  if (hasInvalidPhoneChars) return false;
+  const cleaned = p.replace(/[^\d+]/g, '');
+  const isIndia = /^(?:\+?91|0)?[6-9]\d{9}$/.test(cleaned);
+  const isNepal = /^(?:\+?977)?9[678]\d{8}$/.test(cleaned);
+  return isIndia || isNepal;
+};
 
 const DOMAIN_OPTIONS = [
   "Information Technology (IT)",
@@ -82,11 +91,8 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
-    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
-    const cleanedPhone = phone.replace(/[^\d+]/g, '');
-    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
-    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
-      newErrors.phone = 'Please enter a valid phone number (e.g. +91 98765 43210).';
+    if (!isValidPhone(phone)) {
+      newErrors.phone = 'Please enter a valid India (+91) or Nepal (+977) phone number.';
     }
 
     if (!selectedUserType) {
@@ -938,12 +944,8 @@ export function Profile() {
       return;
     }
     
-    // Validation for phone
-    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(memberPhone);
-    const cleanedPhone = memberPhone.replace(/[^\d+]/g, '');
-    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
-    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
-      toast.error('Please enter a valid phone number.');
+    if (!isValidPhone(memberPhone)) {
+      toast.error('Please enter a valid India (+91) or Nepal (+977) phone number.');
       return;
     }
 
@@ -1305,7 +1307,7 @@ export function Profile() {
                   </p>
                   <div style={{ maxWidth: '320px' }}>
                     <Suspense fallback={<div>Loading certificate generator...</div>}>
-                      <DownloadCertificateButton fullName={user.fullName} userId={user.id} />
+                      <DownloadCertificateButton fullName={user.fullName} userId={user.id} selectedCohort={user.selectedCohort} />
                     </Suspense>
                   </div>
                 </div>
@@ -1341,9 +1343,9 @@ export function Profile() {
       {isFeedbackModalOpen && createPortal(
         <div className="modal-overlay" onClick={() => setIsFeedbackModalOpen(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Session Feedback</h2>
-              <button className="modal-close" onClick={() => setIsFeedbackModalOpen(false)}>
+            <div className="modal-header" style={{ background: '#0a0d3d', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px 8px 0 0' }}>
+              <h2 style={{ color: '#ffffff', margin: 0 }}>Session Feedback</h2>
+              <button className="modal-close" onClick={() => setIsFeedbackModalOpen(false)} style={{ color: '#ffffff', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
@@ -1354,7 +1356,8 @@ export function Profile() {
                   : 'Share your feedback for all 4 sessions to unlock your certificate.'}
               </p>
               {feedbackData.map((fb, idx) => {
-                const isRatingQuestion = !isUpcomingCohort || idx === 0;
+                const showStars = !isUpcomingCohort || idx === 0;
+                const showText = !isUpcomingCohort || idx > 0;
                 const isRequired = !isUpcomingCohort || idx === 0 || idx === 1 || idx === 3;
                 
                 return (
@@ -1363,15 +1366,15 @@ export function Profile() {
                       <label style={{ display: 'block', fontWeight: 600, color: 'var(--color-umber)', fontSize: '0.93rem' }}>
                         {fb.session} {isRequired && <span style={{ color: '#ef4444' }}>*</span>}
                       </label>
-                      {!isRatingQuestion && (
+                      {showText && (
                         <span style={{ fontSize: '0.72rem', color: fb.text.length > 280 ? '#ef4444' : 'var(--color-stone)' }}>
                           {fb.text.length}/300
                         </span>
                       )}
                     </div>
 
-                    {isRatingQuestion ? (
-                      <div className="rating-container" style={{ display: 'flex', gap: '0.5rem' }}>
+                    {showStars && (
+                      <div className="rating-container" style={{ display: 'flex', gap: '0.5rem', marginBottom: showText ? '0.5rem' : '0' }}>
                         {[1, 2, 3, 4, 5].map((star) => (
                           <button
                             key={star}
@@ -1396,9 +1399,11 @@ export function Profile() {
                           </button>
                         ))}
                       </div>
-                    ) : (
+                    )}
+
+                    {showText && (
                       <textarea
-                        rows={3}
+                        rows={!isUpcomingCohort ? 2 : 3}
                         maxLength={300}
                         style={{
                           width: '100%',

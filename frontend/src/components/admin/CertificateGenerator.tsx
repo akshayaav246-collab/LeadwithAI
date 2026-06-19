@@ -7,6 +7,7 @@ interface CertificateGeneratorProps {
     id?: string;
     _id?: string;
     fullName: string;
+    selectedCohort?: string;
   };
   onClose: () => void;
 }
@@ -35,14 +36,17 @@ export function CertificateGenerator({ user, onClose }: CertificateGeneratorProp
 
   useEffect(() => {
     // Load Base Certificate Template
+    setImageLoaded(false);
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.src = publicAsset("Certificate.png");
+    const cohort = user?.selectedCohort || '';
+    const isJune27 = cohort.includes('27 & 28');
+    img.src = publicAsset(isJune27 ? "Certificate_27&28.png" : "Certificate_13&14.png");
     img.onload = () => {
       setBaseImage(img);
       setImageLoaded(true);
     };
-  }, []);
+  }, [user?.selectedCohort]);
 
   useEffect(() => {
     // Generate QR Code Image using the verify link

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 interface DownloadCertificateButtonProps {
   fullName: string;
   userId?: string;
+  selectedCohort?: string;
 }
 
 // Config matches the backend and admin preview coordinates exactly (3200x2200 resolution)
@@ -25,7 +26,7 @@ const CONFIG = {
   }
 };
 
-export function DownloadCertificateButton({ fullName, userId }: DownloadCertificateButtonProps) {
+export function DownloadCertificateButton({ fullName, userId, selectedCohort }: DownloadCertificateButtonProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -43,7 +44,8 @@ export function DownloadCertificateButton({ fullName, userId }: DownloadCertific
       // 1. Load Base Certificate Template
       const baseImg = new Image();
       baseImg.crossOrigin = "anonymous";
-      baseImg.src = publicAsset("Certificate.png");
+      const isJune27 = selectedCohort && selectedCohort.includes('27 & 28');
+      baseImg.src = publicAsset(isJune27 ? "Certificate_27&28.png" : "Certificate_13&14.png");
       await new Promise((resolve, reject) => {
         baseImg.onload = resolve;
         baseImg.onerror = reject;

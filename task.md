@@ -7,3 +7,7 @@
 - [x] Backend: Remove HTML branding wrap template from custom bulk email sender
 - [x] Backend: Fix standard user certificate lookup 404 (Not Found) issue (e.g. Chetana's lookup error) by dynamically casting ObjectId strings
 - [x] Verification: Run typecheck and syntax checks successfully
+- [x] Implement Country filter dropdown (India/Nepal) in Admin Users dashboard with wrapping flex layout to fit in existing space
+- [x] Add Country select dropdown to manual Add Registrant modal
+- [x] Enforce Year of Study select dropdown (1st Year to 5th Year) in both Add and Edit modals
+- [x] Fix duplicate referral/source double-counting bug inside backend report calculations

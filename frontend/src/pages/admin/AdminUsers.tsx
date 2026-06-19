@@ -154,6 +154,7 @@ export function AdminUsers() {
   const [filterCohort, setFilterCohort] = useState('all');
   const [filterFeedback, setFilterFeedback] = useState('all');
   const [filterCertSent, setFilterCertSent] = useState('all');
+  const [filterCountry, setFilterCountry] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   const [isSendingCert, setIsSendingCert] = useState<string | null>(null);
   const [isBulkSendingCert, setIsBulkSendingCert] = useState(false);
@@ -214,7 +215,8 @@ export function AdminUsers() {
     referralCode: '',
     selectedCohort: '',
     paymentStatus: 'pending',
-    customPaymentAmount: ''
+    customPaymentAmount: '',
+    country: 'India'
   });
   const [addIdCardFile, setAddIdCardFile] = useState<File | null>(null);
 
@@ -271,6 +273,7 @@ export function AdminUsers() {
         filterCohort,
         filterFeedback,
         filterCertSent,
+        filterCountry,
         sortOrder
       });
       setUsers(data.data || []);
@@ -286,7 +289,7 @@ export function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
-  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterSources, sortOrder, filterCohort, filterFeedback, filterCertSent, adminToken]);
+  }, [page, debouncedSearchTerm, filterPaid, filterType, filterWaitlist, filterSources, sortOrder, filterCohort, filterFeedback, filterCertSent, filterCountry, adminToken]);
 
   const handleExportCSV = async () => {
     try {
@@ -299,6 +302,7 @@ export function AdminUsers() {
         filterCohort,
         filterFeedback,
         filterCertSent,
+        filterCountry,
         exportCsv: 'true',
         sortOrder
       });
@@ -504,6 +508,7 @@ export function AdminUsers() {
       if (addForm.heardFrom === 'Others' && addForm.heardFromOther.trim()) fd.append('heardFromOther', addForm.heardFromOther.trim());
       if (addForm.heardFrom === 'GKT Employee' && addForm.referralName) fd.append('referralName', addForm.referralName);
       if (addForm.referralCode) fd.append('referralCode', addForm.referralCode);
+      if (addForm.country) fd.append('country', addForm.country);
 
       if (addForm.customPaymentAmount.trim() !== '') {
         const amt = parseFloat(addForm.customPaymentAmount);
@@ -544,7 +549,8 @@ export function AdminUsers() {
         referralCode: '',
         selectedCohort: cohortsList[0] || 'June 13 & 14, 2026',
         paymentStatus: 'pending',
-        customPaymentAmount: ''
+        customPaymentAmount: '',
+        country: 'India'
       });
       setAddIdCardFile(null);
       fetchUsers();
@@ -724,23 +730,29 @@ export function AdminUsers() {
         </div>
       </div>
 
-      <div className="admin-controls">
+      <div className="admin-controls" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
         <input
           type="text"
-          placeholder="Search name, email, college, org..."
+          placeholder="Search..."
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
           className="admin-search-input"
+          style={{ minWidth: '150px', padding: '0.5rem 0.8rem', fontSize: '0.9rem', height: '38px', boxSizing: 'border-box' }}
         />
-        <select value={filterPaid} onChange={e => setFilterPaid(e.target.value)} className="admin-select">
-          <option value="all">All Payment Status</option>
+        <select value={filterPaid} onChange={e => setFilterPaid(e.target.value)} className="admin-select" style={{ height: '38px', padding: '0 2rem 0 0.8rem', fontSize: '0.9rem', backgroundPosition: 'right 0.6rem center', boxSizing: 'border-box' }}>
+          <option value="all">All Payments</option>
           <option value="paid">Paid Only</option>
           <option value="unpaid">Unpaid Only</option>
         </select>
-        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="admin-select">
+        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="admin-select" style={{ height: '38px', padding: '0 2rem 0 0.8rem', fontSize: '0.9rem', backgroundPosition: 'right 0.6rem center', boxSizing: 'border-box' }}>
           <option value="all">All Types</option>
           <option value="student">Students</option>
           <option value="working">Professionals</option>
+        </select>
+        <select value={filterCountry} onChange={e => setFilterCountry(e.target.value)} className="admin-select" style={{ height: '38px', padding: '0 2rem 0 0.8rem', fontSize: '0.9rem', backgroundPosition: 'right 0.6rem center', boxSizing: 'border-box' }}>
+          <option value="all">All Countries</option>
+          <option value="India">India</option>
+          <option value="Nepal">Nepal</option>
         </select>
         {/* Source Dropdown with Checkboxes */}
         <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -752,15 +764,16 @@ export function AdminUsers() {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              minWidth: '180px',
+              minWidth: '140px',
               textAlign: 'left',
               cursor: 'pointer',
               background: '#fff',
               border: '1px solid #cbd5e1',
               borderRadius: '6px',
               padding: '0.5rem 0.8rem',
-              fontSize: '0.875rem',
-              height: '100%'
+              fontSize: '0.9rem',
+              height: '38px',
+              boxSizing: 'border-box'
             }}
           >
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
@@ -865,7 +878,7 @@ export function AdminUsers() {
             </>
           )}
         </div>
-        <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)} className="admin-select">
+        <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)} className="admin-select" style={{ height: '38px', padding: '0 2rem 0 0.8rem', fontSize: '0.9rem', backgroundPosition: 'right 0.6rem center', boxSizing: 'border-box' }}>
           <option value="all">All Dates</option>
           {cohortsList.map(c => {
             const completed = isCohortCompleted(c);
@@ -876,10 +889,10 @@ export function AdminUsers() {
             );
           })}
         </select>
-        <select value={filterFeedback} onChange={e => setFilterFeedback(e.target.value)} className="admin-select">
-          <option value="all">All Feedback Status</option>
-          <option value="completed">Feedback Completed</option>
-          <option value="pending">Feedback Pending</option>
+        <select value={filterFeedback} onChange={e => setFilterFeedback(e.target.value)} className="admin-select" style={{ height: '38px', padding: '0 2rem 0 0.8rem', fontSize: '0.9rem', backgroundPosition: 'right 0.6rem center', boxSizing: 'border-box' }}>
+          <option value="all">All Feedback</option>
+          <option value="completed">Completed</option>
+          <option value="pending">Pending</option>
         </select>
 
       </div>
@@ -1248,12 +1261,18 @@ export function AdminUsers() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                     <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Year</label>
-                    <input
-                      type="text"
+                    <select
                       value={editForm.year}
                       onChange={e => setEditForm({ ...editForm, year: e.target.value })}
-                      style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
-                    />
+                      style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                    >
+                      <option value="">Select Year</option>
+                      <option value="1st Year">1st Year</option>
+                      <option value="2nd Year">2nd Year</option>
+                      <option value="3rd Year">3rd Year</option>
+                      <option value="4th Year">4th Year</option>
+                      <option value="5th Year">5th Year</option>
+                    </select>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                     <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>College ID Card (PDF)</label>
@@ -1589,13 +1608,18 @@ export function AdminUsers() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                       <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Year of Study</label>
-                      <input
-                        type="text"
+                      <select
                         value={addForm.year}
                         onChange={e => setAddForm({ ...addForm, year: e.target.value })}
-                        placeholder="e.g. 3rd Year"
-                        style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6 }}
-                      />
+                        style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                      >
+                        <option value="">Select Year</option>
+                        <option value="1st Year">1st Year</option>
+                        <option value="2nd Year">2nd Year</option>
+                        <option value="3rd Year">3rd Year</option>
+                        <option value="4th Year">4th Year</option>
+                        <option value="5th Year">5th Year</option>
+                      </select>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                       <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>College ID Card (PDF)</label>
@@ -1634,6 +1658,19 @@ export function AdminUsers() {
                     </div>
                   </>
                 )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Country *</label>
+                  <select
+                    value={addForm.country}
+                    onChange={e => setAddForm({ ...addForm, country: e.target.value })}
+                    style={{ padding: '0.5rem', border: '1px solid #E2D9CC', borderRadius: 6, background: '#fff' }}
+                    required
+                  >
+                    <option value="India">India</option>
+                    <option value="Nepal">Nepal</option>
+                  </select>
+                </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                   <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#8C7B6B' }}>Selected Date (Cohort) *</label>

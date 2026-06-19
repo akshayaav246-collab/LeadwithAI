@@ -7,6 +7,16 @@ import { Autocomplete } from '@/components/Autocomplete';
 import { toast } from 'sonner';
 import { publicAsset } from '@/lib/assets';
 
+const isValidPhone = (p: string): boolean => {
+  if (!p) return false;
+  const hasInvalidPhoneChars = /[^\d+\s()-]/.test(p);
+  if (hasInvalidPhoneChars) return false;
+  const cleaned = p.replace(/[^\d+]/g, '');
+  const isIndia = /^(?:\+?91|0)?[6-9]\d{9}$/.test(cleaned);
+  const isNepal = /^(?:\+?977)?9[678]\d{8}$/.test(cleaned);
+  return isIndia || isNepal;
+};
+
 const COURSE_OPTIONS = [
   "B.E. Computer Science and Engineering",
   "B.E. Electronics and Communication Engineering",
@@ -184,11 +194,8 @@ export function Register() {
       return;
     }
 
-    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(mPhone);
-    const cleanedPhone = mPhone.replace(/[^\d+]/g, '');
-    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
-    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
-      toast.error('Please enter a valid phone number.');
+    if (!isValidPhone(mPhone)) {
+      toast.error('Please enter a valid India (+91) or Nepal (+977) phone number.');
       return;
     }
 
@@ -409,11 +416,8 @@ export function Register() {
         toast.warning('Please enter your phone number first.');
         return false;
       }
-      const hasInvalidChars = /[^\d+\s()-]/.test(phone);
-      const cleaned = phone.replace(/[^\d+]/g, '');
-      const phoneRegex = /^\+?[1-9]\d{6,14}$/;
-      if (hasInvalidChars || !phoneRegex.test(cleaned)) {
-        toast.warning('Please enter a valid phone number first (e.g. +91 98765 43210).');
+      if (!isValidPhone(phone)) {
+        toast.warning('Please enter a valid phone number.');
         return false;
       }
     }
@@ -490,11 +494,8 @@ export function Register() {
     if (!isEmailVerified) newErrors.email = 'Verify the email';
     if (!fullName.trim()) newErrors.fullName = 'Please enter your full name.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Please enter a valid email.';
-    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
-    const cleanedPhone = phone.replace(/[^\d+]/g, '');
-    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
-    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
-      newErrors.phone = 'Please enter a valid phone number (e.g. +91 98765 43210).';
+    if (!isValidPhone(phone)) {
+      newErrors.phone = 'Please enter a valid India (+91) or Nepal (+977) phone number.';
     }
     
     if (userType === 'student') {
@@ -559,11 +560,8 @@ export function Register() {
           toast.error(`Attendee ${i + 1}: Email cannot be the same as the main registration email.`);
           return;
         }
-        const hasInvalidPhoneChars = /[^\d+\s()-]/.test(m.phone);
-        const cleanedPhone = m.phone.replace(/[^\d+]/g, '');
-        const phoneRegex = /^\+?[1-9]\d{6,14}$/;
-        if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
-          toast.error(`Attendee ${i + 1}: A valid phone number is required.`);
+        if (!isValidPhone(m.phone)) {
+          toast.error(`Attendee ${i + 1}: A valid India (+91) or Nepal (+977) phone number is required.`);
           return;
         }
       }

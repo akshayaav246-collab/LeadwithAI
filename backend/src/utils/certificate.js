@@ -26,7 +26,20 @@ const CERTIFICATE_CONFIG = {
  * @returns {Promise<{ filePath: string, buffer: Buffer }>}
  */
 async function generateCertificate(participantName, userId) {
-  const templatePath = path.join(__dirname, '../../../frontend/public/Certificate.png');
+  let templateName = 'Certificate_13&14.png';
+  try {
+    const mongoose = require('mongoose');
+    if (mongoose.Types.ObjectId.isValid(userId)) {
+      const User = require('../models/User');
+      const user = await User.findById(userId).select('selectedCohort');
+      if (user && user.selectedCohort && user.selectedCohort.includes('27 & 28')) {
+        templateName = 'Certificate_27&28.png';
+      }
+    }
+  } catch (err) {
+    console.error('Error finding user cohort for certificate:', err);
+  }
+  const templatePath = path.join(__dirname, `../../../frontend/public/${templateName}`);
   
   // Create output directory if not exists
   const outputDir = path.join(__dirname, '../../uploads/certificates');

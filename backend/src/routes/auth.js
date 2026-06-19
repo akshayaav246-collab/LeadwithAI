@@ -124,6 +124,17 @@ const upload = multer({
   },
 });
 
+// Helper: validate India and Nepal phone numbers
+function isValidIndiaNepalPhone(phone) {
+  if (!phone) return false;
+  const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
+  if (hasInvalidPhoneChars) return false;
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  const isIndia = /^(?:\+?91|0)?[6-9]\d{9}$/.test(cleaned);
+  const isNepal = /^(?:\+?977)?9[678]\d{8}$/.test(cleaned);
+  return isIndia || isNepal;
+}
+
 // Helper: generate JWT
 function signToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -403,6 +414,10 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(400).json({ error: 'Missing required fields.' });
     }
+    if (!isValidIndiaNepalPhone(phone)) {
+      if (req.file) await fs.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'Please enter a valid India (+91) or Nepal (+977) phone number.' });
+    }
     if (!['student', 'working'].includes(userType)) {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(400).json({ error: 'Invalid user type.' });
@@ -448,9 +463,9 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       }
       seenEmails.add(memberEmail);
 
-      if (!m.phone || m.phone.trim().length < 7) {
+      if (!isValidIndiaNepalPhone(m.phone)) {
         if (req.file) await fs.unlink(req.file.path).catch(() => {});
-        return res.status(400).json({ error: `Member ${i + 1}: A valid phone number is required.` });
+        return res.status(400).json({ error: `Member ${i + 1}: A valid India (+91) or Nepal (+977) phone number is required.` });
       }
     }
 
@@ -811,12 +826,9 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
       return res.status(400).json({ error: `Selected date (${selectedCohort}) is no longer available.` });
     }
 
-    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
-    const cleanedPhone = phone.replace(/[^\d+]/g, '');
-    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
-    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
+    if (!isValidIndiaNepalPhone(phone)) {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
-      return res.status(400).json({ error: 'Please enter a valid phone number (e.g. +91 98765 43210).' });
+      return res.status(400).json({ error: 'Please enter a valid India (+91) or Nepal (+977) phone number.' });
     }
 
     // Enforce lock on userType if it was set by admin
@@ -1079,12 +1091,9 @@ router.post('/add-group-member', authMiddleware, upload.single('idCard'), async 
     const cohortToRegister = leader.selectedCohort || (await Settings.getSingleton()).activeCohort;
 
     // Validate phone number
-    const hasInvalidPhoneChars = /[^\d+\s()-]/.test(phone);
-    const cleanedPhone = phone.replace(/[^\d+]/g, '');
-    const phoneRegex = /^\+?[1-9]\d{6,14}$/;
-    if (hasInvalidPhoneChars || !phoneRegex.test(cleanedPhone)) {
+    if (!isValidIndiaNepalPhone(phone)) {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
-      return res.status(400).json({ error: 'Please enter a valid phone number.' });
+      return res.status(400).json({ error: 'Please enter a valid India (+91) or Nepal (+977) phone number.' });
     }
 
     const userData = {

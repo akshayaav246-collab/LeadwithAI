@@ -315,17 +315,6 @@ router.get('/stats', adminAuth, async (req, res) => {
         let sourceKey = null;
         if (u.referralCode && u.referralCode.trim() && u.referralCode !== '-') {
           sourceKey = u.referralCode.trim();
-        } else if (u.heardFrom) {
-          const h = u.heardFrom.trim();
-          if (/social\s*media/i.test(h)) {
-            sourceKey = 'Social Media';
-          } else if (/newspaper/i.test(h)) {
-            sourceKey = 'Newspaper';
-          } else if (/gkt\s*employee/i.test(h)) {
-            sourceKey = 'GKT Employee';
-          } else if (h !== '-' && h !== '') {
-            sourceKey = 'Others';
-          }
         }
 
         if (sourceKey) {
@@ -517,7 +506,8 @@ router.get('/users', adminAuth, async (req, res) => {
       filterSource = 'all',
       filterCohort = 'all',
       filterFeedback = 'all',
-      filterCertSent = 'all'
+      filterCertSent = 'all',
+      filterCountry = 'all'
     } = req.query;
 
     const query = {};
@@ -645,6 +635,21 @@ router.get('/users', adminAuth, async (req, res) => {
       query.isCertificateSent = { $ne: true };
     }
 
+    // Filter Country (India/Nepal)
+    if (filterCountry !== 'all') {
+      if (filterCountry.toLowerCase() === 'india') {
+        andConditions.push({
+          $or: [
+            { country: { $regex: /^india$/i } },
+            { country: null },
+            { country: '' }
+          ]
+        });
+      } else {
+        query.country = { $regex: new RegExp(`^${filterCountry}$`, 'i') };
+      }
+    }
+
     if (andConditions.length > 0) {
       query.$and = andConditions;
     }
@@ -744,6 +749,7 @@ const createRegistrantSchema = Joi.object({
   heardFrom: Joi.string().allow('', null).optional(),
   heardFromOther: Joi.string().allow('', null).optional(),
   referralName: Joi.string().allow('', null).optional(),
+  country: Joi.string().allow('', null).optional(),
 });
 
 router.post('/users', adminAuth, upload.single('idCard'), validate(createRegistrantSchema), async (req, res) => {
@@ -765,6 +771,7 @@ router.post('/users', adminAuth, upload.single('idCard'), validate(createRegistr
       heardFrom,
       heardFromOther,
       referralName,
+      country,
     } = req.body;
 
     // Check duplicate (case-insensitive email)
@@ -822,6 +829,7 @@ router.post('/users', adminAuth, upload.single('idCard'), validate(createRegistr
       referralCode: mappedReferral,
       salesperson: finalSalesperson,
       selectedCohort: selectedCohort || null,
+      country: country || 'India',
       isAdminCreated: true,
       registeredEvents: [eventEntry]
     };
@@ -1499,13 +1507,46 @@ router.post('/send-email', adminAuth, validate(sendBulkEmailSchema), async (req,
 // ─────────────────────────────────────────────
 router.get('/feedback', adminAuth, async (req, res) => {
   try {
-    const { page = 1, limit = 20, session = '', exportCsv = 'false' } = req.query;
+    const { page = 1, limit = 20, session = '', cohort = '', rating = '', sortRating = '', exportCsv = 'false' } = req.query;
 
     const query = { isFeedbackSubmitted: true };
+    if (cohort) {
+      query.selectedCohort = cohort;
+    }
+    if (rating) {
+      if (cohort && cohort !== 'June 13 & 14, 2026') {
+        // For June 27 & 28 (and future cohorts), overall rating is the first question
+        query['feedback.0.rating'] = rating;
+      } else {
+        if (session) {
+          query.feedback = {
+            $elemMatch: {
+              session: new RegExp(session, 'i'),
+              rating: rating
+            }
+          };
+        } else {
+          query.feedback = {
+            $elemMatch: {
+              rating: rating
+            }
+          };
+        }
+      }
+    }
+
+    let sortObj = { updatedAt: -1 };
+    if (cohort && cohort !== 'June 13 & 14, 2026') {
+      if (sortRating === 'desc') {
+        sortObj = { 'feedback.0.rating': -1, updatedAt: -1 };
+      } else if (sortRating === 'asc') {
+        sortObj = { 'feedback.0.rating': 1, updatedAt: -1 };
+      }
+    }
 
     let usersQuery = User.find(query)
-      .sort({ updatedAt: -1 })
-      .select('fullName email userType collegeName organization feedback isFeedbackSubmitted createdAt');
+      .sort(sortObj)
+      .select('fullName email userType collegeName organization feedback isFeedbackSubmitted selectedCohort createdAt');
 
     const isExport = exportCsv === 'true';
 
@@ -1519,18 +1560,17 @@ router.get('/feedback', adminAuth, async (req, res) => {
       User.countDocuments(query)
     ]);
 
-    // Optionally filter by session client-side (feedback is stored per-session)
+    // Return full feedback array so that the frontend can display all sessions
     const formatted = users.map(u => ({
       id:           u._id,
       fullName:     u.fullName,
       email:        u.email,
       userType:     u.userType,
       institution:  u.userType === 'student' ? (u.collegeName || '-') : (u.organization || '-'),
-      feedback:     session
-        ? u.feedback.filter(f => f.session.toLowerCase().includes(session.toLowerCase()))
-        : u.feedback,
+      feedback:     u.feedback,
       createdAt:    u.createdAt,
-    })).filter(u => u.feedback.length > 0);
+      selectedCohort: u.selectedCohort,
+    }));
 
     if (isExport) {
       return res.json({ data: formatted, total });

@@ -171,7 +171,7 @@ export function Home() {
 
                 {/* Certificate visual */}
                 <div className="who-cert-frame" style={{ padding: 0 }}>
-                  <img src={publicAsset("Certificate2.png")} alt="Certificate of Completion" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                  <img src={publicAsset("Certificate_home.png")} alt="Certificate of Completion" style={{ width: '100%', height: 'auto', display: 'block' }} />
                 </div>
               </div>
             </div>
