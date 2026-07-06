@@ -1,9 +1,12 @@
 import { Link } from "wouter";
 import { SixThings } from "@/components/SixThings";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { publicAsset } from "@/lib/assets";
+import * as api from "@/lib/api";
 
 export function Home() {
+  const [activeCohort, setActiveCohort] = useState<string | null>(null);
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -19,6 +22,16 @@ export function Home() {
     document.querySelectorAll('.scroll-fade-up, .scroll-scale-up, .scroll-slide-right, .scroll-slide-left').forEach((el) => {
       observer.observe(el);
     });
+
+    api.getPublicSettings()
+      .then(settings => {
+        if (settings) {
+          setActiveCohort(settings.activeCohort || '');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load settings:', err);
+      });
 
     return () => observer.disconnect();
   }, []);
@@ -37,18 +50,20 @@ export function Home() {
             <a href={publicAsset("Lead_with_AI_Brochure.pdf")} download className="btn-secondary-light">Download the Brochure ↓</a>
           </div>
           
-          {/* Upcoming Cohorts Board */}
-          <div style={{
-            marginTop: '2rem',
-            marginBottom: '2.5rem',
-            display: 'flex',
-            justifyContent: 'center'
-          }}>
-            <div style={{ padding: '0.75rem 2rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '0.25rem' }}>
-              <strong style={{ fontSize: '1.2rem', color: 'var(--color-white)' }}>June 27 &amp; 28, 2026</strong>
-              <span style={{ fontSize: '0.72rem', letterSpacing: '0.06em', fontWeight: 700, color: 'var(--color-sienna)', textTransform: 'uppercase' }}>Online</span>
+          {/* Upcoming Cohorts Board — only shown when an active date is set */}
+          {activeCohort && (
+            <div style={{
+              marginTop: '2rem',
+              marginBottom: '2.5rem',
+              display: 'flex',
+              justifyContent: 'center'
+            }}>
+              <div style={{ padding: '0.75rem 2rem', border: '1px solid rgba(59, 139, 212, 0.3)', borderBottom: '3px solid var(--color-sienna)', background: 'rgba(255,255,255,0.08)', borderRadius: '6px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '0.25rem' }}>
+                <strong style={{ fontSize: '1.2rem', color: 'var(--color-white)' }}>{activeCohort}</strong>
+                <span style={{ fontSize: '0.72rem', letterSpacing: '0.06em', fontWeight: 700, color: 'var(--color-sienna)', textTransform: 'uppercase' }}>Online</span>
+              </div>
             </div>
-          </div>
+          )}
 
 
           <div className="hero-trust">

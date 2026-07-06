@@ -271,7 +271,11 @@ export function AdminSettings() {
     try {
       const settings = await updateActiveCohort(token, cohort);
       setActiveCohort(settings.activeCohort || '');
-      toast.success(`Active cohort updated to "${settings.activeCohort}"`);
+      if (settings.activeCohort) {
+        toast.success(`Active cohort updated to "${settings.activeCohort}"`);
+      } else {
+        toast.success('Active cohort cleared — no active cohort set.');
+      }
     } catch (err: any) {
       toast.error('Failed to update active cohort: ' + err.message);
     }

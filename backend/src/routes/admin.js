@@ -1880,16 +1880,17 @@ router.delete('/settings/cohorts/:cohort', adminAuth, async (req, res) => {
 // Update active cohort
 // ─────────────────────────────────────────────
 const activeCohortSchema = Joi.object({
-  activeCohort: Joi.string().required()
+  activeCohort: Joi.string().allow('').optional()
 });
 router.patch('/settings/active-cohort', adminAuth, validate(activeCohortSchema), async (req, res) => {
   try {
     const { activeCohort } = req.body;
     const settings = await Settings.getSingleton();
-    if (!settings.cohorts.includes(activeCohort)) {
+    // Allow clearing the active cohort (empty string means no active cohort)
+    if (activeCohort && !settings.cohorts.includes(activeCohort)) {
       return res.status(400).json({ error: 'Selected cohort must exist first.' });
     }
-    settings.activeCohort = activeCohort;
+    settings.activeCohort = activeCohort || '';
     await settings.save();
     return res.json(settings);
   } catch (err) {

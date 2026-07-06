@@ -11,6 +11,7 @@ const Settings = require('../models/Settings');
 const Otp = require('../models/Otp');
 
 const { sendRegistrationEmail, sendOtpEmail, sendVerificationOtpEmail } = require('../utils/email');
+const { getCohortCutoff } = require('../utils/cohorts');
 const authMiddleware = require('../middleware/auth');
 const Joi = require('joi');
 const validate = require('../middleware/validate');
@@ -505,9 +506,12 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       }
     }
 
-    // Waitlist Logic: Use the dynamic registrationCap from Settings
+    // Waitlist Logic: Use the dynamic registrationCap from Settings OR check if the cohort is in the past
     const userCount = await User.countDocuments();
-    const isWaitlisted = userCount >= (settings.registrationCap || 1000);
+    const cohortToRegister = settings.activeCohort || 'June 13 & 14, 2026';
+    const cutoff = getCohortCutoff(cohortToRegister);
+    const isCohortPast = new Date() >= cutoff;
+    const isWaitlisted = userCount >= (settings.registrationCap || 1000) || isCohortPast;
 
     // Referral code resolution:
     // 1. If came via referral link → use that code
@@ -525,8 +529,6 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
         mappedReferral = matchedRef.label; // store as label (e.g. "gkt01 - Chetana N")
       }
     }
-
-    const cohortToRegister = settings.activeCohort || 'June 13 & 14, 2026';
 
     // Build user object
     const userData = {
@@ -575,6 +577,7 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
           referralCode: user.referralCode,
           salesperson: user.salesperson || null,
           country: country || 'India',
+          isWaitlisted: isWaitlisted,
           registeredEvents: [{
             eventName: 'Lead with AI: Adopt, Implement and Transform',
             paymentStatus: 'pending'

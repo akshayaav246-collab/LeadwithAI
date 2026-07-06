@@ -184,15 +184,25 @@ async function sendRegistrationEmail(user) {
   }
 
   const greeting = `Welcome, ${user.fullName.split(' ')[0]}!`;
-  const cohortDate = await getCohortDateForUser(user);
   let contentHtml = '';
   let subject = 'Registration Confirmed — Lead with AI Workshop';
 
-  contentHtml = `
-    <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop scheduled on <strong>${cohortDate}</strong>.</p>
-    <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
-    <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
-  `;
+  if (user.isWaitlisted) {
+    subject = 'Registration Received — Lead with AI Workshop';
+    contentHtml = `
+      <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop.</p>
+      <p>We will send you updates and details regarding the upcoming session soon by email.</p>
+      <p>You can access your registration portal here:</p>
+      <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
+    `;
+  } else {
+    const cohortDate = await getCohortDateForUser(user);
+    contentHtml = `
+      <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop scheduled on <strong>${cohortDate}</strong>.</p>
+      <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
+      <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
+    `;
+  }
 
   const html = getHtmlTemplate({ greeting, contentHtml });
 

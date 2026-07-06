@@ -689,9 +689,7 @@ export function Profile() {
           if (settings.availableCohorts) {
             setAvailableCohorts(settings.availableCohorts);
           }
-          if ((settings as any).activeCohort) {
-            setActiveCohort((settings as any).activeCohort);
-          }
+          setActiveCohort((settings as any).activeCohort || '');
           if ((settings as any).allowProfileGroupAdditions !== undefined) {
             setAllowProfileGroupAdditions(!!(settings as any).allowProfileGroupAdditions);
           }
@@ -1040,7 +1038,9 @@ export function Profile() {
               </div>
               <div className="profile-detail-item">
                 <span className="profile-detail-label">Date</span>
-                <span className="profile-detail-value">{user.selectedCohort || '-'}</span>
+                <span className="profile-detail-value">
+                  {activeCohort || 'Will update soon'}
+                </span>
               </div>
 
               {user.userType === 'student' && (
@@ -1491,45 +1491,7 @@ export function Profile() {
         </div>,
         document.body
       )}
-      {/* ── Invalid Cohort Modal (Update to activeCohort) ── */}
-      {!leaderConfirmed && user.selectedCohort && activeCohort && user.selectedCohort !== activeCohort && !availableCohorts.includes(user.selectedCohort) && createPortal(
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001, padding: '1rem' }}>
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #E2D9CC', padding: '2.5rem', width: '100%', maxWidth: '480px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)', textAlign: 'center' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '56px', height: '56px', borderRadius: '50%', background: '#FFFBEB', border: '1px solid #FDE68A', marginBottom: '1.25rem' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            </div>
-            <h3 style={{ marginBottom: '0.75rem', color: '#2A1F14', fontSize: '1.25rem', fontWeight: 700 }}>Event Date Update</h3>
-            <p style={{ fontSize: '0.88rem', color: '#64748B', marginBottom: '1.5rem', lineHeight: '1.5' }}>
-              Please note that the <strong>Lead with AI</strong> professional program is scheduled to run on <strong>{activeCohort}</strong>.
-            </p>
-            <p style={{ fontSize: '0.85rem', color: '#8C7B6B', marginBottom: '1.5rem', lineHeight: '1.5' }}>
-              Click below to update your date selection to {activeCohort} and continue.
-            </p>
-            <button 
-              type="button" 
-              onClick={async () => {
-                if (isUpdatingCohort) return;
-                setIsUpdatingCohort(true);
-                try {
-                  const res = await api.changeCohort(token!, activeCohort);
-                  updateUser(res.user);
-                  toast.success(`Your cohort date was successfully updated to ${activeCohort}!`);
-                } catch (err: any) {
-                  toast.error(err.message || 'Failed to update cohort date.');
-                } finally {
-                  setIsUpdatingCohort(false);
-                }
-              }}
-              className="btn-primary" 
-              style={{ width: '100%', padding: '0.75rem', fontSize: '0.95rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: '#3b8bd4', borderColor: '#3b8bd4' }}
-              disabled={isUpdatingCohort}
-            >
-              {isUpdatingCohort ? 'Updating...' : 'Update Date & Continue'}
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
+
 
       {/* ── Add Group Member Modal ── */}
       {showAddMemberModal && createPortal(

@@ -38,6 +38,13 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'You are currently waitlisted and cannot proceed to payment.' });
     }
 
+    // Block payment if cohort date is in the past
+    const { getCohortCutoff } = require('../utils/cohorts');
+    const cutoff = getCohortCutoff(user.selectedCohort);
+    if (new Date() >= cutoff) {
+      return res.status(403).json({ error: 'This cohort has already completed. You cannot make payments for a completed cohort.' });
+    }
+
     // Block payment if profile is incomplete
     if (user.isProfileComplete === false) {
       return res.status(400).json({ error: 'Please complete your profile before proceeding to payment.' });
