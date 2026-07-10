@@ -506,12 +506,11 @@ router.post('/register', upload.single('idCard'), validate(registerSchema), asyn
       }
     }
 
-    // Waitlist Logic: Use the dynamic registrationCap from Settings OR check if the cohort is in the past
+    // Waitlist Logic: Only based on registration cap (not cohort status)
+    // If no active cohort is set, selectedCohort will be null — users can still register and pay
     const userCount = await User.countDocuments();
-    const cohortToRegister = settings.activeCohort || 'June 13 & 14, 2026';
-    const cutoff = getCohortCutoff(cohortToRegister);
-    const isCohortPast = new Date() >= cutoff;
-    const isWaitlisted = userCount >= (settings.registrationCap || 1000) || isCohortPast;
+    const cohortToRegister = settings.activeCohort || null;
+    const isWaitlisted = userCount >= (settings.registrationCap || 1000);
 
     // Referral code resolution:
     // 1. If came via referral link → use that code
@@ -789,13 +788,36 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
 
     const isGroupMember = !!user.groupLeaderId;
 
+    const settings = await Settings.getSingleton();
+
     // Validate required fields
-    if (!phone || !userType || (!isGroupMember && !heardFrom) || !selectedCohort) {
+    if (!phone || !userType || (!isGroupMember && !heardFrom)) {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
-      return res.status(400).json({ error: 'Missing required fields (phone, userType, heardFrom, selectedCohort).' });
+      return res.status(400).json({ error: 'Missing required fields (phone, userType, heardFrom).' });
     }
 
-    const settings = await Settings.getSingleton();
+    // Resolve cohort date
+    let cohortToSave = selectedCohort || user.selectedCohort || null;
+    if (!cohortToSave && settings.activeCohort) {
+      cohortToSave = settings.activeCohort;
+    }
+
+    if (cohortToSave) {
+      const validCohorts = settings.cohorts || [];
+      if (!validCohorts.includes(cohortToSave)) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Invalid cohort selected.' });
+      }
+
+      // Cohort availability validation
+      const { getAvailableCohorts } = require('../utils/cohorts');
+      const available = await getAvailableCohorts();
+      const isSameCohort = user.selectedCohort === cohortToSave;
+      if (!isSameCohort && !available.includes(cohortToSave)) {
+        if (req.file) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: `Selected date (${cohortToSave}) is no longer available.` });
+      }
+    }
 
     // Salesperson tracking
     let selectedSalesperson = null;
@@ -812,21 +834,6 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
         return res.status(400).json({ error: 'Selected salesperson is invalid.' });
       }
       selectedSalesperson = salesperson.trim();
-    }
-
-    const validCohorts = settings.cohorts || ['June 13 & 14, 2026'];
-    if (!validCohorts.includes(selectedCohort)) {
-      if (req.file) await fs.unlink(req.file.path).catch(() => {});
-      return res.status(400).json({ error: 'Invalid cohort selected.' });
-    }
-
-    // Cohort availability validation
-    const { getAvailableCohorts } = require('../utils/cohorts');
-    const available = await getAvailableCohorts();
-    const isSameCohort = user.selectedCohort === selectedCohort;
-    if (!isSameCohort && !available.includes(selectedCohort)) {
-      if (req.file) await fs.unlink(req.file.path).catch(() => {});
-      return res.status(400).json({ error: `Selected date (${selectedCohort}) is no longer available.` });
     }
 
     if (!isValidIndiaNepalPhone(phone)) {
@@ -876,7 +883,7 @@ router.patch('/complete-profile', authMiddleware, upload.single('idCard'), async
     // Update user properties
     user.phone = phone.trim();
     user.userType = userType;
-    user.selectedCohort = selectedCohort;
+    user.selectedCohort = cohortToSave;
     
     if (!isGroupMember) {
       user.heardFrom = finalHeardFrom;
@@ -939,7 +946,7 @@ router.post('/change-cohort', authMiddleware, async (req, res) => {
     }
 
     const settings = await Settings.getSingleton();
-    const validCohorts = settings.cohorts || ['June 13 & 14, 2026'];
+    const validCohorts = settings.cohorts || [];
     if (!validCohorts.includes(cohort)) {
       return res.status(400).json({ error: 'Invalid cohort selected.' });
     }

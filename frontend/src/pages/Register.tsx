@@ -139,7 +139,7 @@ export function Register() {
   // Working fields
   const [domain, setDomain] = useState('');
   const [organization, setOrganization] = useState('');
-  const [selectedCohort, setSelectedCohort] = useState('June 13 & 14, 2026');
+  const [selectedCohort, setSelectedCohort] = useState('');
   const [availableCohorts, setAvailableCohorts] = useState<string[]>([]);
 
   // Group members state
@@ -516,7 +516,7 @@ export function Register() {
       if (!organization.trim()) newErrors.organization = 'Please enter your organization name.';
     }
     
-    if (!selectedCohort) {
+    if (activeCohort && !selectedCohort) {
       newErrors.selectedCohort = 'Please select your preferred date.';
     }
 

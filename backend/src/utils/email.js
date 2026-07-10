@@ -143,7 +143,7 @@ async function getCohortDateForUser(user) {
   } catch (err) {
     console.error('getCohortDateForUser error:', err);
   }
-  return 'June 13 & 14, 2026';
+  return null; // No active cohort set — caller handles the null case
 }
 
 // Helper: Map selectedCohort label to .ics start and end timestamps in UTC
@@ -187,19 +187,19 @@ async function sendRegistrationEmail(user) {
   let contentHtml = '';
   let subject = 'Registration Confirmed — Lead with AI Workshop';
 
-  if (user.isWaitlisted) {
+  if (!user.selectedCohort) {
+    // No active cohort — date will be announced later
     subject = 'Registration Received — Lead with AI Workshop';
     contentHtml = `
       <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop.</p>
-      <p>We will send you updates and details regarding the upcoming session soon by email.</p>
-      <p>You can access your registration portal here:</p>
+      <p>The workshop dates will be updated soon. We will notify you by email once the schedule is confirmed.</p>
+      <p>In the meantime, you can complete your payment and profile on the registration portal:</p>
       <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
     `;
   } else {
-    const cohortDate = await getCohortDateForUser(user);
     contentHtml = `
-      <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop scheduled on <strong>${cohortDate}</strong>.</p>
-      <p>To secure your seat, please complete the payment of <strong>₹${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
+      <p>You have successfully registered for the <strong>Lead with AI: Adopt, Implement and Transform</strong> workshop scheduled on <strong>${user.selectedCohort}</strong>.</p>
+      <p>To secure your seat, please complete the payment of <strong>&#8377;${user.userType === 'student' ? '499' : '999'}</strong>. You can access your registration portal to complete the payment.</p>
       <p><a href="https://www.globalknowledgetech.com/leadwithAI/login" style="color: #2563EB; text-decoration: underline; font-weight: bold;">https://www.globalknowledgetech.com/leadwithAI/login</a></p>
     `;
   }
@@ -257,7 +257,8 @@ async function sendOtpEmail(email, otp, name) {
  */
 async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoinUrl, totalPaid) {
   const greeting = `Dear ${user.fullName.split(' ')[0]},`;
-  const cohortDate = await getCohortDateForUser(user);
+  const cohortDate = await getCohortDateForUser(user); // null if no active cohort
+  const dateDisplay = cohortDate || 'Will be updated soon';
   let contentHtml = '';
   let subject = `Payment Confirmed — Your seat is booked!`;
 
@@ -269,7 +270,7 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
     subject = `Registration & Payment Confirmed — Lead with AI Workshop`;
     contentHtml = `
       <p style="font-size: 18px; color: #10B981; font-weight: bold; margin-bottom: 20px;">Registration & Payment Confirmed!</p>
-      <p>You have been registered for the <strong>${eventName}</strong> workshop scheduled on <strong>${cohortDate}</strong> by <strong>${leaderName}</strong>.</p>
+      <p>You have been registered for the <strong>${eventName}</strong> workshop${cohortDate ? ` scheduled on <strong>${cohortDate}</strong>` : ''} by <strong>${leaderName}</strong>.</p>
       <p>The payment for your seat has been fully completed and confirmed!</p>
       
       <p>To access the workshop sessions and verify your registration, <strong>please log in to your registration portal and complete your profile:</strong></p>
@@ -283,7 +284,7 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
           </tr>
           <tr>
             <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
-            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${cohortDate}</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${dateDisplay}</td>
           </tr>
           <tr>
             <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Payment ID</strong></td>
@@ -314,7 +315,7 @@ async function sendPaymentConfirmationEmail(user, eventName, paymentId, zoomJoin
           </tr>
           <tr>
             <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Date</strong></td>
-            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${cohortDate}</td>
+            <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #1E293B; font-weight: bold;" valign="top">${dateDisplay}</td>
           </tr>
           <tr>
             <td style="padding: 10px 0; border-bottom: 1px solid #E2E8F0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; color: #64748B;" valign="top"><strong>Amount Paid</strong></td>

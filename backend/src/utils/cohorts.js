@@ -25,7 +25,7 @@ function getCohortCutoff(cohortStr) {
 async function getAvailableCohorts() {
   const Settings = require('../models/Settings');
   const settings = await Settings.findOne();
-  const cohorts = settings ? settings.cohorts : ['June 13 & 14, 2026'];
+  const cohorts = settings ? settings.cohorts : [];
   const now = new Date();
   const available = [];
 

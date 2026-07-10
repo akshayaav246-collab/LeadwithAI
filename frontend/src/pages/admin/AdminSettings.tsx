@@ -12,6 +12,7 @@ import {
   deleteAdmin,
   addCohort,
   deleteCohort,
+  getCohortCount,
   updateActiveCohort,
   toggleCohortFeedbackApi,
   updateGroupAdditionsSetting
@@ -52,9 +53,23 @@ export function AdminSettings() {
   const [admins, setAdmins] = useState<any[]>([]);
   const [cohorts, setCohorts] = useState<string[]>([]);
   const [activeCohort, setActiveCohort] = useState<string>('');
-  const [newCohort, setNewCohort] = useState('');
+  const [cohortCounts, setCohortCounts] = useState<Record<string, number>>({});
+  // Date-picker state for adding a new cohort (two-day format: "Month Day1 & Day2, Year")
+  const [newCohortMonth, setNewCohortMonth] = useState('');
+  const [newCohortDay1, setNewCohortDay1] = useState('');
+  const [newCohortDay2, setNewCohortDay2] = useState('');
+  const [newCohortYear, setNewCohortYear] = useState(String(new Date().getFullYear()));
   const [allowProfileGroupAdditions, setAllowProfileGroupAdditions] = useState(false);
-  
+
+  // Migration modal state
+  type MigrationModal = {
+    cohort: string;
+    count: number;
+    isActive: boolean;
+    migrateTo: string;
+  };
+  const [migrationModal, setMigrationModal] = useState<MigrationModal | null>(null);
+  const [migrationLoading, setMigrationLoading] = useState(false);
   // New referral input state
   const [refCode, setRefCode] = useState('');
   const [refLabel, setRefLabel] = useState('');
@@ -81,6 +96,15 @@ export function AdminSettings() {
       setCohorts((settings as any).cohorts || []);
       setActiveCohort((settings as any).activeCohort || '');
       setAllowProfileGroupAdditions(!!(settings as any).allowProfileGroupAdditions);
+
+      // Fetch registrant count for each cohort
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        ((settings as any).cohorts || []).map(async (c: string) => {
+          try { counts[c] = (await getCohortCount(token, c)).count; } catch { counts[c] = 0; }
+        })
+      );
+      setCohortCounts(counts);
       
       const adminList = await getAdmins(token);
       setAdmins(adminList);
@@ -238,33 +262,82 @@ export function AdminSettings() {
 
   const handleAddCohort = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCohort.trim()) return;
+    if (!newCohortMonth || !newCohortDay1 || !newCohortDay2 || !newCohortYear) return;
+    const cohortStr = `${newCohortMonth} ${newCohortDay1} & ${newCohortDay2}, ${newCohortYear}`;
     try {
-      const settings = await addCohort(token, newCohort.trim());
+      const settings = await addCohort(token, cohortStr);
       setCohorts(settings.cohorts || []);
       setActiveCohort(settings.activeCohort || '');
-      setNewCohort('');
+      // Fetch count for the new cohort
+      try { setCohortCounts(prev => ({ ...prev, [cohortStr]: 0 })); } catch {}
+      setNewCohortMonth(''); setNewCohortDay1(''); setNewCohortDay2('');
+      setNewCohortYear(String(new Date().getFullYear()));
       toast.success('Cohort added successfully!');
     } catch (err: any) {
       toast.error('Failed to add cohort: ' + err.message);
     }
   };
 
-  const handleDeleteCohort = (cohort: string) => {
-    setConfirmModal({
-      message: `Are you sure you want to delete the cohort "${cohort}"?`,
-      onConfirm: async () => {
-        try {
-          const settings = await deleteCohort(token, cohort);
-          setCohorts(settings.cohorts || []);
-          setActiveCohort(settings.activeCohort || '');
-          toast.success(`Cohort "${cohort}" deleted`);
-        } catch (err: any) {
-          toast.error('Failed to delete cohort: ' + err.message);
-        }
-        setConfirmModal(null);
+  const handleDeleteCohort = async (cohort: string) => {
+    try {
+      const { count } = await getCohortCount(token, cohort);
+      const isActive = cohort === activeCohort;
+
+      if (count > 0 || isActive) {
+        // Show migration modal
+        setMigrationModal({ cohort, count, isActive, migrateTo: '' });
+      } else {
+        // No users affected — simple confirm
+        setConfirmModal({
+          message: `Delete cohort "${cohort}"? This action cannot be undone.`,
+          onConfirm: async () => {
+            try {
+              const { settings } = await deleteCohort(token, cohort);
+              setCohorts(settings.cohorts || []);
+              setActiveCohort(settings.activeCohort || '');
+              setCohortCounts(prev => { const n = { ...prev }; delete n[cohort]; return n; });
+              toast.success(`Cohort "${cohort}" deleted.`);
+            } catch (err: any) {
+              toast.error('Failed to delete cohort: ' + err.message);
+            }
+            setConfirmModal(null);
+          }
+        });
       }
-    });
+    } catch (err: any) {
+      toast.error('Failed to fetch cohort info: ' + err.message);
+    }
+  };
+
+  const handleConfirmMigrationDelete = async () => {
+    if (!migrationModal) return;
+    setMigrationLoading(true);
+    try {
+      const { cohort, migrateTo } = migrationModal;
+      // migrateTo empty string = set users to null ("Will update soon")
+      const { settings, affectedUsers } = await deleteCohort(token, cohort, migrateTo || '');
+      setCohorts(settings.cohorts || []);
+      setActiveCohort(settings.activeCohort || '');
+      // Refresh counts
+      const counts: Record<string, number> = {};
+      await Promise.all(
+        (settings.cohorts || []).map(async (c: string) => {
+          try { counts[c] = (await getCohortCount(token, c)).count; } catch { counts[c] = 0; }
+        })
+      );
+      setCohortCounts(counts);
+      const msg = affectedUsers > 0
+        ? migrateTo
+          ? `Cohort deleted. ${affectedUsers} user(s) migrated to "${migrateTo}".`
+          : `Cohort deleted. ${affectedUsers} user(s) set to "Will update soon".`
+        : `Cohort "${cohort}" deleted.`;
+      toast.success(msg);
+      setMigrationModal(null);
+    } catch (err: any) {
+      toast.error('Failed to delete cohort: ' + err.message);
+    } finally {
+      setMigrationLoading(false);
+    }
   };
 
   const handleSelectActiveCohort = async (cohort: string) => {
@@ -412,19 +485,80 @@ export function AdminSettings() {
               </select>
             </div>
 
-            {/* Add cohort form */}
-            <form onSubmit={handleAddCohort} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-              <input
-                type="text"
-                value={newCohort}
-                onChange={e => setNewCohort(e.target.value)}
-                placeholder="e.g. June 20 & 21, 2026"
-                style={{ flex: 1, padding: '0.5rem 0.75rem', border: '1px solid #E2D9CC', borderRadius: 4 }}
-                required
-              />
-              <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1rem' }}>
-                Add Cohort
-              </button>
+            {/* Add cohort — date picker (two days) */}
+            <form onSubmit={handleAddCohort} style={{ marginBottom: '1.25rem', background: '#faf8f5', border: '1px solid #E2D9CC', borderRadius: 8, padding: '1rem' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#5C4B3B', marginBottom: '0.6rem' }}>Add New Cohort Date</div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                {/* Month */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#8C7B6B' }}>Month</label>
+                  <select
+                    value={newCohortMonth}
+                    onChange={e => setNewCohortMonth(e.target.value)}
+                    required
+                    style={{ padding: '0.4rem 0.5rem', border: '1px solid #E2D9CC', borderRadius: 4, background: '#fff', fontSize: '0.88rem' }}
+                  >
+                    <option value="">Month</option>
+                    {['January','February','March','April','May','June','July','August','September','October','November','December'].map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Day 1 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#8C7B6B' }}>Day 1</label>
+                  <select
+                    value={newCohortDay1}
+                    onChange={e => setNewCohortDay1(e.target.value)}
+                    required
+                    style={{ padding: '0.4rem 0.5rem', border: '1px solid #E2D9CC', borderRadius: 4, background: '#fff', fontSize: '0.88rem', width: '70px' }}
+                  >
+                    <option value="">—</option>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <span style={{ paddingBottom: '0.35rem', color: '#8C7B6B', fontWeight: 700 }}>&amp;</span>
+                {/* Day 2 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#8C7B6B' }}>Day 2</label>
+                  <select
+                    value={newCohortDay2}
+                    onChange={e => setNewCohortDay2(e.target.value)}
+                    required
+                    style={{ padding: '0.4rem 0.5rem', border: '1px solid #E2D9CC', borderRadius: 4, background: '#fff', fontSize: '0.88rem', width: '70px' }}
+                  >
+                    <option value="">—</option>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Year */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: '#8C7B6B' }}>Year</label>
+                  <select
+                    value={newCohortYear}
+                    onChange={e => setNewCohortYear(e.target.value)}
+                    style={{ padding: '0.4rem 0.5rem', border: '1px solid #E2D9CC', borderRadius: 4, background: '#fff', fontSize: '0.88rem' }}
+                  >
+                    {[2025, 2026, 2027, 2028].map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+                <button type="submit" className="btn-primary" style={{ padding: '0.4rem 1rem', alignSelf: 'flex-end' }}
+                  disabled={!newCohortMonth || !newCohortDay1 || !newCohortDay2}>
+                  Add Cohort
+                </button>
+              </div>
+              {/* Preview */}
+              {newCohortMonth && newCohortDay1 && newCohortDay2 && (
+                <div style={{ marginTop: '0.6rem', fontSize: '0.82rem', color: '#5C4B3B' }}>
+                  Preview: <strong>{newCohortMonth} {newCohortDay1} &amp; {newCohortDay2}, {newCohortYear}</strong>
+                </div>
+              )}
             </form>
 
             <div className="admin-table-container">
@@ -432,25 +566,26 @@ export function AdminSettings() {
                 <thead>
                   <tr>
                     <th>Cohort Date</th>
+                    <th style={{ textAlign: 'center' }}>Registrants</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {cohorts.map(c => {
                     const completed = isCohortCompleted(c);
+                    const count = cohortCounts[c] ?? '…';
                     return (
                       <tr key={c}>
-                        <td className="admin-row-name" style={{ fontWeight: c === activeCohort ? 700 : 'normal' }}>
-                          {c} 
-                          {c === activeCohort && <span style={{ color: '#2e7d32', fontSize: '0.75rem', marginLeft: '5px' }}>(Active)</span>}
-                          {completed && <span style={{ color: '#8c8c8c', fontSize: '0.75rem', marginLeft: '5px' }}>(Completed)</span>}
+                        <td style={{ fontWeight: c === activeCohort ? 700 : 'normal' }}>
+                          {c}
+                          {c === activeCohort && <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', background: '#e8f5e9', color: '#2e7d32', borderRadius: 4, padding: '1px 6px', fontWeight: 600 }}>Active</span>}
+                          {completed && c !== activeCohort && <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', background: '#f3f3f3', color: '#8c8c8c', borderRadius: 4, padding: '1px 6px' }}>Completed</span>}
                         </td>
+                        <td style={{ textAlign: 'center', fontWeight: 600, color: '#3B2F2F' }}>{count}</td>
                         <td>
                           <button
                             onClick={() => handleDeleteCohort(c)}
-                            style={{
-                              background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem'
-                            }}
+                            style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
                           >
                             Delete
                           </button>
@@ -460,7 +595,7 @@ export function AdminSettings() {
                   })}
                   {cohorts.length === 0 && (
                     <tr>
-                      <td colSpan={2} style={{ textAlign: 'center', padding: '1rem', color: '#8C7B6B' }}>
+                      <td colSpan={3} style={{ textAlign: 'center', padding: '1rem', color: '#8C7B6B' }}>
                         No cohort dates defined yet.
                       </td>
                     </tr>
@@ -645,6 +780,63 @@ export function AdminSettings() {
                 style={{ padding: '0.5rem 1.5rem', backgroundColor: '#dc2626', borderColor: '#dc2626' }}
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Migration Modal (cohort delete with users) ── */}
+      {migrationModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2D9CC', padding: '2rem', width: '90%', maxWidth: '480px' }}>
+            <h3 style={{ marginBottom: '0.4rem', color: '#3B2F2F' }}>Delete Cohort: "{migrationModal.cohort}"</h3>
+
+            {migrationModal.isActive && (
+              <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 6, padding: '0.6rem 0.9rem', marginBottom: '0.75rem', fontSize: '0.83rem', color: '#856404' }}>
+                ⚠️ This is currently the <strong>active cohort</strong>. It will be cleared after deletion.
+              </div>
+            )}
+
+            {migrationModal.count > 0 && (
+              <p style={{ fontSize: '0.88rem', color: '#5C4B3B', marginBottom: '1rem' }}>
+                <strong>{migrationModal.count} registered user(s)</strong> are on this cohort. What should happen to them?
+              </p>
+            )}
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.83rem', fontWeight: 600, color: '#3B2F2F', marginBottom: '0.4rem' }}>
+                Migrate these users to:
+              </label>
+              <select
+                value={migrationModal.migrateTo}
+                onChange={e => setMigrationModal(prev => prev ? { ...prev, migrateTo: e.target.value } : prev)}
+                style={{ width: '100%', padding: '0.45rem 0.7rem', border: '1px solid #E2D9CC', borderRadius: 6, fontSize: '0.9rem', background: '#fff' }}
+              >
+                <option value="">No date — show "Will update soon"</option>
+                {cohorts.filter(c => c !== migrationModal.cohort).map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setMigrationModal(null)}
+                disabled={migrationLoading}
+                style={{ padding: '0.5rem 1rem', border: '1px solid #c8bdb0', borderRadius: 6, background: '#f8f6f2', color: '#4a3f35', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmMigrationDelete}
+                disabled={migrationLoading}
+                className="btn-primary"
+                style={{ padding: '0.5rem 1.5rem', backgroundColor: '#dc2626', borderColor: '#dc2626' }}
+              >
+                {migrationLoading ? 'Deleting…' : 'Confirm Delete'}
               </button>
             </div>
           </div>

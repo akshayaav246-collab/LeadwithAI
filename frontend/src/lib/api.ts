@@ -300,8 +300,13 @@ export function addCohort(token: string, cohort: string) {
   return request<any>('/api/admin/settings/cohorts', { method: 'POST', body: JSON.stringify({ cohort }) }, token);
 }
 
-export function deleteCohort(token: string, cohort: string) {
-  return request<any>(`/api/admin/settings/cohorts/${encodeURIComponent(cohort)}`, { method: 'DELETE' }, token);
+export function deleteCohort(token: string, cohort: string, migrateTo?: string) {
+  const qs = migrateTo !== undefined ? `?migrateTo=${encodeURIComponent(migrateTo)}` : '';
+  return request<{ settings: any; affectedUsers: number }>(`/api/admin/settings/cohorts/${encodeURIComponent(cohort)}${qs}`, { method: 'DELETE' }, token);
+}
+
+export function getCohortCount(token: string, cohort: string) {
+  return request<{ count: number }>(`/api/admin/settings/cohorts/${encodeURIComponent(cohort)}/count`, {}, token);
 }
 
 export function updateActiveCohort(token: string, activeCohort: string) {

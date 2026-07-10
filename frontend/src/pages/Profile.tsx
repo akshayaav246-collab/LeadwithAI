@@ -39,9 +39,10 @@ interface ProfileCompletionFormProps {
   logout: () => void;
   availableCohorts: string[];
   salespersons: string[];
+  activeCohort: string;
 }
 
-function ProfileCompletionForm({ user, token, updateUser, logout, availableCohorts, salespersons }: ProfileCompletionFormProps) {
+function ProfileCompletionForm({ user, token, updateUser, logout, availableCohorts, salespersons, activeCohort }: ProfileCompletionFormProps) {
   const [phone, setPhone] = useState(user.phone || '');
   const [selectedUserType, setSelectedUserType] = useState<'student' | 'working'>(
     user.userType || 'student'
@@ -77,7 +78,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
   const [heardFrom, setHeardFrom] = useState(getHeardFromInitial());
   const [heardFromOther, setHeardFromOther] = useState(getHeardFromOtherInitial());
   const [salesperson, setSalesperson] = useState(user.salesperson || (user.referralCode && user.referralCode !== '-' ? user.referralCode : ''));
-  const [selectedCohort, setSelectedCohort] = useState(user.selectedCohort || 'June 13 & 14, 2026');
+  const [selectedCohort, setSelectedCohort] = useState(user.selectedCohort || activeCohort || '');
 
   const [isSaving, setIsSaving] = useState(false);
   const hasReferral = !!(localStorage.getItem('referralCode') || (user && user.referralCode && user.referralCode !== '-'));
@@ -127,7 +128,7 @@ function ProfileCompletionForm({ user, token, updateUser, logout, availableCohor
       }
     }
 
-    if (!selectedCohort) {
+    if (activeCohort && !selectedCohort) {
       newErrors.selectedCohort = 'Please select your preferred date.';
     }
 
@@ -794,6 +795,7 @@ export function Profile() {
               logout={logout}
               availableCohorts={availableCohorts}
               salespersons={salespersons}
+              activeCohort={activeCohort}
             />
           </div>
         </section>

@@ -38,11 +38,13 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'You are currently waitlisted and cannot proceed to payment.' });
     }
 
-    // Block payment if cohort date is in the past
-    const { getCohortCutoff } = require('../utils/cohorts');
-    const cutoff = getCohortCutoff(user.selectedCohort);
-    if (new Date() >= cutoff) {
-      return res.status(403).json({ error: 'This cohort has already completed. You cannot make payments for a completed cohort.' });
+    // Block payment if cohort date is set and already in the past
+    if (user.selectedCohort) {
+      const { getCohortCutoff } = require('../utils/cohorts');
+      const cutoff = getCohortCutoff(user.selectedCohort);
+      if (new Date() >= cutoff) {
+        return res.status(403).json({ error: 'This cohort has already completed. You cannot make payments for a completed cohort.' });
+      }
     }
 
     // Block payment if profile is incomplete
@@ -171,7 +173,7 @@ router.post('/verify', authMiddleware, validate(verifyPaymentSchema), async (req
             u.email,
             firstName,
             lastNameParts.join(' '),
-            u.selectedCohort || 'June 13 & 14, 2026'
+            u.selectedCohort || ''
           );
           eventEntry.zoomJoinUrl = joinUrl;
           eventEntry.zoomRegistrationStatus = 'success';
@@ -262,7 +264,7 @@ router.post('/webhook', async (req, res) => {
           // Register for Zoom
           try {
             const [firstName, ...lastNameParts] = u.fullName.split(' ');
-            const joinUrl = await registerForWebinar(u.email, firstName, lastNameParts.join(' '), u.selectedCohort || 'June 13 & 14, 2026');
+            const joinUrl = await registerForWebinar(u.email, firstName, lastNameParts.join(' '), u.selectedCohort || '');
             eventEntry.zoomJoinUrl = joinUrl;
             eventEntry.zoomRegistrationStatus = 'success';
           } catch (zoomErr) {

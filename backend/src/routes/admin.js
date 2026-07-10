@@ -1833,6 +1833,20 @@ router.delete('/settings/referrals/:code', adminAuth, async (req, res) => {
   }
 });
 // ─────────────────────────────────────────────
+// GET /api/admin/settings/cohorts/:cohort/count
+// Count registrants for a given cohort
+// ─────────────────────────────────────────────
+router.get('/settings/cohorts/:cohort/count', adminAuth, async (req, res) => {
+  try {
+    const cohort = decodeURIComponent(req.params.cohort);
+    const count = await User.countDocuments({ selectedCohort: cohort });
+    return res.json({ count });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to count cohort registrants.' });
+  }
+});
+
+// ─────────────────────────────────────────────
 // POST /api/admin/settings/cohorts
 // Add a cohort
 // ─────────────────────────────────────────────
@@ -1861,14 +1875,25 @@ router.post('/settings/cohorts', adminAuth, validate(addCohortSchema), async (re
 // ─────────────────────────────────────────────
 router.delete('/settings/cohorts/:cohort', adminAuth, async (req, res) => {
   try {
-    const { cohort } = req.params;
+    const cohort = decodeURIComponent(req.params.cohort);
+    const migrateTo = req.query.migrateTo !== undefined ? decodeURIComponent(req.query.migrateTo) : undefined;
     const settings = await Settings.getSingleton();
+
+    // Migrate or clear users who were on this cohort
+    const updatePayload = migrateTo
+      ? { selectedCohort: migrateTo }
+      : { selectedCohort: null };
+    const result = await User.updateMany({ selectedCohort: cohort }, { $set: updatePayload });
+
+    // Remove cohort from list
     settings.cohorts = settings.cohorts.filter(c => c !== cohort);
+    // Clear active cohort if it was this one
     if (settings.activeCohort === cohort) {
-      settings.activeCohort = settings.cohorts[0] || null;
+      settings.activeCohort = '';
     }
     await settings.save();
-    return res.json(settings);
+
+    return res.json({ settings, affectedUsers: result.modifiedCount });
   } catch (err) {
     console.error('Delete cohort error:', err);
     res.status(500).json({ error: 'Failed to delete cohort.' });
@@ -1892,6 +1917,15 @@ router.patch('/settings/active-cohort', adminAuth, validate(activeCohortSchema),
     }
     settings.activeCohort = activeCohort || '';
     await settings.save();
+
+    // Auto-assign all users with no date to the new active cohort and un-waitlist them
+    if (activeCohort) {
+      await User.updateMany(
+        { selectedCohort: null },
+        { $set: { selectedCohort: activeCohort, isWaitlisted: false } }
+      );
+    }
+
     return res.json(settings);
   } catch (err) {
     console.error('Update active cohort error:', err);
